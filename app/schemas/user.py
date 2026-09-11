@@ -25,6 +25,8 @@ class UserCreate(BaseModel):
             raise ValueError("Password must contain at least one special character.")
         if len(value) < 8:
             raise ValueError("Password must be at least 8 characters long.")
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password must be at most 72 bytes long.")
         return value
 
 class UserRead(BaseModel):

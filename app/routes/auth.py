@@ -14,11 +14,84 @@ See app/models/user.py, app/models/session.py, app/schemas/user.py and
 app/schemas/session.py for the pieces these will need.
 """
 
-from fastapi import APIRouter
+from datetime import datetime, timedelta, timezone
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
+from app.models.session import Session as SessionModel
+from sqlalchemy.orm import Session
+from app.schemas.user import UserCreate, UserRead, UserLogin
+from app.models.user import User as UserModel
+from app.security import hash_password, verify_password, generate_session_token
+from app.database import get_db
 
 router = APIRouter(tags=["auth"])
 
 
 # TODO: implement POST /signup
+@router.post("/signup")
+def signup(user_data: UserCreate, db: Session = Depends(get_db)):
+
+    #Check if email already exists
+    existing_user = db.query(UserModel).filter(UserModel.email == user_data.email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already exists.")
+
+    # Hash the password
+    hashed_password = hash_password(user_data.password)
+
+    # Create a new user
+    user = UserModel(
+        email=user_data.email,
+        password_hash=hashed_password,
+        account_name=user_data.account_name
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return UserRead.model_validate(user)
+
 # TODO: implement POST /login
+@router.post("/login")
+def login(user_data: UserLogin, response: Response, db: Session = Depends(get_db)):
+    # Look up the user by email
+    user = db.query(UserModel).filter(UserModel.email == user_data.email).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid email or password.")
+
+    # Verify the password
+    if not verify_password(user_data.password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Invalid email or password.")
+
+    # Generate a session token
+    session_token = generate_session_token()
+
+    # Create a new session
+    session = SessionModel(
+        user_id=user.id,
+        session_token=session_token,
+        created_at=datetime.now(timezone.utc),
+        expires_at=datetime.now(timezone.utc) + timedelta(weeks=4)  
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+
+    response.set_cookie(key="session_token", value=session.session_token, httponly=True)
+
+    return {"session_token": session.session_token}
+
 # TODO: implement POST /logout
+@router.post("/logout")
+def logout(session_token: str = Cookie(None), response: Response = None, db: Session = Depends(get_db)):
+    # Identify the session by token
+    session = db.query(SessionModel).filter(SessionModel.session_token == session_token).first()
+    if not session:
+        raise HTTPException(status_code=400, detail="Invalid session token.")
+    # Delete the session cookie
+    response.delete_cookie(key="session_token")
+
+    # Invalidate the session (delete it)
+    db.delete(session)
+    db.commit()
+
+    return {"detail": "Logged out successfully."}
