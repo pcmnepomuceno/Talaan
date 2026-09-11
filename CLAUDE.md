@@ -19,7 +19,7 @@ see "Working Agreement" below before generating anything.
 ### Users
 | Column | Type | Notes |
 |---|---|---|
-| id | integer | primary key |
+| id | integer | primary key | 
 | email | string | UNIQUE |
 | password_hash | string | never store a raw/plaintext password |
 | account_name | string | |
@@ -31,7 +31,7 @@ see "Working Agreement" below before generating anything.
 | token | string | UNIQUE — the value stored in the `session_token` HttpOnly cookie |
 | user_id | integer | foreign key → Users.id |
 | created_at | timestamp | `DateTime(timezone=True)` — plain `DateTime` silently drops tz info from Postgres |
-| expires_at | timestamp | `DateTime(timezone=True)`; session lifetime currently `timedelta(weeks=4)` — placeholder, not a deliberate choice yet |
+| expires_at | timestamp | `DateTime(timezone=True)`; session lifetime is `timedelta(days=30)` (deliberately chosen, ~1 month) |
 
 ### Job Applications
 | Column | Type | Notes |
@@ -87,6 +87,17 @@ applications; query by `created_by` instead).
   rejects + deletes the row if `expires_at` has passed (opportunistic
   cleanup), otherwise resolves and returns the `User`. Verified against a
   real Postgres container for valid/expired/bogus tokens.
+- **`GET /me`** (`app/routes/users.py`): first (and so far only) route
+  protected by `Depends(get_current_user)` — returns the caller's own
+  profile as `UserRead`, no request body needed. Proves the dependency
+  wires into a real route; the same one-line pattern is what future
+  Job Applications routes will use to scope data to `created_by`.
+- **Session lifetime = cookie lifetime.** `SESSION_LIFETIME = timedelta(days=30)`
+  is a single constant in `app/routes/auth.py`, used for both the `Session`
+  row's `expires_at` and the cookie's `max_age` — without `max_age` set
+  explicitly, the browser would treat it as a "until browser closes" session
+  cookie regardless of what the database row says, so the two have to stay
+  in sync deliberately.
 
 ## Working Agreement — read this before generating any code
 
@@ -141,8 +152,9 @@ works, stop and say so — even if I seem satisfied and want to move on.
 - [x] `Users` and `Sessions` SQLAlchemy models
 - [x] `POST /signup`, `POST /login`, `POST /logout` (`app/routes/auth.py`) — implemented and verified against real Postgres
 - [x] `get_current_user` auth dependency (`app/dependencies.py`) — implemented and verified, valid/expired/bogus tokens all behave correctly
-- [ ] Wire `Depends(get_current_user)` into an actual protected route — dependency exists but nothing uses it yet
+- [x] Wire `Depends(get_current_user)` into an actual protected route — `GET /me` (`app/routes/users.py`), verified: 401 with no cookie, 200 with one, 401 again after logout
+- [x] Deliberately choose (and justify) session lifetime — `timedelta(days=30)`, synced to the cookie's `max_age` (2592000s, confirmed in the actual `Set-Cookie` header)
 - [ ] `/health` checks the DB connection, not just that the process is up
-- [ ] Deliberately choose (and justify) session lifetime — currently an unexamined `timedelta(weeks=4)` placeholder
 - [ ] Verify `JobApplication`/`Interview` models still match the schema above
 - [ ] Schemas + CRUD routes for Job Applications and Interviews
+- [ ] Manually exercise the app end-to-end yourself (not just Claude's automated checks) — walkthrough given for three options: FastAPI's interactive `/docs` (Swagger UI, cookies persist automatically in-browser), `curl` with a `-c`/`-b` cookie jar file, and `docker exec -it applyflow-db psql -U applyflow -d applyflow` to inspect rows directly. Not yet actually run.

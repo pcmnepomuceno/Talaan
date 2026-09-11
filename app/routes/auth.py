@@ -25,8 +25,9 @@ from app.database import get_db
 
 router = APIRouter(tags=["auth"])
 
+SESSION_LIFETIME = timedelta(days=30)
 
-# TODO: implement POST /signup
+
 @router.post("/signup")
 def signup(user_data: UserCreate, db: Session = Depends(get_db)):
 
@@ -50,7 +51,6 @@ def signup(user_data: UserCreate, db: Session = Depends(get_db)):
 
     return UserRead.model_validate(user)
 
-# TODO: implement POST /login
 @router.post("/login")
 def login(user_data: UserLogin, response: Response, db: Session = Depends(get_db)):
     # Look up the user by email
@@ -70,17 +70,21 @@ def login(user_data: UserLogin, response: Response, db: Session = Depends(get_db
         user_id=user.id,
         token=session_token,
         created_at=datetime.now(timezone.utc),
-        expires_at=datetime.now(timezone.utc) + timedelta(weeks=4)  
+        expires_at=datetime.now(timezone.utc) + SESSION_LIFETIME
     )
     db.add(session)
     db.commit()
     db.refresh(session)
 
-    response.set_cookie(key="session_token", value=session.token, httponly=True)
+    response.set_cookie(
+        key="session_token",
+        value=session.token,
+        httponly=True,
+        max_age=int(SESSION_LIFETIME.total_seconds()),
+    )
 
     return {"session_token": session.token}
 
-# TODO: implement POST /logout
 @router.post("/logout")
 def logout(session_token: str = Cookie(None), response: Response = None, db: Session = Depends(get_db)):
     # Identify the session by token
