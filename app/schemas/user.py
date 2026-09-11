@@ -23,6 +23,8 @@ class UserCreate(BaseModel):
             raise ValueError("Password must contain at least one digit.")
         if not any(c in "!@#$%^&*()-_=+[]{}|;:'\",.<>?/`~" for c in value):
             raise ValueError("Password must contain at least one special character.")
+        if len(value) < 8:
+            raise ValueError("Password must be at least 8 characters long.")
         return value
 
 class UserRead(BaseModel):
