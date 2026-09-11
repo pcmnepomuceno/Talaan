@@ -12,6 +12,7 @@ see "Working Agreement" below before generating anything.
 - **Backend:** FastAPI (Python)
 - **Database:** PostgreSQL
 - **Local dev:** Docker (Postgres container at minimum; full docker-compose once the API is dockerized too)
+- **Password hashing:** `bcrypt` (direct — `passlib` was dropped, unmaintained and broken against `bcrypt` 5.x)
 
 ## Schema
 
@@ -22,6 +23,15 @@ see "Working Agreement" below before generating anything.
 | email | string | UNIQUE |
 | password_hash | string | never store a raw/plaintext password |
 | account_name | string | |
+
+### Sessions
+| Column | Type | Notes |
+|---|---|---|
+| id | integer | primary key |
+| token | string | UNIQUE — the value stored in the `session_token` HttpOnly cookie |
+| user_id | integer | foreign key → Users.id |
+| created_at | timestamp | `DateTime(timezone=True)` — plain `DateTime` silently drops tz info from Postgres |
+| expires_at | timestamp | `DateTime(timezone=True)`; session lifetime currently `timedelta(weeks=4)` — placeholder, not a deliberate choice yet |
 
 ### Job Applications
 | Column | Type | Notes |
@@ -40,6 +50,8 @@ see "Working Agreement" below before generating anything.
 | updated_at | timestamp | last edited |
 | created_by | integer | foreign key → Users.id |
 
+**Needs a double-check:** current model file is a pre-Day-3 placeholder stub — verify it still matches this spec before building schemas/routes against it.
+
 ### Interviews
 | Column | Type | Notes |
 |---|---|---|
@@ -51,19 +63,30 @@ see "Working Agreement" below before generating anything.
 | outcome | ENUM | good, bad, pending, etc. |
 | remarks | string | free-text notes |
 
-### Sessions
-| Column | Type | Notes |
-|---|---|---|
-| id | integer | primary key |
-| session_token | string | UNIQUE, the actual random token stored in the user's cookie |
-| user_id | integer | foreign key → Users.id |
-| created_at | timestamp | |
-| expires_at | timestamp | when this session stops being valid |
+**Needs a double-check:** same as Job Applications — pre-Day-3 placeholder stub.
 
-Relationships: Users 1—N Job Applications 1—N Interviews, and Users 1—N
-Sessions. Each foreign key lives on the "many" side only — no relationship
-is ever duplicated on both sides (e.g. Users does NOT store a list of its
+Relationships: Users 1—N Job Applications 1—N Interviews. Users 1—N Sessions.
+Each foreign key lives on the "many" side only — no relationship is ever
+duplicated on both sides (e.g. Users does NOT store a list of its
 applications; query by `created_by` instead).
+
+## Auth design decisions
+
+- **Sessions over JWT** — chosen specifically for instant revocation (delete
+  the row, access is gone immediately), since this is a solo project where
+  JWT's horizontal-scaling advantage doesn't apply.
+- **Password rules** (`UserCreate` schema): 8–72 bytes, checked as UTF-8 byte
+  length (not character count — bcrypt has a 72-byte input limit), plus
+  upper/lower/digit/special-char requirements. Complexity rules apply only at
+  signup (`UserCreate`), not at login (`UserLogin`).
+- **Login error responses:** wrong password and nonexistent email both return
+  `401`, never `404` — a `404` would let an attacker enumerate which emails
+  are registered.
+- **`get_current_user` dependency** (`app/dependencies.py`): reads the
+  `session_token` cookie, looks up the Session row, rejects (401) if missing,
+  rejects + deletes the row if `expires_at` has passed (opportunistic
+  cleanup), otherwise resolves and returns the `User`. Verified against a
+  real Postgres container for valid/expired/bogus tokens.
 
 ## Working Agreement — read this before generating any code
 
@@ -88,22 +111,38 @@ collect a finished repo I can't explain. Follow these rules strictly:
 5. Keep secrets out of version control — real config goes in `.env`
    (gitignored), only `.env.example` with placeholders is committed.
 
+### How I want you to work with me
+
+Five roles, named explicitly when I need one specifically: **teacher**
+(explain a concept before I touch code), **pair programmer** (nudge while
+I'm actively writing), **reviewer** (assess what I actually wrote, not what
+you'd have written), **interviewer** (cold questions, no notes), **mentor**
+(zoom out — do I actually understand this, or did it just run).
+
+For anything under rule 2, follow **explain → attempt → hint → review →
+improve**: explain the concept with no code, I attempt it myself, you hint
+rather than fix if I'm stuck, we review it together line by line, I make the
+edits. Above all: if I accept something without being able to explain why it
+works, stop and say so — even if I seem satisfied and want to move on.
+
+## Backlog (explicitly deferred, not started)
+
+- **Google OAuth signup** — needs `password_hash` nullable +
+  `auth_provider`/`google_id` columns (or a separate `oauth_identities`
+  table), plus a decision on what happens when a Google email collides with
+  an existing local account.
+
 ## Current status
 
-- [x] Data model designed (Users / Job Applications / Interviews / Sessions)
+- [x] Data model designed (Users / Sessions / Job Applications / Interviews)
 - [x] Project skeleton scaffolded
-- [ ] Postgres running via Docker
-- [x] `/health` route (written by hand, not generated)
-- [ ] `POST /signup`, `POST /login`, `POST /logout` (in progress — see auth
-      route/schema/model stubs)
-
-## Backlog (not started, deliberately deferred)
-
-- **Alternative signup via Google OAuth.** Requires `password_hash` to
-  become nullable on Users, plus a way to identify Google-originated
-  accounts — either `auth_provider`/`google_id` columns on Users, or a
-  separate `oauth_identities` table if multiple providers ever get added.
-  Also needs a decision on what happens if a Google sign-in email matches
-  an existing local-password account (link vs. reject vs. treat as
-  separate users). Deferred because it's purely additive to the current
-  schema — safe to build whenever it's actually needed.
+- [x] Postgres running via Docker
+- [x] `/health` route (written by hand) — currently a bare `{"status": "ok"}`, does not check the DB connection
+- [x] `Users` and `Sessions` SQLAlchemy models
+- [x] `POST /signup`, `POST /login`, `POST /logout` (`app/routes/auth.py`) — implemented and verified against real Postgres
+- [x] `get_current_user` auth dependency (`app/dependencies.py`) — implemented and verified, valid/expired/bogus tokens all behave correctly
+- [ ] Wire `Depends(get_current_user)` into an actual protected route — dependency exists but nothing uses it yet
+- [ ] `/health` checks the DB connection, not just that the process is up
+- [ ] Deliberately choose (and justify) session lifetime — currently an unexamined `timedelta(weeks=4)` placeholder
+- [ ] Verify `JobApplication`/`Interview` models still match the schema above
+- [ ] Schemas + CRUD routes for Job Applications and Interviews

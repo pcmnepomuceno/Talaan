@@ -68,7 +68,7 @@ def login(user_data: UserLogin, response: Response, db: Session = Depends(get_db
     # Create a new session
     session = SessionModel(
         user_id=user.id,
-        session_token=session_token,
+        token=session_token,
         created_at=datetime.now(timezone.utc),
         expires_at=datetime.now(timezone.utc) + timedelta(weeks=4)  
     )
@@ -76,15 +76,15 @@ def login(user_data: UserLogin, response: Response, db: Session = Depends(get_db
     db.commit()
     db.refresh(session)
 
-    response.set_cookie(key="session_token", value=session.session_token, httponly=True)
+    response.set_cookie(key="session_token", value=session.token, httponly=True)
 
-    return {"session_token": session.session_token}
+    return {"session_token": session.token}
 
 # TODO: implement POST /logout
 @router.post("/logout")
 def logout(session_token: str = Cookie(None), response: Response = None, db: Session = Depends(get_db)):
     # Identify the session by token
-    session = db.query(SessionModel).filter(SessionModel.session_token == session_token).first()
+    session = db.query(SessionModel).filter(SessionModel.token == session_token).first()
     if not session:
         raise HTTPException(status_code=400, detail="Invalid session token.")
     # Delete the session cookie
