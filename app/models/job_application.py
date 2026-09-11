@@ -6,5 +6,16 @@ to Users.id (the FK lives here, on the "many" side, only).
 """
 
 from app.database import Base
+from sqlalchemy import Column, Integer, String, Boolean
 
 # TODO: implement the JobApplication model
+class JobApplication(Base):
+    __tablename__ = "job_applications"
+    id = Column(Integer, primary_key=True)
+    job_title = Column(String, nullable=False)
+    company_name = Column(String, nullable=False)
+    status = Column(String, nullable=False)  # Enum: e.g., "applied", "interviewing", "offer", "rejected"
+    mode_of_work = Column(String, nullable=False)  # Enum: e.g., "remote", "onsite", "hybrid"
+    created_by = Column(Integer, nullable=False)  # Foreign key to Users.id
+    created_at = Column(String, nullable=False)  # Timestamp of application creation
+    updated_at = Column(String, nullable=True)  # Timestamp of last update
