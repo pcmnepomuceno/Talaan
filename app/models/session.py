@@ -6,12 +6,12 @@ cookie); `user_id` is a foreign key to Users.id (the FK lives here only).
 """
 
 from app.database import Base
-from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 
 class Session(Base):
     __tablename__ = "sessions"
     id = Column(Integer, primary_key=True)
     session_token = Column(String, unique=True, nullable=False)
-    user_id = Column(Integer, nullable=False)  # Foreign key to Users.id
-    created_at = Column(String, nullable=False)  # Timestamp of session creation
-    expired_at = Column(String, nullable=True)  # Timestamp of session expiration
+    user_id = Column(ForeignKey("users.id"), nullable=False)  # Foreign key to Users.id
+    created_at = Column(DateTime, nullable=False)  # Timestamp of session creation
+    expired_at = Column(DateTime, nullable=True)  # Timestamp of session expiration
