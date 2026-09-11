@@ -12,6 +12,6 @@ class Session(Base):
     __tablename__ = "sessions"
     id = Column(Integer, primary_key=True)
     session_token = Column(String, unique=True, nullable=False)
-    user_id = Column(ForeignKey("users.id"), nullable=False)  # Foreign key to Users.id
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # Foreign key to Users.id
     created_at = Column(DateTime, nullable=False)  # Timestamp of session creation
-    expired_at = Column(DateTime, nullable=True)  # Timestamp of session expiration
+    expires_at = Column(DateTime, nullable=False)  # Timestamp of session expiration

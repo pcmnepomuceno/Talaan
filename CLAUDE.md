@@ -90,7 +90,20 @@ collect a finished repo I can't explain. Follow these rules strictly:
 
 ## Current status
 
-- [x] Data model designed (Users / Job Applications / Interviews)
-- [ ] Project skeleton scaffolded
+- [x] Data model designed (Users / Job Applications / Interviews / Sessions)
+- [x] Project skeleton scaffolded
 - [ ] Postgres running via Docker
-- [ ] `/health` route (written by hand, not generated)
+- [x] `/health` route (written by hand, not generated)
+- [ ] `POST /signup`, `POST /login`, `POST /logout` (in progress — see auth
+      route/schema/model stubs)
+
+## Backlog (not started, deliberately deferred)
+
+- **Alternative signup via Google OAuth.** Requires `password_hash` to
+  become nullable on Users, plus a way to identify Google-originated
+  accounts — either `auth_provider`/`google_id` columns on Users, or a
+  separate `oauth_identities` table if multiple providers ever get added.
+  Also needs a decision on what happens if a Google sign-in email matches
+  an existing local-password account (link vs. reject vs. treat as
+  separate users). Deferred because it's purely additive to the current
+  schema — safe to build whenever it's actually needed.
