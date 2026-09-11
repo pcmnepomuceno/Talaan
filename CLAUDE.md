@@ -51,10 +51,19 @@ see "Working Agreement" below before generating anything.
 | outcome | ENUM | good, bad, pending, etc. |
 | remarks | string | free-text notes |
 
-Relationships: Users 1—N Job Applications 1—N Interviews. Each foreign key
-lives on the "many" side only — no relationship is ever duplicated on both
-sides (e.g. Users does NOT store a list of its applications; query by
-`created_by` instead).
+### Sessions
+| Column | Type | Notes |
+|---|---|---|
+| id | integer | primary key |
+| session_token | string | UNIQUE, the actual random token stored in the user's cookie |
+| user_id | integer | foreign key → Users.id |
+| created_at | timestamp | |
+| expires_at | timestamp | when this session stops being valid |
+
+Relationships: Users 1—N Job Applications 1—N Interviews, and Users 1—N
+Sessions. Each foreign key lives on the "many" side only — no relationship
+is ever duplicated on both sides (e.g. Users does NOT store a list of its
+applications; query by `created_by` instead).
 
 ## Working Agreement — read this before generating any code
 
