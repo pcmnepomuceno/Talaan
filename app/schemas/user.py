@@ -11,6 +11,13 @@ class UserCreate(BaseModel):
     password: str
     account_name: str
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        if value is None:
+            return value
+        return str(value).strip().lower()
+
     @field_validator("password")
     @classmethod
     def check_password_rules(cls, value: str) -> str:
@@ -39,3 +46,10 @@ class UserRead(BaseModel):
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        if value is None:
+            return value
+        return str(value).strip().lower()

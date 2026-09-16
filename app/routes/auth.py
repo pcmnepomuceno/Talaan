@@ -30,9 +30,10 @@ SESSION_LIFETIME = timedelta(days=30)
 
 @router.post("/signup")
 def signup(user_data: UserCreate, db: Session = Depends(get_db)):
+    normalized_email = user_data.email.lower()
 
     #Check if email already exists
-    existing_user = db.query(UserModel).filter(UserModel.email == user_data.email).first()
+    existing_user = db.query(UserModel).filter(UserModel.email == normalized_email).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already exists.")
 
@@ -41,7 +42,7 @@ def signup(user_data: UserCreate, db: Session = Depends(get_db)):
 
     # Create a new user
     user = UserModel(
-        email=user_data.email,
+        email=normalized_email,
         password_hash=hashed_password,
         account_name=user_data.account_name
     )
@@ -53,8 +54,10 @@ def signup(user_data: UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login")
 def login(user_data: UserLogin, response: Response, db: Session = Depends(get_db)):
+    normalized_email = user_data.email.lower()
+
     # Look up the user by email
-    user = db.query(UserModel).filter(UserModel.email == user_data.email).first()
+    user = db.query(UserModel).filter(UserModel.email == normalized_email).first()
     if not user:
         raise HTTPException(status_code=400, detail="Invalid email or password.")
 
