@@ -6,7 +6,9 @@ Run locally with:
 
 from fastapi import FastAPI
 
-from app.routes import auth, health, users
+from app import health
+from app.auth import router as auth
+from app.users import router as users
 
 app = FastAPI(title="Talaan", description="Job application tracker")
 

@@ -16,11 +16,11 @@ app/schemas/session.py for the pieces these will need.
 
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
-from app.models.session import Session as SessionModel
+from app.auth.models import Session as SessionModel
 from sqlalchemy.orm import Session
-from app.schemas.user import UserCreate, UserRead, UserLogin
-from app.models.user import User as UserModel
-from app.security import hash_password, verify_password, generate_session_token
+from app.users.schemas import UserCreate, UserRead, UserLogin
+from app.users.models import User as UserModel
+from app.auth.security import hash_password, verify_password, generate_session_token
 from app.database import get_db
 
 router = APIRouter(tags=["auth"])

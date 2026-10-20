@@ -3,8 +3,9 @@ from datetime import datetime, timezone
 from fastapi import Cookie, Depends, HTTPException, status
 from sqlalchemy.orm import Session as DBSession
 
-from .database import get_db
-from .models import Session, User
+from app.auth.models import Session
+from app.database import get_db
+from app.users.models import User
 
 
 def get_current_user(

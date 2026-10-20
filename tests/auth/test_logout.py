@@ -1,4 +1,4 @@
-from app.models import Session as SessionModel
+from app.auth.models import Session as SessionModel
 
 
 def test_logout_valid_token(client, db, make_session):

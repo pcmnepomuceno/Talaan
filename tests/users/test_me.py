@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from app.models import Session as SessionModel
+from app.auth.models import Session as SessionModel
 from tests.conftest import USER_EMAIL
 
 
