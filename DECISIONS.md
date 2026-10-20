@@ -119,3 +119,12 @@
 - **Rationale:** Quick-add and the browser extension must save jobs not yet applied to.
 - **Tradeoff:** Postgres cannot drop an enum value, so the downgrade must map `saved` rows and recreate the type. Making `date_applied` nullable again also needs a backfill.
 - **Alternative:** A separate `saved_jobs` table; rejected because it duplicates the application fields.
+
+---
+
+# Decision: Idempotent logout (204)
+
+- **Date:** 2026-10-20
+- **Decision:** `POST /logout` always returns 204 and clears the `session_token` cookie. It deletes the session row if the token matches one, and succeeds quietly for a missing, invalid, or already-deleted token.
+- **Rationale:** Logging out twice is harmless, the response does not reveal whether a token was valid, and it matches the 204 in docs/API.md.
+- **Alternative:** 401 for a missing or invalid token; rejected because a repeat or stale logout would error for no security gain.
