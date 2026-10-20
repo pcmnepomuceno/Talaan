@@ -82,3 +82,24 @@ def make_session(db, user):
         return s
 
     return _make
+
+
+def _user_with_token(db, email, token):
+    u = User(email=email, password_hash="x", account_name=email)
+    db.add(u)
+    db.commit()
+    now = datetime.now(timezone.utc)
+    db.add(SessionModel(token=token, user_id=u.id, created_at=now, expires_at=now + timedelta(days=1)))
+    db.commit()
+    return u
+
+
+@pytest.fixture
+def users(db):
+    return _user_with_token(db, "a@example.com", "tok-a"), _user_with_token(db, "b@example.com", "tok-b")
+
+
+def as_user(client, token):
+    client.cookies.clear()
+    if token:
+        client.cookies.set("session_token", token)
