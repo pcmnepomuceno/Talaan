@@ -19,16 +19,16 @@ if not (_url.database or "").endswith("_test"):
 # app.database.engine / alembic/env.py both use it.
 os.environ["DATABASE_URL"] = _url.render_as_string(hide_password=False)
 
-from alembic import command  # noqa: E402
-from alembic.config import Config  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-from sqlalchemy.orm import Session  # noqa: E402
+from alembic.config import Config
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
-from app.database import engine, get_db  # noqa: E402
-from app.main import app  # noqa: E402
-from app.models import Session as SessionModel  # noqa: E402
-from app.models import User  # noqa: E402
-from app.security import hash_password  # noqa: E402
+from alembic import command
+from app.database import engine, get_db
+from app.main import app
+from app.models import Session as SessionModel
+from app.models import User
+from app.security import hash_password
 
 USER_EMAIL = "user@example.com"
 USER_PASSWORD = "Str0ng!pass"
