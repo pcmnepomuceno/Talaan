@@ -6,7 +6,7 @@ GOOD = {"email": "new@example.com", "password": "Str0ng!pass", "account_name": "
 
 
 def test_signup_success(client):
-    r = client.post("/signup", json=GOOD)
+    r = client.post("/api/v1/signup", json=GOOD)
     assert r.status_code == 200
     body = r.json()
     assert body["email"] == GOOD["email"]
@@ -15,7 +15,7 @@ def test_signup_success(client):
 
 
 def test_signup_duplicate_email(client, user):
-    r = client.post("/signup", json={**GOOD, "email": USER_EMAIL})
+    r = client.post("/api/v1/signup", json={**GOOD, "email": USER_EMAIL})
     assert r.status_code == 400
 
 
@@ -30,5 +30,5 @@ def test_signup_duplicate_email(client, user):
     ],
 )
 def test_signup_weak_password(client, password):
-    r = client.post("/signup", json={**GOOD, "password": password})
+    r = client.post("/api/v1/signup", json={**GOOD, "password": password})
     assert r.status_code == 422

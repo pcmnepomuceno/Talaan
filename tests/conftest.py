@@ -26,9 +26,9 @@ from sqlalchemy.orm import Session
 from alembic import command
 from app.database import engine, get_db
 from app.main import app
-from app.models import Session as SessionModel
-from app.models import User
-from app.security import hash_password
+from app.auth.models import Session as SessionModel
+from app.auth.security import hash_password
+from app.users.models import User
 
 USER_EMAIL = "user@example.com"
 USER_PASSWORD = "Str0ng!pass"
