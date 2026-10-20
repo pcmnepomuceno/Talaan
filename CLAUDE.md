@@ -28,8 +28,8 @@ FKs live on the "many" side only (query `created_by`, never store lists on Users
 
 **Users** (matches model): id, email (UNIQUE), password_hash, account_name
 
-**Sessions** (matches model): id, token (UNIQUE, value of the `session_token`
-HttpOnly cookie), user_id → Users.id, created_at, expires_at
+**Sessions** (matches model): id, token_hash (UNIQUE, SHA-256 hex of the `session_token`
+HttpOnly cookie value; raw token never stored), user_id → Users.id, created_at, expires_at
 (both `DateTime(timezone=True)`)
 
 **Job Applications** (matches model)
@@ -137,6 +137,6 @@ Routers mount under `/api/v1` (`/api/v1/signup`, `/login`, `/logout`, `/me`).
 - `/signup` returns 400/200 where API.md says 409/201; tests in `tests/auth/test_signup.py`
   assert the current behavior and must change when aligned
 - `/signup` check-then-insert race: concurrent duplicate hits the unique constraint (500); catch `IntegrityError`
-- No rate limiting on `/login` and `/signup` (v1b); session tokens stored in plaintext (v1b: hash)
+- No rate limiting on `/login` and `/signup` (v1b)
 - Expired sessions are deleted only when presented; add a purge or clean up at login
 - Tests: starlette warns `httpx` is deprecated for `TestClient` (suggests `httpx2`); revisit
