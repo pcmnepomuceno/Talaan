@@ -9,7 +9,10 @@ Agreement). The earlier learn-by-writing workflow is preserved in
 ## Stack
 - FastAPI (Python), SQLAlchemy, PostgreSQL 16 (Docker)
 - Password hashing: `bcrypt` directly (`passlib` dropped: unmaintained, broken on bcrypt 5.x)
-- Run: `cp .env.example .env`, `docker compose up -d db`, `uvicorn app.main:app --reload`
+- Run: `cp .env.example .env`, `docker compose up -d db`, `pip install -r requirements-dev.txt`,
+  `alembic upgrade head`, `uvicorn app.main:app --reload`
+- Migrations: `alembic revision --autogenerate -m slug` (review the output), `alembic upgrade head`,
+  `alembic check` (models match migrations)
 - Tests: none yet (pytest planned)
 
 ## Schema
@@ -22,23 +25,23 @@ FKs live on the "many" side only (query `created_by`, never store lists on Users
 HttpOnly cookie), user_id → Users.id, created_at, expires_at
 (both `DateTime(timezone=True)`)
 
-**Job Applications** (target spec; model is a stub, see Status)
+**Job Applications** (matches model)
 id, company, job_name, contact_website?, contact_email?, status (ENUM),
 salary? (int), mode_of_work (ENUM), remarks, date_applied, created_at,
 updated_at, created_by → Users.id
-- Current model differs: `job_title`/`company_name` names; missing
-  contact_website, contact_email, salary, remarks, date_applied;
-  String instead of ENUM; naive `DateTime` (must be tz-aware).
+- `salary`: monthly gross, PHP, no currency column. `remarks` nullable. `date_applied` is a `Date`.
+- ENUMs: status = applied/screening/interviewing/offered/accepted/rejected/withdrawn/ghosted;
+  mode_of_work = on_site/hybrid/remote.
 
-**Interviews** (target spec; model is partial)
+**Interviews** (matches model)
 id, job_application_id → Job Applications.id, interviewer, scheduled_at
 (tz-aware; spec renamed from `datetime`, model already uses `scheduled_at`),
 mode (ENUM: on-site/online/async), outcome (ENUM: good/bad/pending), remarks,
 created_at, updated_at
-- Current model has the FK and tz-aware timestamps; missing interviewer and
-  remarks; mode/outcome are Strings with different example values.
+- `interviewer` and `remarks` nullable. mode = on_site/online/async;
+  outcome = pending/good/bad (default pending).
 
-ENUM value lists are decided in the schemas milestone and logged in DECISIONS.md.
+ENUM value lists and column choices are logged in DECISIONS.md (2026-10-20).
 
 ## Auth design decisions
 - **Sessions over JWT**: instant revocation (delete the row); no horizontal-scaling need.
@@ -99,11 +102,11 @@ behavior change, AFTER the auth tests exist and BEFORE any CRUD code:
 - [x] Users/Sessions models; Postgres via docker-compose
 - [x] `POST /signup`, `/login`, `/logout`; `get_current_user`; `GET /me`
 - [x] `/health` exists (bare `{"status":"ok"}`, no DB check)
+- [x] Alembic set up; baseline migration for all four tables
+- [x] `JobApplication`/`Interview` models match schema
 - [ ] Fix login/logout failures to 401 (see Auth)
 - [ ] Auth tests (pytest + httpx)
 - [ ] Manually exercise the app end-to-end (`/docs`, curl cookie jar, psql)
-- [ ] Alembic set up (nothing creates tables today)
-- [ ] `JobApplication`/`Interview` models match schema (via migration)
 - [ ] Move to domain layout (after auth tests, before CRUD)
 - [ ] Pydantic schemas + CRUD routes for applications and interviews (with ownership checks)
 - [ ] Dockerfile for the API; compose with db
@@ -114,7 +117,7 @@ behavior change, AFTER the auth tests exist and BEFORE any CRUD code:
 - `/login` also returns `session_token` in the JSON body, exposing it to JS
   (defeats HttpOnly); drop it from the response
 - Signup reveals whether an email exists ("Email already exists"); decide whether to accept or change
-- Pin versions in `requirements.txt`
+- `sessions.user_id` FK: add `ON DELETE CASCADE` and an index (new migration)
 - Stale stub docstrings in `app/` reference the old learning-mode rules and passlib; clean up
   (fits the domain move)
 - Google OAuth signup: needs nullable `password_hash` + `auth_provider`/`google_id`
