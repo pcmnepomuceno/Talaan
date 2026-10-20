@@ -8,7 +8,17 @@ member names.
 
 import enum
 
-from sqlalchemy import Column, Date, DateTime, Enum, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (
+    Column,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    func,
+)
 
 from app.database import Base
 
