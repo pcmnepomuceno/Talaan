@@ -24,6 +24,7 @@ from app.database import Base
 
 
 class ApplicationStatus(str, enum.Enum):
+    SAVED = "saved"
     APPLIED = "applied"
     SCREENING = "screening"
     INTERVIEWING = "interviewing"
@@ -62,10 +63,12 @@ class JobApplication(Base):
         nullable=False,
     )
     remarks = Column(Text, nullable=True)
-    date_applied = Column(Date, nullable=False)
+    date_applied = Column(Date, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(
-        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+        DateTime(timezone=True), nullable=False, server_default=func.now(),
+        # clock_timestamp, not now(): now() is frozen for the whole transaction
+        onupdate=func.clock_timestamp(),
     )
     created_by = Column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True

@@ -1,0 +1,4 @@
+extend-exclude = ["alembic/versions"]
+
+[lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Cookie", "fastapi.Query", "fastapi.Path"]

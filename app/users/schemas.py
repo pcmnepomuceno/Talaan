@@ -4,6 +4,7 @@ Stub — request validation is yours to write (CLAUDE.md rule 2).
 Typical set: UserCreate (email + raw password in), UserRead (no password out).
 """
 from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
+
 # TODO: implement User schemas
 
 class UserCreate(BaseModel):

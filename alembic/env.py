@@ -1,8 +1,8 @@
 from logging.config import fileConfig
 
-import app.applications.models  # noqa: F401  (registers tables on Base.metadata)
-import app.auth.models  # noqa: F401
-import app.interviews.models  # noqa: F401
+import app.applications.models
+import app.auth.models
+import app.interviews.models
 import app.users.models  # noqa: F401
 from alembic import context
 from app.config import DATABASE_URL

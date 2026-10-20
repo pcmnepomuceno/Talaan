@@ -5,8 +5,10 @@ Notes: `token` is unique (this is what gets set in the user's
 cookie); `user_id` is a foreign key to Users.id (the FK lives here only).
 """
 
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
+
 from app.database import Base
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+
 
 class Session(Base):
     __tablename__ = "sessions"
