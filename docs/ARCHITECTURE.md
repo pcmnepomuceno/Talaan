@@ -39,7 +39,6 @@ Planned (v1b): hash tokens at rest, `Secure` and `SameSite=Lax` via config, rate
 Deliberate deviations:
 - **30-day absolute lifetime**, no idle timeout, no sliding renewal. Data is low-stakes; convenience wins (DECISIONS.md).
 - **No token rotation at login-time privilege change**: there are no roles.
-- Login currently returns the token in the JSON body; to be removed (backlog).
 
 ## Testing
 - Separate `*_test` database. A guard aborts if the configured DB name does not end in `_test`.

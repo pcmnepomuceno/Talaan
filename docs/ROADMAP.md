@@ -1,6 +1,6 @@
 # Talaan Roadmap
 
-**Current milestone:** Milestone 0: rename + planning docs
+**Current milestone:** Milestone 1 done (auth fixes + tests). Next: domain layout move (move-only commit), then v1a CRUD.
 
 ## Roadmap
 
