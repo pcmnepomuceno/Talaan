@@ -92,13 +92,13 @@ Decision changes get a new dated entry in DECISIONS.md (append; never rewrite ol
 - Ask before adding dependencies.
 
 ## Structure
-Domain packages (`app/`). Applications have CRUD; interviews have models and schemas only until their CRUD lands.
+Domain packages (`app/`). Applications and interviews have CRUD. A middleware in `main.py` sets `Cache-Control: no-store` on every `/api/v1` response.
 
     app/main.py, config.py, database.py, health.py
     app/auth/          router, schemas, models [Session], dependencies, security
     app/users/         router, schemas, models
     app/applications/  models, schemas, router, dependencies (service planned)
-    app/interviews/    models, schemas (router, service planned)
+    app/interviews/    models, schemas, router, dependencies (service planned)
     tests/             mirrors app/
 
 Routers mount under `/api/v1` (`/api/v1/signup`, `/login`, `/logout`, `/me`).
@@ -116,13 +116,13 @@ Routers mount under `/api/v1` (`/api/v1/signup`, `/login`, `/logout`, `/me`).
 - [ ] Manually exercise the app end-to-end (`/docs`, curl cookie jar, psql)
 - [x] Domain layout move; routers under `/api/v1`
 - [x] Applications CRUD (ownership 404, pagination, status filter, `saved` migration; 64 tests)
-- [ ] Pydantic schemas + CRUD routes for interviews (with ownership checks)
+- [x] Interviews CRUD (ownership through the parent application; 127 tests)
 - [ ] Dockerfile for the API; compose with db
 - [ ] Deploy
 
 ## Backlog
-- `/me` and auth responses lack `Cache-Control: no-store` (applications router sets it)
-- `Interview.updated_at` `onupdate=now()` is frozen per transaction; use `clock_timestamp()` (interviews milestone)
+- PATCH has no optimistic concurrency (no ETag/version): concurrent edits are last-write-wins
+- No-store middleware matches the prefix `/api/v1`, so a future `/api/v10` would match too; use `/api/v1/`
 - Cookie `samesite="lax"` and `secure=True` in production (via config)
 - Signup reveals whether an email exists ("Email already exists"); decide whether to accept or change
 - `sessions.user_id` FK: add `ON DELETE CASCADE` and an index (new migration)

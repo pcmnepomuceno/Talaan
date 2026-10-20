@@ -146,3 +146,12 @@
 - **Decision:** (1) Migration `saved_status_nullable_date_applied` adds `saved` and makes `date_applied` nullable. It is hand-written because autogenerate misses enum changes. The downgrade raises `RuntimeError` with a row count if any `saved` or NULL-date rows exist, then recreates the enum without `saved`. (2) For a non-`saved` row with no `date_applied`, the server sets today in Asia/Manila (fixed +08:00, no DST, no tzdata); a client date wins; returning to `saved` keeps the date. (3) Default list order is `created_at DESC, id DESC`; the id tiebreaker keeps pages stable. (4) `JobApplication.updated_at` uses `onupdate=clock_timestamp()` because `now()` is frozen for a whole transaction, so a PATCH in the same transaction could not change it.
 - **Rationale:** Rows are never silently rewritten on downgrade; one timezone makes the date predictable for a PH user; stable pagination.
 - **Alternative:** Auto-map `saved` rows on downgrade (loses data meaning); `sort by date_applied` (NULL for saved rows).
+
+---
+
+# Decision: Interviews CRUD (ownership, order, whitespace, no-store middleware)
+
+- **Date:** 2026-10-21
+- **Decision:** (1) Interviews have no owner column; ownership is the parent application's `created_by`. Nested routes reuse `get_owned_application`; by-id routes use `get_owned_interview`, which joins `job_applications` and returns 404 for missing and not-owned alike. (2) Default list order is `scheduled_at ASC, id ASC`: rounds read chronologically and the id tiebreaker keeps pages stable. (3) A whitespace-only `interviewer` is 422, not null (same rule as application names); `null` is the explicit "none". (4) `scheduled_at` must be timezone-aware and between years 1900 and 2200; the instant is stored and returned in UTC, the sent offset is not kept. (5) `Cache-Control: no-store` is set by one middleware on every `/api/v1` response, replacing the per-router dependency. (6) `Interview.updated_at` uses `clock_timestamp()` (ORM-only, no migration).
+- **Rationale:** One owner of truth avoids a second column that could drift from the parent. A middleware also covers 401/404/422 responses and `/me`, which a router dependency missed. The year bound stops a 500 from datetime overflow found in the security pass.
+- **Alternative:** Denormalized `user_id` on interviews (faster check, can drift); descending order (newest first, but rounds read backwards); coercing blank `interviewer` to null (silent rewrite); storing the offset in a column (more schema for little value, the .ics export uses UTC).
