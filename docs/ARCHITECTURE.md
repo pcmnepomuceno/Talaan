@@ -3,15 +3,15 @@
 ## Stack
 FastAPI, sync SQLAlchemy, PostgreSQL 16, Alembic, bcrypt. Sync routes only (see CLAUDE.md conventions).
 
-## Domain layout (planned)
-Done as a move-only commit after the auth tests, before any CRUD.
+## Domain layout
+Done in Milestone 2 as a move-only commit. Applications and interviews have models and schemas only until CRUD.
 
 ```
-app/main.py, config.py, database.py
+app/main.py, config.py, database.py, health.py
 app/auth/          router, schemas, models [Session], dependencies, security
 app/users/         router, schemas, models
-app/applications/  router, schemas, models, service, dependencies
-app/interviews/    router, schemas, models, service
+app/applications/  models, schemas (router, service, dependencies planned)
+app/interviews/    models, schemas (router, service planned)
 tests/             mirrors app/
 ```
 

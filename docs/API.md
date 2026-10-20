@@ -1,6 +1,6 @@
 # Talaan: API Contract
 
-Contract first; no CRUD exists yet. All routes live under `/api/v1` (existing auth routes move there in v1a). Items marked **Open** need a decision.
+Contract first; no CRUD exists yet. All routes live under `/api/v1`, except `/health` and `/ping`, which sit at the root. Items marked **Open** need a decision.
 
 ## Auth
 - Browsers: `session_token` HttpOnly cookie (30 days).
@@ -21,13 +21,13 @@ Contract first; no CRUD exists yet. All routes live under `/api/v1` (existing au
 | GET | `/applications/{id}/interviews` | paginated |
 | POST | `/applications/{id}/interviews` | 201 |
 | GET/PATCH/DELETE | `/interviews/{id}` | ownership via parent application |
-| GET | `/health` | DB check (`SELECT 1`) |
-| GET | `/ping` | no DB; for uptime pinger |
+| GET | `/health` | root (unversioned); DB check (`SELECT 1`); 503 on DB failure |
+| GET | `/ping` | root (unversioned); no DB; for uptime pinger |
 
-`/health` and `/ping` are unauthenticated. **Open**: whether they sit outside `/api/v1` (proposal: root, so pingers and Render checks survive version bumps).
+`/health` and `/ping` are unauthenticated and unversioned so pingers and Render checks survive version bumps (DECISIONS.md, 2026-10-20).
 
 ## Status codes
-200 OK, 201 Created, 204 No Content (delete, logout), 401 not logged in or bad credentials, 404 not found **or not yours**, 409 duplicate email, 422 validation, 429 rate limited (v1b).
+200 OK, 201 Created, 204 No Content (delete, logout), 401 not logged in or bad credentials, 404 not found **or not yours**, 409 duplicate email, 422 validation, 429 rate limited (v1b), 503 `/health` when the database is unreachable.
 
 ## Errors
 FastAPI default: `{"detail": "message"}`. Validation errors (422) use FastAPI's `detail` list. Clients branch on status code, not on message text.
@@ -52,7 +52,6 @@ New `application_status` value `saved` (first in order) and nullable `date_appli
 `POST /applications/quick` takes `{"url": "...", "company": "..."?}`. It creates a `saved` application with `contact_website=url`. Because `job_name` is NOT NULL, **Open**: placeholder (the URL's hostname) vs making `job_name` nullable for `saved` rows. Duplicate URLs for the same user: **Open** (409 vs allow).
 
 ## Open questions
-1. `/health` and `/ping` path (root vs `/api/v1`).
-2. Default sort for applications.
-3. Quick-add `job_name` placeholder and duplicate-URL behavior.
-4. Should `status` accept several values (`?status=applied&status=screening`)?
+1. Default sort for applications.
+2. Quick-add `job_name` placeholder and duplicate-URL behavior.
+3. Should `status` accept several values (`?status=applied&status=screening`)?

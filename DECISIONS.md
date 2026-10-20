@@ -128,3 +128,12 @@
 - **Decision:** `POST /logout` always returns 204 and clears the `session_token` cookie. It deletes the session row if the token matches one, and succeeds quietly for a missing, invalid, or already-deleted token.
 - **Rationale:** Logging out twice is harmless, the response does not reveal whether a token was valid, and it matches the 204 in docs/API.md.
 - **Alternative:** 401 for a missing or invalid token; rejected because a repeat or stale logout would error for no security gain.
+
+---
+
+# Decision: /health and /ping at the root, unversioned
+
+- **Date:** 2026-10-20
+- **Decision:** `GET /health` (runs `SELECT 1`, 503 on database failure) and `GET /ping` (no database work) live at the root, outside `/api/v1`. Business routes live under `/api/v1`.
+- **Rationale:** Uptime pingers and Render's health check should not break when the API version bumps. `/ping` touches no database, so a free uptime pinger can keep a free instance warm without loading Neon.
+- **Alternative:** Mount both under `/api/v1`; rejected because every version bump would force a change to deploy and pinger config.

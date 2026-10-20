@@ -90,43 +90,39 @@ Decision changes get a new dated entry in DECISIONS.md (append; never rewrite ol
 - Lint/format with `ruff`; tests in `tests/` mirroring `app/`.
 - Ask before adding dependencies.
 
-## Planned structure (not yet applied)
-**Current:** `app/` is organized by file type (`models/`, `routes/`, `schemas/`,
-plus `dependencies.py`, `security.py`).
+## Structure
+Domain packages (`app/`). Applications and interviews have models and schemas only until CRUD lands.
 
-**Planned:** domain packages, done as a separate move-only commit with no
-behavior change, AFTER the auth tests exist and BEFORE any CRUD code:
-
-    app/main.py, config.py, database.py
+    app/main.py, config.py, database.py, health.py
     app/auth/          router, schemas, models [Session], dependencies, security
     app/users/         router, schemas, models
-    app/applications/  router, schemas, models, service, dependencies
-    app/interviews/    router, schemas, models, service
-    tests/             mirroring app/
+    app/applications/  models, schemas (router, service, dependencies planned)
+    app/interviews/    models, schemas (router, service planned)
+    tests/             mirrors app/
 
-**Rule:** do not build Job Applications/Interviews CRUD before this move.
+Routers mount under `/api/v1` (`/api/v1/signup`, `/login`, `/logout`, `/me`).
+`/health` (SELECT 1, 503 on DB failure) and `/ping` (no DB) are unversioned at the root.
+`alembic/env.py` imports each domain's `models` module; add new domains there.
 
 ## Status
 - [x] Users/Sessions models; Postgres via docker-compose
 - [x] `POST /signup`, `/login`, `/logout`; `get_current_user`; `GET /me`
-- [x] `/health` exists (bare `{"status":"ok"}`, no DB check)
+- [x] Real `/health` (SELECT 1, 503 on failure) and `/ping`, unversioned at root
 - [x] Alembic set up; baseline migration for all four tables
 - [x] `JobApplication`/`Interview` models match schema
 - [x] Login 401, no token in login body, idempotent logout 204
-- [x] Auth tests (pytest + httpx; 20 tests, `_test` database)
+- [x] Auth + health tests (pytest + httpx; 23 tests, `_test` database)
 - [ ] Manually exercise the app end-to-end (`/docs`, curl cookie jar, psql)
-- [ ] Move to domain layout (after auth tests, before CRUD)
+- [x] Domain layout move; routers under `/api/v1`
 - [ ] Pydantic schemas + CRUD routes for applications and interviews (with ownership checks)
 - [ ] Dockerfile for the API; compose with db
 - [ ] Deploy
 
 ## Backlog
 - Cookie `samesite="lax"` and `secure=True` in production (via config)
-- `/health` should run `SELECT 1` via `get_db`
 - Signup reveals whether an email exists ("Email already exists"); decide whether to accept or change
 - `sessions.user_id` FK: add `ON DELETE CASCADE` and an index (new migration)
-- Stale stub docstrings in `app/` reference the old learning-mode rules and passlib; clean up
-  (fits the domain move)
+- Stale stub docstrings in `app/` reference the old learning-mode rules and passlib; clean up.
 - Google OAuth signup: needs nullable `password_hash` + `auth_provider`/`google_id`
   (or an `oauth_identities` table) and a rule for email collisions with local accounts
 - Login timing oracle: unknown email skips bcrypt, so response time reveals which emails

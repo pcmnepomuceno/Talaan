@@ -1,6 +1,6 @@
 # Talaan Roadmap
 
-**Current milestone:** Milestone 1 done (auth fixes + tests). Next: domain layout move (move-only commit), then v1a CRUD.
+**Current milestone:** Milestone 2 done (domain layout, `/api/v1` prefix, real `/health` + `/ping`). Next: applications CRUD, including the `saved` status + nullable `date_applied` migration.
 
 ## Roadmap
 
