@@ -14,5 +14,5 @@ load_dotenv()
 # postgresql+psycopg2://user:password@host:5432/dbname
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+psycopg2://applyflow:applyflow@localhost:5432/applyflow",
+    "postgresql+psycopg2://talaan@localhost:5432/talaan",
 )
