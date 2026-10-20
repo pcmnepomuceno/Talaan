@@ -8,7 +8,7 @@ from fastapi import FastAPI
 
 from app.routes import auth, health, users
 
-app = FastAPI(title="ApplyFlow", description="Job Application Tracker")
+app = FastAPI(title="Talaan", description="Job application tracker")
 
 app.include_router(health.router)
 app.include_router(auth.router)

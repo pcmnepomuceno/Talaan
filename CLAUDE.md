@@ -1,4 +1,4 @@
-# ApplyFlow — Job Application Tracker
+# Talaan — Job Application Tracker
 
 Personal job-application tracker: log applications, track status changes,
 record interview rounds. Portfolio project, built in **build mode**: Claude
