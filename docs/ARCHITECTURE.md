@@ -22,7 +22,7 @@ erDiagram
     USERS ||--o{ JOB_APPLICATIONS : owns
     JOB_APPLICATIONS ||--o{ INTERVIEWS : has
     USERS { int id PK string email UK string password_hash string account_name }
-    SESSIONS { int id PK string token UK int user_id FK timestamptz created_at timestamptz expires_at }
+    SESSIONS { int id PK string token_hash UK int user_id FK timestamptz created_at timestamptz expires_at }
     JOB_APPLICATIONS { int id PK int created_by FK string company string job_name enum status enum mode_of_work int salary date date_applied }
     INTERVIEWS { int id PK int job_application_id FK timestamptz scheduled_at enum mode enum outcome }
 ```
@@ -30,11 +30,11 @@ Columns are abridged; the full schema is in CLAUDE.md.
 
 ## Sessions vs OWASP Session Management
 Matches:
-- Random, unguessable token (`secrets`), stored server-side.
+- Random, unguessable token (`secrets`, 256 bits). The cookie holds the raw token; the database stores only its SHA-256 hex digest (`sessions.token_hash`), so a leaked dump holds no working logins.
 - `HttpOnly` cookie; logout and expiry delete the row (instant revocation).
 - Same 401 for unknown email and wrong password.
 
-Planned (v1b): hash tokens at rest, `Secure` and `SameSite=Lax` via config, rate limiting on login/signup.
+Planned (v1b): `Secure` and `SameSite=Lax` via config, rate limiting on login/signup.
 
 Deliberate deviations:
 - **30-day absolute lifetime**, no idle timeout, no sliding renewal. Data is low-stakes; convenience wins (DECISIONS.md).

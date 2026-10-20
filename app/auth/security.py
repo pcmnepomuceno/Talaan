@@ -10,6 +10,7 @@ You'll likely need something like:
 For hashing, look into `passlib[bcrypt]` (add to requirements.txt yourself
 once you've decided on it) rather than rolling your own.
 """
+import hashlib
 import secrets
 
 import bcrypt
@@ -27,3 +28,8 @@ def verify_password(password: str, hashed: str) -> bool:
 def generate_session_token() -> str:
    
     return secrets.token_urlsafe(32)
+
+
+def hash_session_token(token: str) -> str:
+    """SHA-256 hex of the raw cookie token; only this digest is stored."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
