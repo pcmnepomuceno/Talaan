@@ -59,11 +59,11 @@ def login(user_data: UserLogin, response: Response, db: Session = Depends(get_db
     # Look up the user by email
     user = db.query(UserModel).filter(UserModel.email == normalized_email).first()
     if not user:
-        raise HTTPException(status_code=400, detail="Invalid email or password.")
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
 
     # Verify the password
     if not verify_password(user_data.password, user.password_hash):
-        raise HTTPException(status_code=400, detail="Invalid email or password.")
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
 
     # Generate a session token
     session_token = generate_session_token()
@@ -86,19 +86,17 @@ def login(user_data: UserLogin, response: Response, db: Session = Depends(get_db
         max_age=int(SESSION_LIFETIME.total_seconds()),
     )
 
-    return {"session_token": session.token}
+    return {"detail": "Logged in"}
 
-@router.post("/logout")
-def logout(session_token: str = Cookie(None), response: Response = None, db: Session = Depends(get_db)):
-    # Identify the session by token
+@router.post("/logout", status_code=204)
+def logout(session_token: str = Cookie(None), db: Session = Depends(get_db)):
+    # Idempotent: missing/invalid token is not an error (DECISIONS.md)
     session = db.query(SessionModel).filter(SessionModel.token == session_token).first()
-    if not session:
-        raise HTTPException(status_code=400, detail="Invalid session token.")
-    # Delete the session cookie
+    if session:
+        db.delete(session)
+        db.commit()
+
+    # Cookie must be cleared on the returned response object
+    response = Response(status_code=204)
     response.delete_cookie(key="session_token")
-
-    # Invalidate the session (delete it)
-    db.delete(session)
-    db.commit()
-
-    return {"detail": "Logged out successfully."}
+    return response
