@@ -80,6 +80,22 @@ Reproduce locally (with `docker compose up -d db` running):
     .venv/bin/python -m pytest -q
     docker compose exec db dropdb -U talaan talaan_ci_test
 
+## Docker
+`Dockerfile` builds the API on `python:3.14-slim` (same minor as CI). It installs `requirements.txt` only, runs as non-root user `app` (uid 10001) and starts one uvicorn worker on `0.0.0.0:${PORT:-8000}`. A `HEALTHCHECK` calls `/ping` with Python's stdlib. `.env`, `.git`, `tests` and `docs` are not in the image. Config comes from env vars only. Compose sets `DATABASE_URL` with host `db`.
+
+Migrations never run on start. Apply them by hand:
+
+    docker compose build                  # build the image
+    docker compose up -d                  # db + api (api waits for db healthy)
+    docker compose run --rm api python -m alembic upgrade head   # migrate
+    docker compose logs -f api            # follow logs
+    docker compose stop                   # stop, keep data
+    docker compose down                   # remove containers, keep the volume
+
+Reset the database: `docker compose down -v` deletes the `talaan_pgdata` volume and **all data**. Run `alembic upgrade head` again after `up`.
+
+If the API starts before migrations, `/ping` and `/health` return 200 (`SELECT 1` needs no tables) and table routes return 500 with `relation "users" does not exist` in the logs. Run the migrate command; no restart is needed.
+
 ## Privacy and data
 - Stored: email, password hash, account name, applications, interviews, session tokens.
 - Sent to LLM providers: nothing today. From v1.2, only text the user explicitly submits, using their own key.

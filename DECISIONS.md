@@ -164,3 +164,12 @@
 - **Decision:** One workflow, `.github/workflows/ci.yml`, runs on every `pull_request` and on `push` to `main` only. It has one job on Python 3.14 (the version in the local venv) with a Postgres 16 service container. Lint, `alembic upgrade head`, `alembic check` and `pytest` run as separate steps. `permissions: contents: read`, a concurrency group cancels older runs on the same branch, and `timeout-minutes: 10` caps a hung run. Config is env vars only: `DATABASE_URL` and `TEST_DATABASE_URL` both point at `talaan_test`, with a throwaway password for the CI-only container. There are no secrets and no committed `.env`.
 - **Rationale:** Matches the checks run by hand and costs $0 on the free tier. Limiting `push` to `main` stops a same-repo PR branch from running twice. Separate steps show which check broke.
 - **Alternative:** A Python version matrix (more minutes, one deploy target); `push` on all branches (duplicate runs); a repository secret for the DB password (nothing to protect in a throwaway container).
+
+---
+
+# Decision: Docker image for the API
+
+- **Date:** 2026-10-21
+- **Decision:** (1) Base `python:3.14-slim`, the minor tag CI uses; `psycopg2-binary` bundles libpq, so no apt packages or build tools. (2) The container runs as non-root user `app` (uid 10001). (3) One uvicorn worker, no gunicorn. (4) Migrations do not run on container start; run `docker compose run --rm api python -m alembic upgrade head`. (5) The image copies only `requirements.txt`, `alembic.ini`, `alembic/` and `app/`; `.env` is never copied. (6) In compose, `POSTGRES_PASSWORD` defaults to `change-me` (the `.env.example` placeholder) instead of failing, so `docker compose build` works from a clean checkout; `.env` still overrides it.
+- **Rationale:** Auto-migrate on start lets several replicas race on the same DDL, and a failed migration would crash-loop the API; schema changes stay an explicit step (Render can run it as a pre-deploy command in v1b). The app boots without tables, so there is no crash loop before the first migrate. One worker fits free-tier memory; scale with instances. Non-root limits what a compromised process can do in the container. Slim is much smaller than the full image and keeps glibc wheels working.
+- **Alternative:** Auto-migrate in an entrypoint (race, hidden failures); `alpine` (musl, wheel and build trouble); gunicorn with workers (more memory, no need yet); keeping the `:?` guard on the password (blocks no-.env builds).
