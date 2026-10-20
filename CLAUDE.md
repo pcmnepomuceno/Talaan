@@ -13,6 +13,7 @@ the **Current milestone** in `docs/ROADMAP.md`. Other docs: `docs/PROJECT_BRIEF.
 ## Stack
 - FastAPI (Python), SQLAlchemy, PostgreSQL 16 (Docker)
 - Password hashing: `bcrypt` directly (`passlib` dropped: unmaintained, broken on bcrypt 5.x)
+- Docker: `docker compose up -d` (db + api on :8000), then `docker compose run --rm api python -m alembic upgrade head` (never auto-run).
 - Run: `cp .env.example .env`, `docker compose up -d db`, `pip install -r requirements-dev.txt`,
   `alembic upgrade head`, `uvicorn app.main:app --reload`
 - Migrations: `alembic revision --autogenerate -m slug` (review the output), `alembic upgrade head`,
@@ -117,7 +118,7 @@ Routers mount under `/api/v1` (`/api/v1/signup`, `/login`, `/logout`, `/me`).
 - [x] Domain layout move; routers under `/api/v1`
 - [x] Applications CRUD (ownership 404, pagination, status filter, `saved` migration; 64 tests)
 - [x] Interviews CRUD (ownership through the parent application; 127 tests)
-- [ ] Dockerfile for the API; compose with db
+- [x] Dockerfile for the API; compose with db (non-root, slim, 1 worker)
 - [ ] Deploy
 
 ## Backlog
