@@ -13,5 +13,5 @@ from app.users import router as users
 app = FastAPI(title="Talaan", description="Job application tracker")
 
 app.include_router(health.router)
-app.include_router(auth.router)
-app.include_router(users.router)
+app.include_router(auth.router, prefix="/api/v1")
+app.include_router(users.router, prefix="/api/v1")
