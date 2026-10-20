@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session as DBSession
 
@@ -23,11 +23,7 @@ from app.users.models import User
 MANILA = timezone(timedelta(hours=8))
 
 
-def _no_store(response: Response) -> None:
-    response.headers["Cache-Control"] = "no-store"
-
-
-router = APIRouter(prefix="/applications", tags=["applications"], dependencies=[Depends(_no_store)])
+router = APIRouter(prefix="/applications", tags=["applications"])
 
 
 def _fill_date(row: JobApplication) -> None:
