@@ -5,8 +5,10 @@ Inherit from `Base` (app.database) and define __tablename__ + columns.
 Remember: store `password_hash`, never a raw password.
 """
 
-from app.database import Base
 from sqlalchemy import Column, Integer, String
+
+from app.database import Base
+
 
 class User(Base):
     __tablename__ = "users"
