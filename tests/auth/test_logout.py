@@ -1,4 +1,5 @@
 from app.auth.models import Session as SessionModel
+from app.auth.security import hash_session_token
 
 
 def test_logout_valid_token(client, db, make_session):
@@ -7,7 +8,7 @@ def test_logout_valid_token(client, db, make_session):
     r = client.post("/api/v1/logout")
     assert r.status_code == 204
     assert "session_token" in r.headers["set-cookie"]
-    assert db.query(SessionModel).filter_by(token="tok").first() is None
+    assert db.query(SessionModel).filter_by(token_hash=hash_session_token("tok")).first() is None
 
 
 def test_logout_no_cookie(client):

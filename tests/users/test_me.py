@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from app.auth.models import Session as SessionModel
+from app.auth.security import hash_session_token
 from tests.conftest import USER_EMAIL
 
 
@@ -25,7 +26,7 @@ def test_me_expired_session_deleted(client, db, make_session):
     make_session("old", expires_in=timedelta(seconds=-1))
     client.cookies.set("session_token", "old")
     assert client.get("/api/v1/me").status_code == 401
-    assert db.query(SessionModel).filter_by(token="old").first() is None
+    assert db.query(SessionModel).filter_by(token_hash=hash_session_token("old")).first() is None
 
 
 def test_me_after_logout(client, make_session):

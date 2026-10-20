@@ -20,7 +20,12 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from app.auth.models import Session as SessionModel
-from app.auth.security import generate_session_token, hash_password, verify_password
+from app.auth.security import (
+    generate_session_token,
+    hash_password,
+    hash_session_token,
+    verify_password,
+)
 from app.database import get_db
 from app.users.models import User as UserModel
 from app.users.schemas import UserCreate, UserLogin, UserRead
@@ -73,7 +78,7 @@ def login(user_data: UserLogin, response: Response, db: Session = Depends(get_db
     # Create a new session
     session = SessionModel(
         user_id=user.id,
-        token=session_token,
+        token_hash=hash_session_token(session_token),
         created_at=datetime.now(timezone.utc),
         expires_at=datetime.now(timezone.utc) + SESSION_LIFETIME
     )
@@ -83,7 +88,7 @@ def login(user_data: UserLogin, response: Response, db: Session = Depends(get_db
 
     response.set_cookie(
         key="session_token",
-        value=session.token,
+        value=session_token,
         httponly=True,
         max_age=int(SESSION_LIFETIME.total_seconds()),
     )
@@ -93,7 +98,13 @@ def login(user_data: UserLogin, response: Response, db: Session = Depends(get_db
 @router.post("/logout", status_code=204)
 def logout(session_token: str = Cookie(None), db: Session = Depends(get_db)):
     # Idempotent: missing/invalid token is not an error (DECISIONS.md)
-    session = db.query(SessionModel).filter(SessionModel.token == session_token).first()
+    session = None
+    if session_token:
+        session = (
+            db.query(SessionModel)
+            .filter(SessionModel.token_hash == hash_session_token(session_token))
+            .first()
+        )
     if session:
         db.delete(session)
         db.commit()

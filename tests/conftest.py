@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 
 from alembic import command
 from app.auth.models import Session as SessionModel
-from app.auth.security import hash_password
+from app.auth.security import hash_password, hash_session_token
 from app.database import engine, get_db
 from app.main import app
 from app.users.models import User
@@ -75,7 +75,7 @@ def make_session(db, user):
     def _make(token="tok-valid", expires_in=timedelta(days=1)):
         now = datetime.now(timezone.utc)
         s = SessionModel(
-            token=token, user_id=user.id, created_at=now, expires_at=now + expires_in
+            token_hash=hash_session_token(token), user_id=user.id, created_at=now, expires_at=now + expires_in
         )
         db.add(s)
         db.commit()
@@ -89,7 +89,7 @@ def _user_with_token(db, email, token):
     db.add(u)
     db.commit()
     now = datetime.now(timezone.utc)
-    db.add(SessionModel(token=token, user_id=u.id, created_at=now, expires_at=now + timedelta(days=1)))
+    db.add(SessionModel(token_hash=hash_session_token(token), user_id=u.id, created_at=now, expires_at=now + timedelta(days=1)))
     db.commit()
     return u
 

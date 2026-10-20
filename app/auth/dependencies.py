@@ -4,6 +4,7 @@ from fastapi import Cookie, Depends, HTTPException, status
 from sqlalchemy.orm import Session as DBSession
 
 from app.auth.models import Session
+from app.auth.security import hash_session_token
 from app.database import get_db
 from app.users.models import User
 
@@ -12,7 +13,13 @@ def get_current_user(
 	session_token: str = Cookie(None),
 	db: DBSession = Depends(get_db),
 ) -> User:
-	session = db.query(Session).filter(Session.token == session_token).first()
+	session = None
+	if session_token:
+		session = (
+			db.query(Session)
+			.filter(Session.token_hash == hash_session_token(session_token))
+			.first()
+		)
 
 	if session is None:
 		raise HTTPException(
