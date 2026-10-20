@@ -63,6 +63,20 @@ def test_create_other_offset_same_instant(a):
     assert got["scheduled_at"] == iv["scheduled_at"]
 
 
+@pytest.mark.parametrize("ts", [
+    "0001-01-01T00:00:00+08:00", "9999-12-31T23:59:59-08:00", "1899-12-31T00:00:00+00:00",
+])
+def test_create_out_of_range_year_422(a, ts):
+    r = a.post(f"{APPS}/{new_app(a)}/interviews", json={**BODY, "scheduled_at": ts})
+    assert r.status_code == 422
+
+
+def test_patch_out_of_range_year_422(a):
+    iv = new_iv(a, new_app(a))
+    r = a.patch(f"{IV}/{iv['id']}", json={"scheduled_at": "0001-01-01T00:00:00+08:00"})
+    assert r.status_code == 422
+
+
 def test_create_past_date_ok(a):
     new_iv(a, new_app(a), scheduled_at="2001-01-01T00:00:00+00:00")
 

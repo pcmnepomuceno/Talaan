@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Annotated
 
 from pydantic import (
+    AfterValidator,
     AwareDatetime,
     BaseModel,
     ConfigDict,
@@ -18,10 +19,20 @@ from app.interviews.models import InterviewMode, InterviewOutcome
 Interviewer = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 
 
+def _sane_range(v: datetime) -> datetime:
+    # Extreme years with a non-UTC offset overflow during conversion (500); bound them instead.
+    if not 1900 <= v.year <= 2200:
+        raise ValueError("scheduled_at year must be between 1900 and 2200")
+    return v
+
+
+ScheduledAt = Annotated[AwareDatetime, AfterValidator(_sane_range)]
+
+
 class InterviewCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    scheduled_at: AwareDatetime
+    scheduled_at: ScheduledAt
     mode: InterviewMode
     outcome: InterviewOutcome = InterviewOutcome.PENDING
     interviewer: Interviewer | None = None
@@ -33,7 +44,7 @@ class InterviewUpdate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    scheduled_at: AwareDatetime | None = None
+    scheduled_at: ScheduledAt | None = None
     mode: InterviewMode | None = None
     outcome: InterviewOutcome | None = None
     interviewer: Interviewer | None = None
