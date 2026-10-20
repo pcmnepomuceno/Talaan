@@ -137,3 +137,12 @@
 - **Decision:** `GET /health` (runs `SELECT 1`, 503 on database failure) and `GET /ping` (no database work) live at the root, outside `/api/v1`. Business routes live under `/api/v1`.
 - **Rationale:** Uptime pingers and Render's health check should not break when the API version bumps. `/ping` touches no database, so a free uptime pinger can keep a free instance warm without loading Neon.
 - **Alternative:** Mount both under `/api/v1`; rejected because every version bump would force a change to deploy and pinger config.
+
+---
+
+# Decision: `saved` migration, date-fill rule, sort, updated_at clock
+
+- **Date:** 2026-10-21
+- **Decision:** (1) Migration `saved_status_nullable_date_applied` adds `saved` and makes `date_applied` nullable. It is hand-written because autogenerate misses enum changes. The downgrade raises `RuntimeError` with a row count if any `saved` or NULL-date rows exist, then recreates the enum without `saved`. (2) For a non-`saved` row with no `date_applied`, the server sets today in Asia/Manila (fixed +08:00, no DST, no tzdata); a client date wins; returning to `saved` keeps the date. (3) Default list order is `created_at DESC, id DESC`; the id tiebreaker keeps pages stable. (4) `JobApplication.updated_at` uses `onupdate=clock_timestamp()` because `now()` is frozen for a whole transaction, so a PATCH in the same transaction could not change it.
+- **Rationale:** Rows are never silently rewritten on downgrade; one timezone makes the date predictable for a PH user; stable pagination.
+- **Alternative:** Auto-map `saved` rows on downgrade (loses data meaning); `sort by date_applied` (NULL for saved rows).

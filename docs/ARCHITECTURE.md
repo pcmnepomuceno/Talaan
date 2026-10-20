@@ -10,7 +10,7 @@ Done in Milestone 2 as a move-only commit. Applications and interviews have mode
 app/main.py, config.py, database.py, health.py
 app/auth/          router, schemas, models [Session], dependencies, security
 app/users/         router, schemas, models
-app/applications/  models, schemas (router, service, dependencies planned)
+app/applications/  models, schemas, router, dependencies (service planned)
 app/interviews/    models, schemas (router, service planned)
 tests/             mirrors app/
 ```

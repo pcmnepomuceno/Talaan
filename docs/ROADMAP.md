@@ -1,6 +1,6 @@
 # Talaan Roadmap
 
-**Current milestone:** Milestone 2 done (domain layout, `/api/v1` prefix, real `/health` + `/ping`). Next: applications CRUD, including the `saved` status + nullable `date_applied` migration.
+**Current milestone:** Milestone 3 done (applications CRUD under `/api/v1/applications`, `saved` status + nullable `date_applied` migration). Next: interviews CRUD.
 
 ## Roadmap
 

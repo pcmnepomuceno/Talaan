@@ -1,6 +1,6 @@
 # Talaan: API Contract
 
-Contract first; no CRUD exists yet. All routes live under `/api/v1`, except `/health` and `/ping`, which sit at the root. Items marked **Open** need a decision.
+Contract first. Applications CRUD is built (milestone 3); interviews are not yet. All routes live under `/api/v1`, except `/health` and `/ping`, which sit at the root. Items marked **Open** need a decision.
 
 ## Auth
 - Browsers: `session_token` HttpOnly cookie (30 days).
@@ -40,18 +40,17 @@ Every list is paginated: `?limit=20&offset=0` (default 20, max 100). Response:
 ```json
 {"items": [], "total": 0, "limit": 20, "offset": 0}
 ```
-Applications filter with `?status=applied` (one of the enum values). Default order: newest `created_at` first (**Open**: sort by `date_applied`?).
+Applications filter with `?status=applied` (one of the enum values). Default order: newest `created_at` first, ties broken by `id` descending (decided 2026-10-21). A bad `status`, `limit` outside 1-100, or a negative or out-of-range `offset` gives 422.
 
 ## PATCH semantics
-Partial update. An omitted field is unchanged. `null` clears a nullable field; `null` on a NOT NULL field is 422. Server-managed fields (`id`, `created_by`, `created_at`) are rejected or ignored.
+Partial update. An omitted field is unchanged. `null` clears a nullable field; `null` on a NOT NULL field is 422. Server-managed fields (`id`, `created_by`, `created_at`, `updated_at`) are rejected with 422 (`extra=forbid`, also on POST). `company`, `job_name`, `status`, `mode_of_work` cannot be null; `salary`, `remarks`, `contact_*` and `date_applied` can.
 
 ## Saved jobs
-New `application_status` value `saved` (first in order) and nullable `date_applied`, via a new migration (DECISIONS.md, 2026-10-20). When status moves to `applied` and `date_applied` is empty, the server sets it to today. Quick-add and the browser extension create `saved` rows.
+New `application_status` value `saved` (first in order) and nullable `date_applied`, via a new migration (DECISIONS.md, 2026-10-20). When a row is not `saved` and `date_applied` is empty (create or PATCH), the server sets it to today in Asia/Manila; a client-sent date always wins. Moving back to `saved` keeps the date. Quick-add and the browser extension create `saved` rows.
 
 ## Quick-add
 `POST /applications/quick` takes `{"url": "...", "company": "..."?}`. It creates a `saved` application with `contact_website=url`. Because `job_name` is NOT NULL, **Open**: placeholder (the URL's hostname) vs making `job_name` nullable for `saved` rows. Duplicate URLs for the same user: **Open** (409 vs allow).
 
 ## Open questions
-1. Default sort for applications.
-2. Quick-add `job_name` placeholder and duplicate-URL behavior.
-3. Should `status` accept several values (`?status=applied&status=screening`)?
+1. Quick-add `job_name` placeholder and duplicate-URL behavior.
+2. Should `status` accept several values (`?status=applied&status=screening`)?

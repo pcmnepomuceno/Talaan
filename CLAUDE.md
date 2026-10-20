@@ -35,7 +35,8 @@ HttpOnly cookie), user_id → Users.id, created_at, expires_at
 id, company, job_name, contact_website?, contact_email?, status (ENUM),
 salary? (int), mode_of_work (ENUM), remarks, date_applied, created_at,
 updated_at, created_by → Users.id
-- `salary`: monthly gross, PHP, no currency column. `remarks` nullable. `date_applied` is a `Date`.
+- `salary`: monthly gross, PHP, no currency column. `remarks` nullable. `date_applied` is a nullable `Date`; non-`saved` rows get today (Asia/Manila) if none is sent.
+  `saved` is first in the status ENUM.
 - ENUMs: status = applied/screening/interviewing/offered/accepted/rejected/withdrawn/ghosted;
   mode_of_work = on_site/hybrid/remote.
 
@@ -91,12 +92,12 @@ Decision changes get a new dated entry in DECISIONS.md (append; never rewrite ol
 - Ask before adding dependencies.
 
 ## Structure
-Domain packages (`app/`). Applications and interviews have models and schemas only until CRUD lands.
+Domain packages (`app/`). Applications have CRUD; interviews have models and schemas only until their CRUD lands.
 
     app/main.py, config.py, database.py, health.py
     app/auth/          router, schemas, models [Session], dependencies, security
     app/users/         router, schemas, models
-    app/applications/  models, schemas (router, service, dependencies planned)
+    app/applications/  models, schemas, router, dependencies (service planned)
     app/interviews/    models, schemas (router, service planned)
     tests/             mirrors app/
 
@@ -114,11 +115,14 @@ Routers mount under `/api/v1` (`/api/v1/signup`, `/login`, `/logout`, `/me`).
 - [x] Auth + health tests (pytest + httpx; 23 tests, `_test` database)
 - [ ] Manually exercise the app end-to-end (`/docs`, curl cookie jar, psql)
 - [x] Domain layout move; routers under `/api/v1`
-- [ ] Pydantic schemas + CRUD routes for applications and interviews (with ownership checks)
+- [x] Applications CRUD (ownership 404, pagination, status filter, `saved` migration; 64 tests)
+- [ ] Pydantic schemas + CRUD routes for interviews (with ownership checks)
 - [ ] Dockerfile for the API; compose with db
 - [ ] Deploy
 
 ## Backlog
+- `/me` and auth responses lack `Cache-Control: no-store` (applications router sets it)
+- `Interview.updated_at` `onupdate=now()` is frozen per transaction; use `clock_timestamp()` (interviews milestone)
 - Cookie `samesite="lax"` and `secure=True` in production (via config)
 - Signup reveals whether an email exists ("Email already exists"); decide whether to accept or change
 - `sessions.user_id` FK: add `ON DELETE CASCADE` and an index (new migration)
