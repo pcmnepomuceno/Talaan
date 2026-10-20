@@ -138,5 +138,4 @@ Routers mount under `/api/v1` (`/api/v1/signup`, `/login`, `/logout`, `/me`).
 - `/signup` check-then-insert race: concurrent duplicate hits the unique constraint (500); catch `IntegrityError`
 - No rate limiting on `/login` and `/signup` (v1b); session tokens stored in plaintext (v1b: hash)
 - Expired sessions are deleted only when presented; add a purge or clean up at login
-- Fix remaining `ruff` errors in `app/` (11: B008, I001, RUF022)
 - Tests: starlette warns `httpx` is deprecated for `TestClient` (suggests `httpx2`); revisit
