@@ -60,7 +60,25 @@ Vercel hosts the PWA. `vercel.json` rewrites `/api/*` to Render, so the browser 
 Authenticated responses send `Cache-Control: no-store`.
 
 ## CI
-GitHub Actions: `ruff check`, then `pytest` with a Postgres service container.
+GitHub Actions (`.github/workflows/ci.yml`, free tier, no secrets). Runs on every pull request and every push to `main`; a newer push to the same branch cancels the older run.
+
+One job, Python 3.14, Postgres 16 service container with database `talaan_test`. Config comes only from env vars: `DATABASE_URL` and `TEST_DATABASE_URL` both point at `talaan_test` (alembic reads the first, the test guard reads the second). Steps, each shown separately:
+1. `pip install -r requirements-dev.txt` (pip cache on)
+2. `ruff check app tests alembic`
+3. `alembic upgrade head`
+4. `alembic check`
+5. `pytest -q`
+
+Reproduce locally (with `docker compose up -d db` running):
+
+    docker compose exec db createdb -U talaan talaan_ci_test
+    export DATABASE_URL=postgresql+psycopg2://talaan:<password>@localhost:5432/talaan_ci_test
+    export TEST_DATABASE_URL=$DATABASE_URL
+    .venv/bin/python -m ruff check app tests alembic
+    .venv/bin/python -m alembic upgrade head
+    .venv/bin/python -m alembic check
+    .venv/bin/python -m pytest -q
+    docker compose exec db dropdb -U talaan talaan_ci_test
 
 ## Privacy and data
 - Stored: email, password hash, account name, applications, interviews, session tokens.
