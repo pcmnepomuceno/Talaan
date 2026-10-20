@@ -1,16 +1,24 @@
-"""Health check route.
+"""Health routes: /ping (no DB) and /health (SELECT 1). Unversioned, at the root."""
 
-Left as a stub on purpose — implement this one yourself (CLAUDE.md rule 2).
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
-Goal: a GET /health endpoint that confirms the service is up, and ideally
-that the database connection works (use the `get_db` dependency from
-app.database and run a trivial query like `SELECT 1`).
-"""
-
-from fastapi import APIRouter
+from app.database import get_db
 
 router = APIRouter(tags=["health"])
 
+
+@router.get("/ping")
+def ping():
+    return {"status": "ok"}
+
+
 @router.get("/health")
-def health():
-    return {"status":"ok"}
+def health(db: Session = Depends(get_db)):
+    try:
+        db.execute(text("SELECT 1"))
+    except SQLAlchemyError:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    return {"status": "ok"}
