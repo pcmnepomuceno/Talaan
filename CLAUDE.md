@@ -6,6 +6,10 @@ Code implements, I specify, review, and ask for explanations (see Working
 Agreement). The earlier learn-by-writing workflow is preserved in
 `docs/learning-mode.md`.
 
+**Source of truth for scope: `docs/ROADMAP.md`.** Before starting a task, read
+the **Current milestone** in `docs/ROADMAP.md`. Other docs: `docs/PROJECT_BRIEF.md`,
+`docs/ARCHITECTURE.md`, `docs/API.md` (contract before CRUD).
+
 ## Stack
 - FastAPI (Python), SQLAlchemy, PostgreSQL 16 (Docker)
 - Password hashing: `bcrypt` directly (`passlib` dropped: unmaintained, broken on bcrypt 5.x)
@@ -36,7 +40,7 @@ updated_at, created_by → Users.id
 **Interviews** (matches model)
 id, job_application_id → Job Applications.id, interviewer, scheduled_at
 (tz-aware; spec renamed from `datetime`, model already uses `scheduled_at`),
-mode (ENUM: on-site/online/async), outcome (ENUM: good/bad/pending), remarks,
+mode (ENUM: on_site/online/async), outcome (ENUM: good/bad/pending), remarks,
 created_at, updated_at
 - `interviewer` and `remarks` nullable. mode = on_site/online/async;
   outcome = pending/good/bad (default pending).
@@ -113,6 +117,8 @@ behavior change, AFTER the auth tests exist and BEFORE any CRUD code:
 - [ ] Deploy
 
 ## Backlog
+- Cookie `samesite="lax"` and `secure=True` in production (via config)
+- Fix existing `ruff` errors (16: I001, B008, UP007, UP035, RUF022); run `ruff check`
 - `/health` should run `SELECT 1` via `get_db`
 - `/login` also returns `session_token` in the JSON body, exposing it to JS
   (defeats HttpOnly); drop it from the response
