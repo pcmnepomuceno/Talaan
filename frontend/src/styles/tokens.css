@@ -1,7 +1,19 @@
 /* Single source of truth for color (DESIGN.md section 3). The only file with hex values.
    light-dark() picks the first value in light, the second in dark (color-scheme in globals.css). */
 @theme static {
-  --*: initial;
+  /* Reset only the namespaces defined here, so Tailwind's defaults cannot bypass the tokens.
+     Container, animate, ease, leading, tracking, blur and similar scales keep their defaults
+     (a global `--*: initial` removed them and silently broke max-w-xl and animate-pulse). */
+  --color-*: initial;
+  --font-*: initial;
+  --font-weight-*: initial;
+  --text-*: initial;
+  --radius-*: initial;
+  --shadow-*: initial;
+  --inset-shadow-*: initial;
+  --drop-shadow-*: initial;
+  --text-shadow-*: initial;
+  --breakpoint-*: initial;
   --spacing: 0.25rem;
   --breakpoint-md: 768px;
   --breakpoint-xl: 1280px;
