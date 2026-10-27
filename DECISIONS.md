@@ -191,3 +191,12 @@
 - **Decision:** (1) `cacheComponents` and `partialPrefetching`, which `create-next-app` 16.4.3 enabled in `next.config.ts`, are removed; the build passes without them. (2) `frontend/package.json` sets `browserslist` to Chrome and Edge 123, Firefox 120, Safari and iOS Safari 17.5. (3) `agentRules: false` stops `next dev` from re-creating `frontend/AGENTS.md`.
 - **Rationale:** (1) Both flags change Next's caching and prefetch model, and F1 has no data fetching, so they add behavior to learn and debug with no benefit; add them back when a screen needs them. (2) Colors are written once as `light-dark()`. With an older floor, Next's CSS tooling rewrites `light-dark()` into a variable toggle that resolves at `:root`, so a `[data-theme]` subtree (the light and dark panels on `/design`, and later any scoped theme) shows the wrong theme. These versions are the first with native `light-dark()` support in each engine. (3) Rules for the repo live in the root CLAUDE.md.
 - **Alternative:** Keep the flags (more surface, nothing used); duplicate every dark value in `:root`, `[data-theme=dark]` and a media query (each token written twice, contrast test must parse both); a lower browser floor with the toggle hack (breaks scoped themes).
+
+---
+
+# Decision: Firefox floor raised to 121 (`:has()`)
+
+- **Date:** 2026-10-28
+- **Decision:** `frontend/package.json` `browserslist` moves from Firefox 120 to Firefox 121. Chrome/Edge 123 and Safari/iOS Safari 17.5 are unchanged. This amends point (2) of the 2026-10-27 frontend scaffold entry.
+- **Rationale:** The components style state with `:has()`: the segmented control and theme toggle highlight the checked radio (`has-checked:`), draw the focus ring on the visible segment (`has-focus-visible:`), and the select shows its placeholder style when the empty option is selected. Firefox 121 is the first Firefox with `:has()`; on 120 those states would silently not render. The other engines in the floor already support it.
+- **Alternative:** JavaScript state for each of these (more code, and the select would need to be controlled); keep 120 and accept broken selected and focus styles there.
