@@ -1,5 +1,7 @@
 @import "tailwindcss";
 @import "../styles/tokens.css";
+/* Test files name utilities as strings; keep them out of the production CSS. */
+@source not "../../tests";
 
 :root {
   color-scheme: light dark;
