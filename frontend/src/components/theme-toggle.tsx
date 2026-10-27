@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useId, useSyncExternalStore } from "react";
 
 type Theme = "light" | "dark" | "system";
 const options: Theme[] = ["light", "dark", "system"];
@@ -46,6 +46,8 @@ function write(t: Theme) {
 export function ThemeToggle() {
   // Server snapshot is "system" so hydration matches; the client re-reads the real value after.
   const theme = useSyncExternalStore(subscribe, read, () => "system" as Theme);
+  // Unique per instance: a shared name would merge two toggles on one page into one radio group.
+  const name = useId();
   return (
     <fieldset className="flex h-11 w-fit gap-1 rounded-sm border border-border-subtle bg-surface-subtle p-1">
       <legend className="sr-only">Theme</legend>
@@ -56,7 +58,7 @@ export function ThemeToggle() {
         >
           <input
             type="radio"
-            name="theme"
+            name={name}
             value={o}
             checked={theme === o}
             onChange={() => write(o)}
