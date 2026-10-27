@@ -1,13 +1,27 @@
 type Variant = "on-paper" | "on-ink";
 
 // Geometry: DESIGN.md 1.1 (64 x 64 grid). Up to 32px the simplified mark (two lines, stroke 5) is used.
-export function Logo({ variant, size = 32 }: { variant: Variant; size?: number }) {
+// `decorative` hides the mark from screen readers when visible text already names it (Wordmark).
+export function Logo({
+  variant,
+  size = 32,
+  decorative = false,
+}: {
+  variant: Variant;
+  size?: number;
+  decorative?: boolean;
+}) {
   const ink = variant === "on-ink";
   const line = ink ? "fill-bar-text stroke-bar-text" : "fill-primary stroke-primary";
   const margin = ink ? "fill-bar-stamp" : "fill-stamp";
   const small = size <= 32;
   return (
-    <svg viewBox="0 0 64 64" width={size} height={size} role="img" aria-label="Talaan">
+    <svg
+      viewBox="0 0 64 64"
+      width={size}
+      height={size}
+      {...(decorative ? { "aria-hidden": true } : { role: "img", "aria-label": "Talaan" })}
+    >
       <rect x="6" y="10" width="52" height="5" rx="2" className={`${line} stroke-0`} />
       <rect x="19" y="10" width="5" height="46" rx="2" className={margin} />
       <path
@@ -23,7 +37,7 @@ export function Logo({ variant, size = 32 }: { variant: Variant; size?: number }
 export function Wordmark({ variant, size = 32 }: { variant: Variant; size?: number }) {
   return (
     <span className="inline-flex items-center gap-2">
-      <Logo variant={variant} size={size} />
+      <Logo variant={variant} size={size} decorative />
       <span
         className={`text-bar-title ${variant === "on-ink" ? "text-bar-text" : "text-primary"}`}
       >
