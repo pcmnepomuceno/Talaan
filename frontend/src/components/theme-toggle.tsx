@@ -12,14 +12,30 @@ function read(): Theme {
   return t === "light" || t === "dark" ? t : "system";
 }
 
+function apply(t: Theme) {
+  if (t === "system") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = t;
+}
+
+// Fires only in the other tabs of this origin, so a change in one tab reaches the rest.
+// key null means localStorage.clear().
+function onStorage(e: StorageEvent) {
+  if (e.key !== "theme" && e.key !== null) return;
+  apply(e.newValue === "light" || e.newValue === "dark" ? e.newValue : "system");
+  listeners.forEach((l) => l());
+}
+
 function subscribe(cb: () => void) {
   listeners.add(cb);
-  return () => listeners.delete(cb);
+  window.addEventListener("storage", onStorage); // same function twice is a no-op
+  return () => {
+    listeners.delete(cb);
+    if (listeners.size === 0) window.removeEventListener("storage", onStorage);
+  };
 }
 
 function write(t: Theme) {
-  if (t === "system") delete document.documentElement.dataset.theme;
-  else document.documentElement.dataset.theme = t;
+  apply(t);
   try {
     if (t === "system") localStorage.removeItem("theme");
     else localStorage.setItem("theme", t);
