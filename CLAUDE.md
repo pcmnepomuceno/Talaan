@@ -121,6 +121,7 @@ Routers mount under `/api/v1` (`/api/v1/signup`, `/login`, `/logout`, `/me`).
 - [x] Dockerfile for the API; compose with db (non-root, slim, 1 worker)
 - [ ] Deploy
 - [x] Frontend F1: scaffold, tokens, theme, logo, `/design`, tests, CI job (see ROADMAP.md)
+- [x] Frontend F2a: icon, button, fields, segmented control, stamp, filter tabs, banner; `/design` gallery; RTL tests
 
 ## Frontend
 Next.js (App Router, TypeScript, Tailwind v4, npm) in `frontend/`; deploys to Vercel later (root directory `frontend`). Source of truth for look: `docs/DESIGN.md`; PNGs in `docs/design/` are visual references only.
@@ -130,6 +131,8 @@ Next.js (App Router, TypeScript, Tailwind v4, npm) in `frontend/`; deploys to Ve
 - Theme: "system" default, override saved in `localStorage` (`theme` = `light` | `dark`), applied by an inline script in `<head>` before paint.
 - Next.js here is newer than common training data; check `frontend/node_modules/next/dist/docs/` before using an unfamiliar API. `agentRules: false` stops `next dev` re-creating `frontend/AGENTS.md`.
 - Changing a token: `npm test` runs the WCAG contrast checks from DESIGN.md and fails below the ratio.
+- Components (`src/components/`, all shown on `/design` in both themes): `Icon`, `Button` (primary/secondary/ghost/destructive; `href` renders a link), `TextField`, `PasswordField`, `Textarea`, `Select` (`fields.tsx`), `SegmentedControl`, `StatusStamp` (+ `STATUSES`, `OUTCOMES`, `stampLabel`), `FilterTabs`, `Banner`, `Logo`, `ThemeToggle`.
+- Component rules: every control at least 44 x 44 (a 36px DESIGN visual sits inside a 44px hit area, focus ring on the visual); fields draw a 2px primary ring over the border (6.2), everything else uses the global `:focus-visible` ring in `@layer base`; fields forward `ref` and native props; status/outcome values must equal the API enums (tested against `app/*/models.py`); icons are inline SVG paths in `icon.tsx` (no icon font); transitions at most 100ms. Tests: RTL + user-event, DOM tests start with `// @vitest-environment jsdom`.
 
 ## Backlog
 - PATCH has no optimistic concurrency (no ETag/version): concurrent edits are last-write-wins
