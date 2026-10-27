@@ -42,6 +42,10 @@ const pairs: [string, string, number][] = [
   ["bar-text", "bar-bg", 4.5],
   ["error-text", "error-bg", 4.5],
   ["error-text", "surface-card", 4.5],
+  // Field error state: message below the field on the page, value/placeholder/prefix on error-bg.
+  ["error-text", "bg-page", 4.5],
+  ["text-primary", "error-bg", 4.5],
+  ["text-muted", "error-bg", 4.5],
   ["success-text", "success-bg", 4.5],
   ...statuses.map((s): [string, string, number] => [`status-${s}-text`, `status-${s}-bg`, 4.5]),
   ["border-input", "surface-card", 3],
