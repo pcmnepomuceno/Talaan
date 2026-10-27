@@ -216,3 +216,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# frontend source dir named lib/ (the Python rule above would hide it)
+!frontend/src/lib/

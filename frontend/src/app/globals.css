@@ -1,0 +1,37 @@
+@import "tailwindcss";
+@import "../styles/tokens.css";
+/* Test files name utilities as strings; keep them out of the production CSS. */
+@source not "../../tests";
+
+:root {
+  color-scheme: light dark;
+}
+[data-theme="light"] {
+  color-scheme: light;
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    /* Without this, an infinite animation repeats every 0.01ms and flickers instead of stopping. */
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,6 +1,6 @@
 # Talaan Roadmap
 
-**Current milestone:** Milestone 4 done (interviews CRUD, `no-store` middleware for `/api/v1`, `Interview.updated_at` clock fix). CI added (GitHub Actions). Docker done (Dockerfile, `api` compose service). v1b: hashed session tokens done. Next: v1b rate limiting on signup and login, plus the login-timing and duplicate-email leaks.
+**Current milestone:** Frontend F1 (scaffold, tokens, theme, logo, `/design`, tests, CI) in review. Backend: Milestone 4 done (interviews CRUD, `no-store` middleware for `/api/v1`, `Interview.updated_at` clock fix). CI added (GitHub Actions). Docker done (Dockerfile, `api` compose service). v1b: hashed session tokens done. Next: v1b rate limiting on signup and login, plus the login-timing and duplicate-email leaks.
 
 ## Roadmap
 
@@ -18,9 +18,24 @@ Optional (decide after 3-5 friends have used it):
 
 Skipped on purpose: voice mock interviews, auto-apply bots, server-side scraping of boards that forbid it.
 
+## Frontend
+
+Next.js app in `frontend/`, built from `docs/DESIGN.md`. Each milestone is mergeable alone.
+- F1: scaffold and tokens (Next.js, Tailwind theme from tokens, theme handling, font, logo, `/design`, contrast and no-hex tests, CI job).
+- F2: base components (buttons, fields, segmented control, stamps, filter tabs, ledger sheet, dialogs, toast, banner, empty state, skeleton).
+- F3: app shell and responsive layout (bar, bottom nav, rail, side nav, two panes) with mock data.
+- F4: auth screens wired to the API.
+- F5: application list, detail and forms.
+- F6: interviews.
+- F7: Vercel deploy.
+
 ## Clients
 
 Talaan must be usable on desktop and mobile. The later Vercel frontend is responsive, mobile-first, installable as a PWA, with a share target ("Share to Talaan"). A native Flutter app is optional and not committed. Docs only for now; nothing is built.
+
+## Backlog
+
+- CI `changes` job clones the full history (`fetch-depth: 0`) only to list changed paths. Deferred (2026-10-28): a full clone of this small repo costs seconds. Revisit if clone time grows (many binary design assets); `gh pr diff --name-only` or the `pulls/{n}/files` API needs no checkout.
 
 ## Maintenance
 

@@ -120,6 +120,16 @@ Routers mount under `/api/v1` (`/api/v1/signup`, `/login`, `/logout`, `/me`).
 - [x] Interviews CRUD (ownership through the parent application; 127 tests)
 - [x] Dockerfile for the API; compose with db (non-root, slim, 1 worker)
 - [ ] Deploy
+- [x] Frontend F1: scaffold, tokens, theme, logo, `/design`, tests, CI job (see ROADMAP.md)
+
+## Frontend
+Next.js (App Router, TypeScript, Tailwind v4, npm) in `frontend/`; deploys to Vercel later (root directory `frontend`). Source of truth for look: `docs/DESIGN.md`; PNGs in `docs/design/` are visual references only.
+- Commands (run in `frontend/`): `npm run dev`, `npm run lint`, `npm run typecheck`, `npm test` (Vitest), `npm run build`. Node 24.
+- Layout: `src/styles/tokens.css` (all colors, radii, type, shadow as a Tailwind `@theme static` block), `src/app/` (routes, `globals.css`, `icon.svg`), `src/components/`, `src/lib/`, `tests/`.
+- Rules: tokens only; no hex outside `tokens.css` (and `app/icon.svg`, enforced by `tests/no-hex.test.ts`); dark mode comes from the variables (`light-dark()` + `color-scheme`), never `dark:` variants; sentence case, no `uppercase`; IBM Plex Sans only (400/500/600), no mono or serif; no component library, CSS-in-JS or animation library; no new dependencies without asking.
+- Theme: "system" default, override saved in `localStorage` (`theme` = `light` | `dark`), applied by an inline script in `<head>` before paint.
+- Next.js here is newer than common training data; check `frontend/node_modules/next/dist/docs/` before using an unfamiliar API. `agentRules: false` stops `next dev` re-creating `frontend/AGENTS.md`.
+- Changing a token: `npm test` runs the WCAG contrast checks from DESIGN.md and fails below the ratio.
 
 ## Backlog
 - PATCH has no optimistic concurrency (no ETag/version): concurrent edits are last-write-wins

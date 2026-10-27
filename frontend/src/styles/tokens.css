@@ -1,0 +1,126 @@
+/* Single source of truth for color (DESIGN.md section 3). The only file with hex values.
+   light-dark() picks the first value in light, the second in dark (color-scheme in globals.css). */
+@theme static {
+  /* Reset only the namespaces defined here, so Tailwind's defaults cannot bypass the tokens.
+     Container, animate, ease, leading, tracking, blur and similar scales keep their defaults
+     (a global `--*: initial` removed them and silently broke max-w-xl and animate-pulse). */
+  --color-*: initial;
+  --font-*: initial;
+  --font-weight-*: initial;
+  --text-*: initial;
+  --radius-*: initial;
+  --shadow-*: initial;
+  --inset-shadow-*: initial;
+  --drop-shadow-*: initial;
+  --text-shadow-*: initial;
+  --breakpoint-*: initial;
+  --spacing: 0.25rem;
+  --breakpoint-md: 768px;
+  --breakpoint-xl: 1280px;
+
+  /* Core */
+  --color-primary: light-dark(#1F3A6E, #A9C0F5);
+  --color-primary-pressed: light-dark(#142A52, #C9D8FA);
+  --color-primary-tint: light-dark(#E3E9F5, #1B2B4F);
+  --color-bg-page: light-dark(#F7F3EA, #0E1626);
+  --color-surface-card: light-dark(#FFFDF8, #152038);
+  --color-surface-subtle: light-dark(#EFE9DB, #1C2A47);
+  --color-border-subtle: light-dark(#DDD5C3, #28365A);
+  --color-border-input: light-dark(#857F72, #6B7EA6);
+  --color-border-strong: light-dark(#5F5A50, #9AAAD0);
+  --color-text-primary: light-dark(#1A2236, #EEF2FA);
+  --color-text-secondary: light-dark(#454D60, #C6D0E6);
+  --color-text-muted: light-dark(#5F6677, #96A3C0);
+  --color-text-inverse: light-dark(#F7F3EA, #0E1626);
+  --color-focus-ring: light-dark(#1F3A6E, #A9C0F5);
+  --color-bar-bg: light-dark(#1F3A6E, #172A52);
+  --color-bar-text: light-dark(#F7F3EA, #EEF2FA);
+  --color-bar-stamp: light-dark(#F97316, #FB923C);
+  --color-stamp: light-dark(#C2410C, #FB923C);
+
+  /* Status stamps (outcomes reuse saved, offered, rejected) */
+  --color-status-saved-text: light-dark(#454D60, #C6D0E6);
+  --color-status-saved-bg: light-dark(#EFE9DB, #1C2A47);
+  --color-status-saved-border: light-dark(#DDD5C3, #34456B);
+  --color-status-applied-text: light-dark(#1F3A6E, #A9C0F5);
+  --color-status-applied-bg: light-dark(#E3E9F5, #1B2B4F);
+  --color-status-applied-border: light-dark(#B7C5E3, #34508F);
+  --color-status-screening-text: light-dark(#0E5F73, #7DD3E8);
+  --color-status-screening-bg: light-dark(#E1F0F4, #0F2F3A);
+  --color-status-screening-border: light-dark(#A8D3DE, #1F6477);
+  --color-status-interviewing-text: light-dark(#9A3412, #FDBA74);
+  --color-status-interviewing-bg: light-dark(#FFEDD5, #3A1D0C);
+  --color-status-interviewing-border: light-dark(#FDBA74, #9A4A18);
+  --color-status-offered-text: light-dark(#166534, #86EFAC);
+  --color-status-offered-bg: light-dark(#E6F4EA, #0F2E1B);
+  --color-status-offered-border: light-dark(#A7D7B4, #1F6B3A);
+  --color-status-accepted-text: light-dark(#14532D, #6EE7A0);
+  --color-status-accepted-bg: light-dark(#CFEBD7, #0A3D22);
+  --color-status-accepted-border: light-dark(#7FC495, #1E7A44);
+  --color-status-rejected-text: light-dark(#991B1B, #FCA5A5);
+  --color-status-rejected-bg: light-dark(#FBE6E4, #3B1214);
+  --color-status-rejected-border: light-dark(#F0B0AB, #8F2A2E);
+  --color-status-withdrawn-text: light-dark(#57534E, #C9C2B4);
+  --color-status-withdrawn-bg: light-dark(#EDEAE4, #26231F);
+  --color-status-withdrawn-border: light-dark(#D6D0C4, #4A453D);
+  --color-status-ghosted-text: light-dark(#854D0E, #FCD34D);
+  --color-status-ghosted-bg: light-dark(#F8EBCB, #35280A);
+  --color-status-ghosted-border: light-dark(#E3C57E, #8A6A12);
+
+  /* Feedback */
+  --color-error-text: light-dark(#B91C1C, #FCA5A5);
+  --color-error-bg: light-dark(#FBE6E4, #3B1214);
+  --color-error-border: light-dark(#F0B0AB, #8F2A2E);
+  --color-destructive: light-dark(#B91C1C, #F87171);
+  --color-destructive-pressed: light-dark(#991B1B, #FCA5A5);
+  --color-success-text: light-dark(#166534, #86EFAC);
+  --color-success-bg: light-dark(#E6F4EA, #0F2E1B);
+  --color-success-border: light-dark(#A7D7B4, #1F6B3A);
+  --color-overlay: light-dark(rgba(14, 22, 38, 0.60), rgba(0, 0, 0, 0.60));
+
+  /* Radius */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-sheet: 12px;
+  --radius-fab: 16px;
+
+  /* Shadow (floating elements only) */
+  --shadow-float: 0 4px 12px rgba(14, 22, 38, 0.14);
+
+  /* Font */
+  --font-sans: var(--font-plex), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  /* Type scale (DESIGN.md section 4) */
+  --text-page-title: 24px;
+  --text-page-title--line-height: 32px;
+  --text-page-title--letter-spacing: -0.01em;
+  --text-page-title--font-weight: 600;
+  --text-bar-title: 18px;
+  --text-bar-title--line-height: 24px;
+  --text-bar-title--font-weight: 600;
+  --text-section-title: 18px;
+  --text-section-title--line-height: 26px;
+  --text-section-title--font-weight: 600;
+  --text-body: 16px;
+  --text-body--line-height: 24px;
+  --text-body--font-weight: 400;
+  --text-body-medium: 16px;
+  --text-body-medium--line-height: 24px;
+  --text-body-medium--font-weight: 500;
+  --text-row-title: 16px;
+  --text-row-title--line-height: 22px;
+  --text-row-title--font-weight: 600;
+  --text-caption: 14px;
+  --text-caption--line-height: 20px;
+  --text-caption--font-weight: 400;
+  --text-caption-bold: 14px;
+  --text-caption-bold--line-height: 20px;
+  --text-caption-bold--font-weight: 600;
+  --text-stamp-label: 14px;
+  --text-stamp-label--line-height: 18px;
+  --text-stamp-label--font-weight: 500;
+  --text-stamp-label--letter-spacing: 0.01em;
+}
