@@ -11,6 +11,9 @@ for (const m of css.matchAll(/--color-([\w-]+):\s*light-dark\((#[0-9a-fA-F]{6}),
 function luminance(hex: string) {
   const [r, g, b] = [1, 3, 5].map((i) => {
     const v = parseInt(hex.slice(i, i + 2), 16) / 255;
+    // 0.03928 is the threshold WCAG 2.x writes in its relative luminance definition; keep it so the
+    // ratios match the spec we claim. sRGB's 0.04045 gives identical results for 8-bit hex: no
+    // channel value falls between the two (10/255 = 0.0392, 11/255 = 0.0431).
     return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
   });
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
@@ -44,6 +47,9 @@ const pairs: [string, string, number][] = [
   ["border-input", "surface-card", 3],
   ["focus-ring", "bg-page", 3],
   ["focus-ring", "surface-card", 3],
+  // Logo margin line: icons need 3:1 (DESIGN.md, WCAG 1.4.11).
+  ["stamp", "bg-page", 3],
+  ["bar-stamp", "bar-bg", 3],
 ];
 
 describe("tokens.css contrast", () => {
