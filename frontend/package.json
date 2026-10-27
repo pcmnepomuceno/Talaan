@@ -32,7 +32,7 @@
   "browserslist": [
     "chrome >= 123",
     "edge >= 123",
-    "firefox >= 120",
+    "firefox >= 121",
     "safari >= 17.5",
     "ios_saf >= 17.5"
   ]
