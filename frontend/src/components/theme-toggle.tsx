@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { SegmentedControl } from "./segmented-control";
 
 type Theme = "light" | "dark" | "system";
@@ -45,6 +45,12 @@ function write(t: Theme) {
     else localStorage.setItem("theme", t);
   } catch {}
   listeners.forEach((l) => l());
+}
+
+// Mounted once in the root layout: keeps every page (login included) in step with other tabs.
+export function ThemeSync() {
+  useEffect(() => subscribe(() => {}), []);
+  return null;
 }
 
 export function ThemeToggle() {
