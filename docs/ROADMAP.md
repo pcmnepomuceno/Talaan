@@ -39,7 +39,7 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - `LedgerSkeleton` mounts its `role="status"` region together with its "Loading applications" text, so many screen readers do not announce it (code review finding, 2026-11-02). Deferred (2026-11-02): pages get a persistent loading live region in F5.
 - Playwright layout smoke tests in CI (clipping, 44px targets, no horizontal scroll). Reason (2026-11-02): layout can't be tested in jsdom; the F2a review checks (segment clipping at 320px, hover band) were run by hand in Chrome.
 - An unknown application id renders a client-side not-found view (HTTP 200). F5 decides whether the server should return 404.
-- Detail has no "Add interview" action until F6. Rail label "Applications" (14px) fits the 80px rail with no side padding; revisit if the nav gets a third item or a larger font.
+- Detail has no "Add interview" action until F6. The 88px rail fits the bold 14px label "Applications" only with `tracking-tight` (77px label in a 79px pill, 4px from the rail edges). A longer label or a third item needs a wider rail or a smaller label token.
 
 ## Maintenance
 

@@ -13,7 +13,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         Skip to content
       </a>
       <MainNav />
-      <div className="md:pl-20 xl:pl-60">{children}</div>
+      <div className="md:pl-22 xl:pl-60">{children}</div>
     </ToastProvider>
     </div>
   );
