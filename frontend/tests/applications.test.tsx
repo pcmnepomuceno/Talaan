@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
+import EditPage from "../src/app/(app)/applications/[id]/edit/page";
 import ApplicationDetailPage from "../src/app/(app)/applications/(ledger)/[id]/page";
 import { ApplicationsScreen, panes } from "../src/app/(app)/applications/(ledger)/screen";
 import { ToastProvider } from "../src/components/toast";
@@ -255,4 +256,25 @@ it("detail requests the application and its interviews together", async () => {
   await waitFor(() => expect(api.getInterviews).toHaveBeenCalledWith(1));
   release();
   expect(await screen.findByRole("list", { name: "Interviews" })).toBeTruthy();
+});
+
+it("Edit keeps ?status=, and the edit page's Back returns to the same filtered detail and list", async () => {
+  params = { id: "2" };
+  search = "status=offered";
+  const detail = screenUnderTest();
+  await screen.findByRole("list", { name: "Interviews" });
+  expect(screen.getAllByRole("link", { name: "Edit" })[0].getAttribute("href")).toBe("/applications/2/edit?status=offered");
+  expect(screen.getByRole("link", { name: "Back" }).getAttribute("href")).toBe("/applications?status=offered");
+  detail.unmount();
+  const page = await EditPage({
+    params: Promise.resolve({ id: "2" }),
+    searchParams: Promise.resolve({ status: "offered" }),
+  });
+  render(page);
+  expect(screen.getByRole("link", { name: "Back" }).getAttribute("href")).toBe("/applications/2?status=offered");
+});
+
+it("edit page ignores an invalid ?status=", async () => {
+  render(await EditPage({ params: Promise.resolve({ id: "2" }), searchParams: Promise.resolve({ status: "bogus" }) }));
+  expect(screen.getByRole("link", { name: "Back" }).getAttribute("href")).toBe("/applications/2");
 });
