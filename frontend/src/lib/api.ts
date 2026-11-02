@@ -1,5 +1,4 @@
-import { STATUSES, type Status } from "../components/status-stamp";
-import type { Application, Interview } from "./types";
+import { type Application, type Interview, STATUSES, type Status } from "./types";
 
 // F3 mock data layer. Screens import ONLY the functions below; F5 replaces the bodies with fetch
 // calls to /api/v1 and keeps these signatures. The seed is private on purpose.
