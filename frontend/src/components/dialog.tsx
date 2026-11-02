@@ -7,6 +7,8 @@ import { Icon } from "./icon";
 // DESIGN.md 6.8 on the native <dialog>: showModal() gives the focus trap, inert page, top layer
 // and Escape. `open` is the source of truth; the parent must clear it in onClose.
 // Escape is routed through onClose (default close prevented) so React state never goes stale.
+// onClose fires only for closes the user started (Escape, or a native close while `open` is still
+// true), never for the close that follows the parent setting `open` to false.
 // Clicking the scrim does nothing: native modal dialogs do not close on backdrop clicks.
 // Focus goes to the first [data-autofocus] element if any, else the browser's default, and returns
 // to the element that was focused before opening.
@@ -27,9 +29,11 @@ export function Dialog({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const trigger = useRef<HTMLElement | null>(null);
+  const wantOpen = useRef(open);
   const id = useId();
 
   useEffect(() => {
+    wantOpen.current = open;
     const el = ref.current;
     if (!el) return;
     if (open && !el.open) {
@@ -52,7 +56,10 @@ export function Dialog({
         e.preventDefault();
         onClose();
       }}
-      onClose={onClose}
+      onClose={() => {
+        // `!open` also skips a stale close event that lands after a re-open.
+        if (wantOpen.current && !ref.current?.open) onClose();
+      }}
       className="m-0 mt-auto max-h-[calc(100%-2rem)] w-full max-w-none overflow-y-auto rounded-t-sheet bg-surface-card px-5 pt-6 pb-[calc(2rem+env(safe-area-inset-bottom))] text-text-primary shadow-float backdrop:bg-overlay md:m-auto md:max-w-[440px] md:rounded-sheet md:pb-8"
     >
       {badge}
