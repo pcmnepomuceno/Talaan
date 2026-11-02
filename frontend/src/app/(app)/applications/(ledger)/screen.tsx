@@ -119,6 +119,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
       setBusy(false);
     }
     setVersion((v) => v + 1);
+    setDetail(null); // Back to the deleted id must refetch (loading, then not found), never show old content.
     setConfirming(false);
     toast.success("Application deleted.");
     router.push(`/applications${qs}`);
