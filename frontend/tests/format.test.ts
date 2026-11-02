@@ -33,6 +33,15 @@ it("invalid or missing dates return null without throwing", () => {
   }
 });
 
+it("days not on the calendar return null instead of rolling over", () => {
+  for (const v of ["2026-02-30", "2027-02-29", "2026-04-31T10:00:00", "2026-02-30T10:00:00Z"]) {
+    expect(formatDate(v)).toBeNull();
+    expect(formatDateTimePHT(v)).toBeNull();
+  }
+  expect(formatDate("2028-02-29")).toBe("Feb 29, 2028");
+  expect(formatDateTimePHT("2028-02-29T10:00:00")).toBe("Feb 29, 2028, 10:00 AM PHT");
+});
+
 it("dateAppliedLabel", () => {
   expect(dateAppliedLabel("2026-10-14", "applied")).toBe("Oct 14, 2026");
   expect(dateAppliedLabel(null, "saved")).toBe("Not applied yet");
