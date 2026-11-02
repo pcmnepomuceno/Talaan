@@ -47,18 +47,31 @@ it("success goes in the status region and disappears after 4s", () => {
   expect(screen.queryByText("Application saved")).toBeNull();
 });
 
-it("timer pauses on hover, resumes with the time left", () => {
+it("timer pauses on mouse hover, resumes with the time left", () => {
   setup();
   fire(() => api.success("Saved"));
   tick(3000);
   const toast = screen.getByText("Saved").parentElement as HTMLElement;
-  fireEvent.mouseEnter(toast);
+  fireEvent.pointerEnter(toast, { pointerType: "mouse" });
   tick(10000);
   expect(screen.queryByText("Saved")).not.toBeNull();
-  fireEvent.mouseLeave(toast);
+  fireEvent.pointerLeave(toast, { pointerType: "mouse" });
   tick(999);
   expect(screen.queryByText("Saved")).not.toBeNull();
   tick(1);
+  expect(screen.queryByText("Saved")).toBeNull();
+});
+
+// A tap fires touch pointer events, then emulated mouseover/mouseenter with no matching leave.
+it("a touch tap does not pause the timer", () => {
+  setup();
+  fire(() => api.success("Saved"));
+  tick(1000);
+  const toast = screen.getByText("Saved").parentElement as HTMLElement;
+  fireEvent.pointerEnter(toast, { pointerType: "touch" });
+  fireEvent.pointerLeave(toast, { pointerType: "touch" });
+  fireEvent.mouseEnter(toast);
+  tick(3000);
   expect(screen.queryByText("Saved")).toBeNull();
 });
 
