@@ -110,7 +110,7 @@ it("detail lists interviews oldest first", async () => {
   expect(items[1]).toContain("Oct 24, 2026");
 });
 
-it.each(["999", "abc"])("unknown id %s shows not-found with a link back", async (id) => {
+it.each(["999", "abc", "01", "9007199254740993"])("unknown id %s shows not-found with a link back", async (id) => {
   params = { id };
   screenUnderTest();
   expect(await screen.findByText("Application not found.")).toBeTruthy();

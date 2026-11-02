@@ -12,7 +12,7 @@ import { Icon } from "@/components/icon";
 import { LoadError } from "@/components/load-error";
 import { ApplicationRow, LedgerSheet, LedgerSkeleton } from "@/components/ledger";
 import { useToast } from "@/components/toast";
-import { deleteApplication, getApplication, getApplications, getInterviews, parseStatus } from "@/lib/api";
+import { deleteApplication, getApplication, getApplications, getInterviews, parseId, parseStatus } from "@/lib/api";
 import type { Application, Interview } from "@/lib/types";
 
 // Below 1280 the list and the detail are separate screens (one is hidden); from 1280 both show.
@@ -76,10 +76,10 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
     (async () => {
       let state: DetailState;
       try {
-        const n = /^\d+$/.test(id) ? Number(id) : NaN;
-        const application = Number.isNaN(n) ? null : await getApplication(n);
+        const n = parseId(id);
+        const application = n === null ? null : await getApplication(n);
         state = application
-          ? { kind: "ready", application, interviews: await getInterviews(n) }
+          ? { kind: "ready", application, interviews: await getInterviews(application.id) }
           : { kind: "missing" };
       } catch {
         state = {

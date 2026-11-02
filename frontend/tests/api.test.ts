@@ -1,5 +1,5 @@
 import { beforeEach, expect, it } from "vitest";
-import { deleteApplication, getApplication, getApplications, getInterviews, parseStatus, resetMock } from "../src/lib/api";
+import { deleteApplication, getApplication, getApplications, getInterviews, parseId, parseStatus, resetMock } from "../src/lib/api";
 
 beforeEach(resetMock);
 
@@ -33,4 +33,11 @@ it("parseStatus falls back to undefined", () => {
   expect(parseStatus("offered")).toBe("offered");
   expect(parseStatus("bogus")).toBeUndefined();
   expect(parseStatus(null)).toBeUndefined();
+});
+
+it("parseId accepts canonical safe integers only", () => {
+  expect(parseId("1")).toBe(1);
+  expect(parseId("0")).toBe(0);
+  for (const bad of ["01", "1.0", "1e3", "+1", " 1", "", "abc", "9007199254740993", "99999999999999999999"])
+    expect(parseId(bad), bad).toBeNull();
 });
