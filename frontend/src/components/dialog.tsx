@@ -60,8 +60,12 @@ export function Dialog({
         if (!busy) onClose();
       }}
       onClose={() => {
-        // `!open` also skips a stale close event that lands after a re-open.
-        if (wantOpen.current && !ref.current?.open) onClose();
+        // `el.open` also skips a stale close event that lands after a re-open.
+        const el = ref.current;
+        if (!wantOpen.current || !el || el.open) return;
+        // Busy: undo a native close that skipped `cancel` (Chrome, a second Escape), keep the request's dialog up.
+        if (busy) el.showModal();
+        else onClose();
       }}
       className="m-0 mt-auto max-h-[calc(100%-2rem)] w-full max-w-none overflow-y-auto rounded-t-sheet bg-surface-card px-5 pt-6 pb-[calc(2rem+env(safe-area-inset-bottom))] text-text-primary shadow-float backdrop:bg-overlay md:m-auto md:max-w-[440px] md:rounded-sheet md:pb-8"
     >
@@ -80,7 +84,8 @@ export function Dialog({
 }
 
 // DESIGN.md section 8.6. Cancel gets initial focus so Enter never confirms by accident.
-// `busy` (request in flight) disables both buttons and Escape, so a double-click deletes once.
+// `busy` (request in flight) disables both buttons and Escape, so a double-click deletes once;
+// a native close while busy re-opens the dialog instead of cancelling.
 export function DeleteConfirm({
   open,
   onCancel,

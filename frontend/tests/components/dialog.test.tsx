@@ -171,6 +171,29 @@ it("DeleteConfirm busy: double-click confirms once, buttons disabled, aria-busy,
   expect(screen.getByRole("dialog")).toBe(d);
 });
 
+// Chrome can close a modal without a cancelable `cancel` (a second Escape with no click between).
+it("DeleteConfirm busy: a native close re-opens the dialog and calls neither callback", async () => {
+  const onCancel = vi.fn();
+  const onConfirm = vi.fn();
+  render(
+    <DeleteConfirm
+      open
+      busy
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+      title="Delete?"
+      message="Gone for good."
+      confirmLabel="Delete it"
+    />,
+  );
+  const d = screen.getByRole("dialog") as HTMLDialogElement;
+  act(() => d.close());
+  expect(d.open).toBe(true);
+  expect(screen.getByRole("dialog")).toBe(d);
+  expect(onCancel).not.toHaveBeenCalled();
+  expect(onConfirm).not.toHaveBeenCalled();
+});
+
 it("a scrim click does not close it", async () => {
   render(<Demo />);
   await userEvent.click(screen.getByRole("button", { name: "Delete" }));
