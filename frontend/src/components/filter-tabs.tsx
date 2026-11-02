@@ -32,14 +32,18 @@ export function FilterTabs({ value, onChange }: { value: Filter; onChange: (valu
   }, []);
 
   // Keep the pressed tab inside the row (a ?status= deep link can put it off-screen). The first
-  // placement and reduced motion are instant; later changes glide.
-  const first = useRef(true);
+  // placement and reduced motion are instant; later changes glide. `placed` is state, not a ref
+  // mutated in the effect, so StrictMode's double run sees the same value both times (dev = prod).
+  const [placed, setPlaced] = useState<Filter | null>(null);
   useEffect(() => {
+    if (placed === value) return;
     const active = row.current?.querySelector<HTMLElement>('[aria-pressed="true"]');
-    const still = first.current || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    first.current = false;
+    const still = placed === null || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     active?.scrollIntoView?.({ inline: "nearest", block: "nearest", behavior: still ? "instant" : "smooth" });
-  }, [value]);
+    // One extra render, once per value: the state is how StrictMode's second effect run knows nothing was placed yet.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPlaced(value);
+  }, [value, placed]);
   return (
     <div
       ref={row}
