@@ -7,7 +7,14 @@ import { EmptyState } from "@/components/empty-state";
 import { ApplicationRow, DetailRows, InterviewRow, LedgerSheet, LedgerSkeleton } from "@/components/ledger";
 import { useToast } from "@/components/toast";
 import { sortInterviewsByDate } from "@/lib/interviews";
-import { type Application, INTERVIEW_MODES, type Interview, WORK_MODES } from "@/lib/types";
+import {
+  type Application,
+  INTERVIEW_MODES,
+  type Interview,
+  type InterviewMode,
+  WORK_MODES,
+  type WorkMode,
+} from "@/lib/types";
 import { Button } from "@/components/button";
 import { PasswordField, Select, Textarea, TextField } from "@/components/fields";
 import { type Filter, FilterTabs } from "@/components/filter-tabs";
@@ -16,8 +23,6 @@ import { SegmentedControl } from "@/components/segmented-control";
 import { OUTCOMES, STATUSES, StatusStamp, stampLabel } from "@/components/status-stamp";
 
 const variants = ["primary", "secondary", "ghost", "destructive"] as const;
-const modes = WORK_MODES;
-const interviewModes = INTERVIEW_MODES;
 
 const base = {
   contact_email: null,
@@ -53,8 +58,8 @@ function Block({ title, children }: { title: string; children: React.ReactNode }
 
 // Every component in its static states. Hover, pressed and focus show on interaction.
 export function Gallery() {
-  const [mode, setMode] = useState<(typeof modes)[number]["value"]>("hybrid");
-  const [iMode, setIMode] = useState<(typeof interviewModes)[number]["value"]>("online");
+  const [mode, setMode] = useState<WorkMode>("hybrid");
+  const [iMode, setIMode] = useState<InterviewMode>("online");
   const [filter, setFilter] = useState<Filter>("all");
   const [selected, setSelected] = useState(1);
   const [deleting, setDeleting] = useState(false);
@@ -153,8 +158,8 @@ export function Gallery() {
       </Block>
 
       <Block title="Segmented control">
-        <SegmentedControl label="Work mode" options={modes} value={mode} onChange={setMode} />
-        <SegmentedControl label="Mode" options={interviewModes} value={iMode} onChange={setIMode} />
+        <SegmentedControl label="Work mode" options={WORK_MODES} value={mode} onChange={setMode} />
+        <SegmentedControl label="Mode" options={INTERVIEW_MODES} value={iMode} onChange={setIMode} />
       </Block>
 
       <Block title="Status and outcome stamps">

@@ -1,3 +1,4 @@
+import type { IconName } from "@/components/icon";
 import type { Outcome, Status } from "@/components/status-stamp";
 
 // Field names match the API exactly (app/applications/schemas.py ApplicationRead,
@@ -13,10 +14,14 @@ export const WORK_MODES = [
 ] as const satisfies readonly { value: WorkMode; label: string }[];
 
 export const INTERVIEW_MODES = [
-  { value: "on_site", label: "On-site" },
-  { value: "online", label: "Online" },
-  { value: "async", label: "Async" },
-] as const satisfies readonly { value: InterviewMode; label: string }[];
+  { value: "on_site", label: "On-site", icon: "apartment" },
+  { value: "online", label: "Online", icon: "videocam" },
+  { value: "async", label: "Async", icon: "schedule" },
+] as const satisfies readonly { value: InterviewMode; label: string; icon: IconName }[];
+
+// The one place a mode value turns into its label (and icon).
+export const workModeLabel = (m: WorkMode) => WORK_MODES.find((x) => x.value === m)?.label;
+export const interviewMode = (m: InterviewMode) => INTERVIEW_MODES.find((x) => x.value === m);
 
 export type Application = {
   id: number;
