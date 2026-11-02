@@ -200,3 +200,13 @@ it.each(Object.entries(ariaFields))("%s puts className on the outer wrapper", (_
   expect((container.firstChild as HTMLElement).classList.contains("md:col-span-2")).toBe(true);
   expect(control().classList.contains("md:col-span-2")).toBe(false);
 });
+
+// A form can disable fields while submitting and keep the server error; the box must still look
+// invalid, matching the error text and aria-invalid.
+it.each(Object.entries(ariaFields))("%s keeps the error styling when disabled", (_, F) => {
+  render(<F disabled error="Wrong" />);
+  const box = control().closest(".border-error-text");
+  expect(box).not.toBeNull();
+  expect(box!.classList.contains("bg-error-bg")).toBe(true);
+  expect(control().getAttribute("aria-invalid")).toBe("true");
+});

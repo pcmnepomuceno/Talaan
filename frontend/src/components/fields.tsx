@@ -65,10 +65,12 @@ function aria(id: string, { helper, error, required }: Omit<FieldProps, "label">
 }
 
 // The visible box. State comes from props so disabled and error never fight hover in CSS order.
+// Error wins over disabled: a form that disables fields while submitting keeps its error visible,
+// matching the error text and aria-invalid.
 function box(error?: string, disabled?: boolean) {
   const shared = "min-h-12 rounded-sm text-body-medium transition-colors duration-100";
-  if (disabled) return `${shared} border border-border-subtle bg-surface-subtle text-text-muted`;
   if (error) return `${shared} border-[1.5px] border-error-text bg-error-bg text-text-primary`;
+  if (disabled) return `${shared} border border-border-subtle bg-surface-subtle text-text-muted`;
   return `${shared} border border-border-input bg-surface-card text-text-primary hover:border-border-strong`;
 }
 
