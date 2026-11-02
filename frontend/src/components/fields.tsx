@@ -7,6 +7,7 @@ import { Icon } from "./icon";
 // element forwards it along with every native attribute (name, autoComplete, inputMode...).
 // `required` shows "Required" and sets aria-required. TextField and Textarea do not set the native
 // attribute (no browser validation popups); Select does, so an empty placeholder value is invalid.
+// `className` goes on the outer wrapper (the layout child), not the native control.
 type FieldProps = { label: string; helper?: string; error?: string; required?: boolean };
 
 function Field({
@@ -15,10 +16,11 @@ function Field({
   required,
   helper,
   error,
+  className,
   children,
-}: FieldProps & { id: string; children: ReactNode }) {
+}: FieldProps & { id: string; className: string; children: ReactNode }) {
   return (
-    <div className="flex min-w-0 flex-col gap-2">
+    <div className={`flex min-w-0 flex-col gap-2 ${className}`}>
       <div className="flex items-baseline justify-between gap-2">
         <label htmlFor={id} className="min-w-0 text-caption-bold text-text-primary">
           {label}
@@ -89,7 +91,7 @@ export function TextField({
 }: TextFieldProps) {
   const fid = useFieldId(id);
   return (
-    <Field id={fid} label={label} required={required} helper={helper} error={error}>
+    <Field id={fid} label={label} required={required} helper={helper} error={error} className={className}>
       <div
         className={`flex items-center gap-2 px-4 has-[input:focus-visible]:outline-2 has-[input:focus-visible]:-outline-offset-1 has-[input:focus-visible]:outline-primary ${box(error, props.disabled)}`}
       >
@@ -97,7 +99,7 @@ export function TextField({
         <input
           {...props}
           {...aria(fid, { helper, error, required }, props)}
-          className={`h-11 min-w-0 flex-1 bg-transparent outline-none placeholder:text-text-muted disabled:cursor-not-allowed ${className}`}
+          className="h-11 min-w-0 flex-1 bg-transparent outline-none placeholder:text-text-muted disabled:cursor-not-allowed"
         />
         {suffix && (
           <span className="flex shrink-0 items-center whitespace-nowrap text-text-muted">{suffix}</span>
@@ -139,12 +141,12 @@ export function Textarea({
 }: FieldProps & ComponentProps<"textarea">) {
   const fid = useFieldId(id);
   return (
-    <Field id={fid} label={label} required={required} helper={helper} error={error}>
+    <Field id={fid} label={label} required={required} helper={helper} error={error} className={className}>
       <textarea
         rows={4}
         {...props}
         {...aria(fid, { helper, error, required }, props)}
-        className={`resize-y px-4 py-3 text-body placeholder:text-text-muted disabled:cursor-not-allowed ${ring} ${box(error, props.disabled)} ${className}`}
+        className={`resize-y px-4 py-3 text-body placeholder:text-text-muted disabled:cursor-not-allowed ${ring} ${box(error, props.disabled)}`}
       />
     </Field>
   );
@@ -166,13 +168,13 @@ export function Select({
 }: FieldProps & ComponentProps<"select"> & { placeholder?: string }) {
   const fid = useFieldId(id);
   return (
-    <Field id={fid} label={label} required={required} helper={helper} error={error}>
+    <Field id={fid} label={label} required={required} helper={helper} error={error} className={className}>
       <div className="relative">
         <select
           {...props}
           required={required}
           {...aria(fid, { helper, error, required }, props)}
-          className={`h-12 w-full appearance-none truncate pr-11 pl-4 disabled:cursor-not-allowed [&:has(option[value='']:checked)]:text-text-muted [&_option]:text-text-primary ${ring} ${box(error, props.disabled)} ${className}`}
+          className={`h-12 w-full appearance-none truncate pr-11 pl-4 disabled:cursor-not-allowed [&:has(option[value='']:checked)]:text-text-muted [&_option]:text-text-primary ${ring} ${box(error, props.disabled)}`}
         >
           {placeholder !== undefined && (
             <option value="" disabled hidden>
