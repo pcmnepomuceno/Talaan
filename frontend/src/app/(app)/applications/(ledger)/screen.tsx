@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { AppBar, BarAction } from "@/components/app-bar";
 import { Button } from "@/components/button";
 import { DeleteConfirm } from "@/components/dialog";
@@ -106,7 +106,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
   const base = hasDetail ? `/applications/${id}` : "/applications";
   const onFilter = (f: Filter) => router.replace(f === "all" ? base : `${base}?status=${f}`);
 
-  const confirmDelete = useCallback(async () => {
+  async function confirmDelete() {
     if (!ready) return;
     setBusy(true);
     try {
@@ -123,7 +123,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
     setConfirming(false);
     toast.success("Application deleted.");
     router.push(`/applications${qs}`);
-  }, [ready, toast, router, qs]);
+  }
 
   const editHref = `/applications/${id}/edit`;
   const actions = ready && (
@@ -171,7 +171,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
                 title="No applications with this status."
                 message="Choose another status or show all applications."
                 action={
-                  <Button variant="secondary" href={hasDetail ? base : "/applications"}>
+                  <Button variant="secondary" href={base}>
                     Show all
                   </Button>
                 }
