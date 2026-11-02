@@ -13,7 +13,8 @@ const items: { href: string; label: string; icon: "table_chart" | "manage_accoun
 const isActive = (path: string, href: string) => path === href || path.startsWith(`${href}/`);
 
 // DESIGN 6.7 and 7. One <nav>, restyled per breakpoint: bottom bar (under 768), 80px rail (768),
-// 240px ink side nav with the logo (1280).
+// 240px ink side nav with the logo (1280). On the ink nav the tint pill is nearly invisible in dark,
+// so the active item gets a lighter fill (15% bar-text) and a 3px left marker instead.
 export function MainNav() {
   const path = usePathname();
   return (
@@ -35,7 +36,7 @@ export function MainNav() {
                 aria-current={active ? "page" : undefined}
                 className={`flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.5 rounded-full px-5 py-1.5 text-caption md:w-full md:px-0 xl:w-auto xl:flex-row xl:justify-start xl:gap-3 xl:px-4 xl:py-2.5 ${
                   active
-                    ? "bg-primary-tint text-primary"
+                    ? "bg-primary-tint text-primary xl:relative xl:bg-bar-text/15 xl:text-bar-text xl:before:absolute xl:before:inset-y-2 xl:before:left-0 xl:before:w-[3px] xl:before:rounded-full xl:before:bg-bar-text xl:before:content-['']"
                     : "text-text-secondary xl:text-bar-text"
                 }`}
               >
