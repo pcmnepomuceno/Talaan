@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Logo, Wordmark } from "@/components/logo";
+import { OUTCOMES, STATUSES, StatusStamp } from "@/components/status-stamp";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Gallery } from "./gallery";
 
 export const metadata: Metadata = { title: "Design system", robots: { index: false, follow: false } };
 
@@ -35,20 +37,7 @@ const swatches = [
   ["overlay", "bg-overlay"],
 ] as const;
 
-const stamps = [
-  ["Saved", "text-status-saved-text bg-status-saved-bg border-status-saved-border"],
-  ["Applied", "text-status-applied-text bg-status-applied-bg border-status-applied-border"],
-  ["Screening", "text-status-screening-text bg-status-screening-bg border-status-screening-border"],
-  ["Interviewing", "text-status-interviewing-text bg-status-interviewing-bg border-status-interviewing-border"],
-  ["Offered", "text-status-offered-text bg-status-offered-bg border-status-offered-border"],
-  ["Accepted", "text-status-accepted-text bg-status-accepted-bg border-status-accepted-border"],
-  ["Rejected", "text-status-rejected-text bg-status-rejected-bg border-status-rejected-border"],
-  ["Withdrawn", "text-status-withdrawn-text bg-status-withdrawn-bg border-status-withdrawn-border"],
-  ["Ghosted", "text-status-ghosted-text bg-status-ghosted-bg border-status-ghosted-border"],
-  ["Pending", "text-status-saved-text bg-status-saved-bg border-status-saved-border"],
-  ["Good", "text-status-offered-text bg-status-offered-bg border-status-offered-border"],
-  ["Bad", "text-status-rejected-text bg-status-rejected-bg border-status-rejected-border"],
-] as const;
+const stampValues = [...STATUSES, ...OUTCOMES];
 
 const types = [
   ["Page title", "text-page-title", "24 / 32, 600"],
@@ -61,16 +50,6 @@ const types = [
   ["Caption bold", "text-caption-bold", "14 / 20, 600"],
   ["Stamp", "text-stamp-label", "14 / 18, 500"],
 ] as const;
-
-function Stamp({ label, cls }: { label: string; cls: string }) {
-  return (
-    <span
-      className={`inline-flex h-7 items-center rounded-xs border px-2.5 text-stamp-label ${cls}`}
-    >
-      {label}
-    </span>
-  );
-}
 
 function Panel({ theme, title }: { theme: "light" | "dark"; title: string }) {
   return (
@@ -89,8 +68,8 @@ function Panel({ theme, title }: { theme: "light" | "dark"; title: string }) {
       </ul>
       <h4 className="my-4 text-section-title">Stamps</h4>
       <div className="flex flex-wrap gap-2">
-        {stamps.map(([l, c]) => (
-          <Stamp key={l} label={l} cls={c} />
+        {stampValues.map((v) => (
+          <StatusStamp key={v} value={v} />
         ))}
       </div>
     </section>
@@ -117,10 +96,29 @@ export default function DesignPage() {
       </section>
 
       <section className="flex flex-col gap-4">
+        <h2 className="text-section-title">Components</h2>
+        <p className="text-caption text-text-muted">
+          Hover, press and Tab through the controls to see those states.
+        </p>
+        <div className="grid gap-4 xl:grid-cols-2">
+          {(["light", "dark"] as const).map((t) => (
+            <section
+              key={t}
+              data-theme={t}
+              className="min-w-0 rounded-sm border border-border-subtle bg-bg-page p-4 text-text-primary"
+            >
+              <h3 className="mb-4 text-section-title">{t === "light" ? "Light" : "Dark"}</h3>
+              <Gallery />
+            </section>
+          ))}
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-4">
         <h2 className="text-section-title">Stamps in the current theme</h2>
         <div className="flex flex-wrap gap-2">
-          {stamps.map(([l, c]) => (
-            <Stamp key={l} label={l} cls={c} />
+          {stampValues.map((v) => (
+            <StatusStamp key={v} value={v} />
           ))}
         </div>
       </section>

@@ -70,9 +70,11 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           # Push to main: always run. Pull request: run only if frontend/ or this workflow changed vs the base.
+          # The two models files are listed because the frontend enum-parity test
+          # (frontend/tests/components/status.test.tsx) reads them: a backend enum change must run it.
           if [ "$EVENT" != "pull_request" ]; then
             echo "frontend=true" >> "$GITHUB_OUTPUT"
-          elif git diff --name-only "$BASE_SHA"...HEAD | grep -qE '^(frontend/|\.github/workflows/ci\.yml$)'; then
+          elif git diff --name-only "$BASE_SHA"...HEAD | grep -qE '^(frontend/|app/applications/models\.py$|app/interviews/models\.py$|\.github/workflows/ci\.yml$)'; then
             echo "frontend=true" >> "$GITHUB_OUTPUT"
           else
             echo "frontend=false" >> "$GITHUB_OUTPUT"

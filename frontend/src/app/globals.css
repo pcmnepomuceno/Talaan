@@ -19,9 +19,13 @@ body {
   font-family: var(--font-sans);
 }
 
-:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
+/* In the base layer so component utilities (fields draw an inset ring) can override it;
+   unlayered CSS would beat every Tailwind utility. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
