@@ -1,8 +1,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { dateAppliedLabel, formatDateTimePHT, formatPeso } from "../lib/format";
-import { type Application, INTERVIEW_MODES, type Interview, WORK_MODES } from "../lib/types";
-import { Icon, type IconName } from "./icon";
+import { type Application, type Interview, interviewMode, workModeLabel } from "../lib/types";
+import { Icon } from "./icon";
 import { StatusStamp } from "./status-stamp";
 
 // DESIGN.md 6.5: one bordered sheet, rows split by 1px rules. `overflow-hidden` clips the selected
@@ -28,7 +28,7 @@ export function ApplicationRow({
   ...target
 }: { application: Application; selected?: boolean } & RowTarget) {
   const salary = formatPeso(a.salary);
-  const mode = WORK_MODES.find((m) => m.value === a.mode_of_work)?.label;
+  const mode = workModeLabel(a.mode_of_work);
   const date = dateAppliedLabel(a.date_applied, a.status);
   const cls = `flex w-full min-h-11 flex-col gap-1 p-4 text-left focus-visible:-outline-offset-2 ${
     selected ? "bg-primary-tint" : ""
@@ -69,15 +69,9 @@ export function ApplicationRow({
   );
 }
 
-const modeIcon: Record<Interview["mode"], IconName> = {
-  on_site: "apartment",
-  online: "videocam",
-  async: "schedule",
-};
-
 // DESIGN.md 6.6. The outcome stamp always shows; interviewer and notes only when present.
 export function InterviewRow({ interview: i }: { interview: Interview }) {
-  const mode = INTERVIEW_MODES.find((m) => m.value === i.mode)?.label;
+  const mode = interviewMode(i.mode);
   return (
     <li className="flex flex-col gap-1 p-4">
       <div className="flex items-start justify-between gap-3">
@@ -88,8 +82,8 @@ export function InterviewRow({ interview: i }: { interview: Interview }) {
       </div>
       <p className="flex flex-wrap items-center gap-x-2 text-caption text-text-secondary">
         <span className="flex items-center gap-1">
-          <Icon name={modeIcon[i.mode]} size={20} />
-          {mode}
+          {mode && <Icon name={mode.icon} size={20} />}
+          {mode?.label}
         </span>
         {i.interviewer && (
           <>
@@ -124,7 +118,7 @@ const shortUrl = (u: string) => u.replace(/^https?:\/\//i, "").replace(/\/$/, ""
 export function DetailRows({ application: a }: { application: Application }) {
   const salary = formatPeso(a.salary);
   const date = dateAppliedLabel(a.date_applied, a.status);
-  const mode = WORK_MODES.find((m) => m.value === a.mode_of_work)?.label;
+  const mode = workModeLabel(a.mode_of_work);
   const safe = a.contact_website && /^https?:\/\//i.test(a.contact_website);
   return (
     <dl className={`${sheet} ${rules}`}>
