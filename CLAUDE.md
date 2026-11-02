@@ -140,7 +140,7 @@ Next.js (App Router, TypeScript, Tailwind v4, npm) in `frontend/`; deploys to Ve
 - Component rules: every control at least 44 x 44 (a 36px DESIGN visual sits inside a 44px hit area, focus ring on the visual); fields draw a 2px primary ring over the border (6.2), everything else uses the global `:focus-visible` ring in `@layer base`; fields forward `ref` and native props; status/outcome values must equal the API enums (tested against `app/*/models.py`); icons are inline SVG paths in `icon.tsx` (no icon font); transitions at most 100ms. Tests: RTL + user-event, DOM tests start with `// @vitest-environment jsdom`.
 
 - Routes: `/` redirects to `/applications`; `/login` (unwired); `(app)` group with the shell (`MainNav` bottom bar under 768, 80px rail from 768, 240px ink side nav from 1280, skip link, `ToastProvider`; toasts clear the bottom nav via `--bottom-nav`); `/applications` and `/applications/[id]` share `(ledger)/screen.tsx` (separate screens under 1280, list + detail panes from 1280, list pane scrolls on its own so selecting a row keeps its scroll); `/account` (theme only); `/applications/new` and `/applications/[id]/edit` are noindex placeholders until the forms milestone. `ThemeSync` in the root layout does cross-tab theme sync. `AppBar` is hidden from 1280.
-- Screenshots: Playwright runs are saved in `frontend/.screenshots/` (gitignored), never committed.
+- Screenshots: run `HIDE_DEV_INDICATOR=1 npm run dev` (hides the Next dev badge). Playwright runs are saved in `frontend/.screenshots/` (gitignored), never committed.
 
 ## Backlog
 - PATCH has no optimistic concurrency (no ETag/version): concurrent edits are last-write-wins
