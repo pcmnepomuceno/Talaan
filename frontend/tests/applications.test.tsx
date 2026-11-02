@@ -218,3 +218,27 @@ it("interviews fetch failure is an error too, not a half-loaded detail", async (
   screenUnderTest();
   await bannerWith("Couldn't load this application.");
 });
+
+it("Back to a deleted id shows loading then not-found, never the old content", async () => {
+  params = { id: "1" };
+  // A new element each time: React skips re-rendering an identical element, and the screen reads params in render.
+  const tree = () => (
+    <ToastProvider>
+      <ApplicationsScreen>
+        <ApplicationDetailPage />
+      </ApplicationsScreen>
+    </ToastProvider>
+  );
+  const { rerender } = render(tree());
+  await screen.findByRole("heading", { name: "Details" });
+  await userEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
+  await userEvent.click(await screen.findByRole("button", { name: "Delete application" }));
+  await waitFor(() => expect(push).toHaveBeenCalled());
+  params = {}; // router.push to the list
+  rerender(tree());
+  params = { id: "1" }; // browser Back
+  rerender(tree());
+  expect(screen.queryByRole("heading", { name: "Details" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
+  expect(await screen.findByText("Application not found.")).toBeTruthy();
+});
