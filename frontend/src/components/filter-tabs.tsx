@@ -1,6 +1,6 @@
 import { STATUSES, type Status, stampLabel } from "./status-stamp";
 
-type Filter = Status | "all";
+export type Filter = Status | "all";
 const filters: Filter[] = ["all", ...STATUSES];
 
 // DESIGN.md 6.4. Toggle buttons (aria-pressed), label only, scrolls sideways when narrow.

@@ -7,7 +7,7 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { expect, it, vi } from "vitest";
 import { Banner } from "../../src/components/banner";
-import { FilterTabs } from "../../src/components/filter-tabs";
+import { type Filter, FilterTabs } from "../../src/components/filter-tabs";
 import { OUTCOMES, STATUSES, StatusStamp } from "../../src/components/status-stamp";
 
 const labels = {
@@ -54,7 +54,7 @@ it("matches the API enum values", () => {
 });
 
 function Tabs() {
-  const [v, setV] = useState<Parameters<typeof FilterTabs>[0]["value"]>("all");
+  const [v, setV] = useState<Filter>("all");
   return <FilterTabs value={v} onChange={setV} />;
 }
 
