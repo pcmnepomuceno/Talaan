@@ -106,6 +106,12 @@ export function resetMock() {
   interviews = seedInterviews();
 }
 
+/** A route id is valid only in canonical form ("1", not "01" or "1e3") and as a safe integer. */
+export function parseId(raw: string): number | null {
+  const n = Number(raw);
+  return Number.isSafeInteger(n) && String(n) === raw ? n : null;
+}
+
 /** Unknown or missing values mean "all". */
 export const parseStatus = (raw: string | null | undefined): Status | undefined =>
   STATUSES.find((s) => s === raw);
