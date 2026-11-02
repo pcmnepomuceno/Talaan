@@ -208,7 +208,7 @@ Rows keep their ledger sheet and rules; each row shows three bars. Base `color-b
 | Breakpoint | Width | Layout |
 |---|---|---|
 | Mobile | under 768 | Single column, 16px gutter, bottom navigation, floating add button |
-| Tablet | 768 to 1279 | Single column list centered, max content width 640, left side navigation rail (80px, icons with labels beneath) replaces bottom nav |
+| Tablet | 768 to 1279 | Single column list centered, max content width 640, left side navigation rail (88px, icons with labels beneath) replaces bottom nav |
 | Desktop | 1280 and up | Left side navigation (240px) with `Applications` and `Account`. Applications screen is two panes: the ledger sheet (400px) and detail (fills the rest, max width 720). Selecting a row fills the detail pane; there is no separate detail page. |
 
 - The add and edit form opens as a centered dialog (max width 560) on tablet and desktop, and as a full screen on mobile.
@@ -219,7 +219,7 @@ Rows keep their ledger sheet and rules; each row shows three bars. Base `color-b
 ---
 
 ## 8. Screens (reference list)
-1. **Sign up / Log in**: an ink-blue band at the top (`color-bar-bg`, about 200px tall) with the logo mark, the wordmark "Talaan" and one plain line, "Track every application in one place." Below it on paper, a two-option segmented control (Log in, Create account). Sign up fields: Account name, Email, Password (with show/hide), Invite code, plus the plain line "Access is by invitation for now." Log in fields: Email, Password.
+1. **Sign up / Log in**: an ink-blue band at the top (`color-bar-bg`, about 200px tall) with the logo mark, the wordmark "Talaan" and one plain line, "Track every application in one place." Below it on paper, a two-option segmented control (Log in, Create account). Sign up fields: Invite code, Account name, Email, Password (with show/hide), plus the plain line "Access is by invitation for now." Log in fields: Email, Password.
    - Failed login message: "Incorrect email or password."
    - Failed sign up message (one banner only, no field-specific message): "We could not create the account. Check the invite code and email, then try again."
 2. **Applications list**: app bar, status filter tabs (All plus each status, label only), the ledger sheet of application rows, floating add button, empty state, loading skeletons.

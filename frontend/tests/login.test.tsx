@@ -1,0 +1,69 @@
+// @vitest-environment jsdom
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { expect, it, vi } from "vitest";
+import { LoginForm } from "../src/app/login/login-form";
+
+it("empty log in shows inline errors, marks fields invalid, focuses the first, never calls fetch", async () => {
+  const fetch = vi.spyOn(globalThis, "fetch");
+  render(<LoginForm />);
+  await userEvent.click(screen.getByRole("button", { name: "Log in" }));
+  expect(screen.getByText("Enter your email.")).toBeTruthy();
+  expect(screen.getByText("Enter your password.")).toBeTruthy();
+  const email = screen.getByLabelText("Email");
+  expect(email.getAttribute("aria-invalid")).toBe("true");
+  expect(document.activeElement).toBe(email);
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it("Create account fields are in order: invite code, account name, email, password", async () => {
+  render(<LoginForm />);
+  await userEvent.click(screen.getByRole("radio", { name: "Create account" }));
+  const labels = [...document.querySelectorAll("form label")].map((l) => l.textContent);
+  expect(labels.filter((t) => !/Required|Show|Hide/.test(t ?? ""))).toEqual([
+    "Invite code",
+    "Account name",
+    "Email",
+    "Password",
+  ]);
+  expect(screen.getByText("Access is by invitation for now.")).toBeTruthy();
+});
+
+it("switching mode clears errors", async () => {
+  render(<LoginForm />);
+  await userEvent.click(screen.getByRole("button", { name: "Log in" }));
+  await userEvent.click(screen.getByRole("radio", { name: "Create account" }));
+  expect(screen.queryByText("Enter your email.")).toBeNull();
+});
+
+it("valid log in does nothing (not wired)", async () => {
+  const fetch = vi.spyOn(globalThis, "fetch");
+  render(<LoginForm />);
+  await userEvent.type(screen.getByLabelText("Email"), "a@example.ph");
+  await userEvent.type(screen.getByLabelText("Password"), "x");
+  await userEvent.click(screen.getByRole("button", { name: "Log in" }));
+  expect(document.querySelector('[aria-invalid="true"]')).toBeNull();
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it("band and form column share max width and gutter (same left edge)", () => {
+  render(<LoginForm />);
+  const band = document.querySelector("header > div")!;
+  const form = document.querySelector("main")!;
+  for (const c of ["max-w-[440px]", "px-4", "mx-auto"]) {
+    expect(band.className).toContain(c);
+    expect(form.className).toContain(c);
+  }
+});
+
+it("switching mode keeps the email and clears the password", async () => {
+  render(<LoginForm />);
+  await userEvent.type(screen.getByLabelText("Email"), "a@example.ph");
+  await userEvent.type(screen.getByLabelText("Password"), "Secret1!");
+  await userEvent.click(screen.getByRole("radio", { name: "Create account" }));
+  expect((screen.getByLabelText("Email") as HTMLInputElement).value).toBe("a@example.ph");
+  expect((screen.getByLabelText("Password") as HTMLInputElement).value).toBe("");
+  await userEvent.click(screen.getByRole("radio", { name: "Log in" }));
+  expect((screen.getByLabelText("Email") as HTMLInputElement).value).toBe("a@example.ph");
+  expect((screen.getByLabelText("Password") as HTMLInputElement).value).toBe("");
+});

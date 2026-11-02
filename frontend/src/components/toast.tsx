@@ -76,7 +76,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           const from = e.relatedTarget;
           if (from instanceof HTMLElement && !stack.current?.contains(from)) returnTo.current = from;
         }}
-        className="pointer-events-none fixed inset-x-0 bottom-0 z-50 mx-auto flex max-w-[440px] flex-col gap-2 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]"
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-50 mx-auto flex max-w-[440px] flex-col gap-2 px-4 pb-[calc(1rem+env(safe-area-inset-bottom)+var(--bottom-nav,0px))]"
       >
         {region("error", "alert")}
         {region("success", "status")}

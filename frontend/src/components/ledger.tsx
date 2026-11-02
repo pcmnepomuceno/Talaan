@@ -36,7 +36,9 @@ export function ApplicationRow({
   const body = (
     <>
       <span className="flex items-start justify-between gap-3">
-        <span className={`min-w-0 text-row-title text-text-primary ${wrap}`}>{a.job_name}</span>
+        <span title={a.job_name} className={`line-clamp-2 min-w-0 text-row-title text-text-primary ${wrap}`}>
+          {a.job_name}
+        </span>
         <StatusStamp value={a.status} />
       </span>
       <span className={`text-caption text-text-secondary ${wrap}`}>{a.company}</span>

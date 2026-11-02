@@ -56,6 +56,20 @@ const pairs: [string, string, number][] = [
   ["bar-stamp", "bar-bg", 3],
 ];
 
+// Side nav active item (main-nav.tsx): bar-text at 15% over bar-bg, with a bar-text marker.
+const mix = (fg: string, bg: string, a: number) =>
+  "#" + [1, 3, 5].map((i) => Math.round(parseInt(fg.slice(i, i + 2), 16) * a + parseInt(bg.slice(i, i + 2), 16) * (1 - a)).toString(16).padStart(2, "0")).join("");
+
+describe("side nav active item", () => {
+  for (const theme of ["light", "dark"] as const) {
+    it(`${theme}: bar-text on the 15% fill >= 4.5:1, marker on bar-bg >= 3:1`, () => {
+      const fill = mix(tokens["bar-text"][theme], tokens["bar-bg"][theme], 0.15);
+      expect(ratio(tokens["bar-text"][theme], fill)).toBeGreaterThanOrEqual(4.5);
+      expect(ratio(tokens["bar-text"][theme], tokens["bar-bg"][theme])).toBeGreaterThanOrEqual(3);
+    });
+  }
+});
+
 describe("tokens.css contrast", () => {
   it("parses the tokens", () => {
     expect(Object.keys(tokens).length).toBeGreaterThan(50);

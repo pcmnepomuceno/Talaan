@@ -13,6 +13,10 @@ npm run lint && npm run typecheck && npm test && npm run build
 - IBM Plex Sans via `next/font`; sentence case; no component library.
 - Contrast tests (`tests/contrast.test.ts`) fail if a token pair drops below the DESIGN.md ratio.
 
+## Routes
+
+`/` redirects to `/applications`. `/login` (not wired), `/applications` (`?status=` filter), `/applications/[id]`, `/account`, plus placeholders at `/applications/new` and `/applications/[id]/edit`. All data comes from the in-memory mock in `src/lib/api.ts` (resets on reload). From 1280 the list and detail show side by side. `/design` is the component gallery.
+
 ## Components (`src/components/`)
 
 | Component | Notes |
@@ -27,6 +31,7 @@ npm run lint && npm run typecheck && npm test && npm run build
 | `LedgerSheet`, `ApplicationRow`, `InterviewRow`, `DetailRows`, `LedgerSkeleton` | `ledger.tsx`; rows are whole-row links (`href`) or buttons (`onSelect`), `selected` sets `aria-current` |
 | `Dialog`, `DeleteConfirm` | `dialog.tsx`; native `<dialog>`: bottom sheet under 768px, centered from 768px; Escape or Cancel only |
 | `ToastProvider`, `useToast()` | `success(msg)` auto-dismisses after 4s (paused on hover or focus), `error(msg)` stays; max 3 |
+| `AppBar`, `BarAction`, `MainNav` | App shell: ink top bar (hidden from 1280), bottom nav / rail / side nav |
 | `EmptyState` | Title, one sentence, optional action button |
 
 All of them are on `/design` in every state, in a light and a dark panel.

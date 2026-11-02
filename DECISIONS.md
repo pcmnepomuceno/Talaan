@@ -209,3 +209,28 @@
 - **Decision:** At most 3 success toasts and 3 error toasts are visible. A fourth of either kind drops the oldest toast of that same kind. This replaces the F2b rule (3 in total, oldest success dropped first), recorded in DESIGN.md 6.9.
 - **Rationale:** Errors never auto-dismiss. Under the shared cap, 3 errors on screen meant a new success was dropped in the same update, so a retry that worked showed no confirmation and screen readers announced nothing.
 - **Alternative:** Keep one cap of 3 and drop the oldest error instead (hides an unresolved error); no cap (a burst of errors covers the screen).
+
+---
+
+# Decision: Sign up asks for the invite code first
+
+- **Date:** 2026-11-02
+- **Decision:** The Create account fields are in this order: Invite code, Account name, Email, Password. DESIGN.md section 8 item 1 changes to match (the only DESIGN.md edit in F3). This follows the Stitch screen instead of the earlier DESIGN.md order.
+- **Rationale:** Signup is by invitation. The invite code gates it, so a person without a valid code finds out before filling in three other fields.
+- **Alternative:** Keep the code last (DESIGN.md v2.2), which puts the field most likely to fail at the end of the form.
+
+---
+
+# Decision: Deny the unrs-resolver install script
+
+- **Date:** 2026-11-03
+- **Decision:** `frontend/package.json` `allowScripts` has `"unrs-resolver": false` (an npm deny-list entry, not a new dependency): this transitive ESLint resolver's postinstall only re-checks a native binding that its platform `optionalDependencies` already install, so denying it removes install-time code execution at no cost (lint and tests pass on a clean `npm ci`).
+
+---
+
+# Decision: Tablet rail is 88px
+
+- **Date:** 2026-11-03
+- **Decision:** The navigation rail from 768 to 1279 is 88px wide, up from 80px. The content offset (`md:pl-22`) matches. This amends DESIGN.md section 7 (the approved DESIGN.md edit for this change) and the CLAUDE.md route note.
+- **Rationale:** The bold "Applications" label does not fit in an 80px rail. At 88px it fits with `tracking-tight` (77px label in a 79px pill).
+- **Alternative:** Keep 80px and shrink the label token or abbreviate the label (worse legibility, and a second token only for the rail).
