@@ -53,4 +53,10 @@ describe("sortInterviewsByDate", () => {
     expect(sortInterviewsByDate(input).map((i) => i.id)).toEqual([2, 1, 3, 4]);
     expect(input).toEqual(copy);
   });
+  // An offset-less time is Manila wall time, as formatDateTimePHT reads it: 14:00 PHT is 06:00Z.
+  it.each(["UTC", "America/Los_Angeles"])("reads offset-less times as Manila time (device zone %s)", (tz) => {
+    vi.stubEnv("TZ", tz);
+    const input = [mk(2, "2026-10-24T08:00:00Z"), mk(1, "2026-10-24T14:00:00")];
+    expect(sortInterviewsByDate(input).map((i) => i.id)).toEqual([1, 2]);
+  });
 });
