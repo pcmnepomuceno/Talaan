@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { Banner } from "../../src/components/banner";
 import { FilterTabs } from "../../src/components/filter-tabs";
 import { OUTCOMES, STATUSES, StatusStamp } from "../../src/components/status-stamp";
@@ -68,4 +68,24 @@ it("Banner is an alert with title and text", () => {
   render(<Banner title="Could not log in">Incorrect email or password.</Banner>);
   const alert = screen.getByRole("alert");
   expect(alert.textContent).toBe("Could not log in" + "Incorrect email or password.");
+});
+
+it.each([
+  ["a paragraph", <p key="p">Check the fields.</p>],
+  [
+    "a list",
+    <ul key="ul">
+      <li>Company is required</li>
+      <li>Enter a full URL</li>
+    </ul>,
+  ],
+])("Banner accepts %s as children without a nesting warning", (_, child) => {
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    render(<Banner title="Could not save">{child}</Banner>);
+    expect(error).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert").querySelector("p p, p ul")).toBeNull();
+  } finally {
+    error.mockRestore();
+  }
 });

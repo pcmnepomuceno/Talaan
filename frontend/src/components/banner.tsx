@@ -8,7 +8,7 @@ export function Banner({ title, children }: { title: string; children: ReactNode
       <Icon name="error" />
       <div className="flex min-w-0 flex-col gap-1">
         <p className="text-body font-semibold">{title}</p>
-        <p className="text-caption">{children}</p>
+        <div className="text-caption">{children}</div>
       </div>
     </div>
   );
