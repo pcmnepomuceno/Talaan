@@ -46,12 +46,18 @@ function useFieldId(id?: string) {
   return id ?? auto;
 }
 
-function aria(id: string, { helper, error, required }: Omit<FieldProps, "label">) {
-  const describedBy = [helper && `${id}-helper`, error && `${id}-error`].filter(Boolean).join(" ");
+type CallerAria = Pick<ComponentProps<"input">, "aria-describedby" | "aria-invalid" | "aria-required">;
+
+// Merges with the caller's ARIA props: their describedby ids come first; error and required win
+// over the caller's aria-invalid/aria-required, otherwise the caller's value stands.
+function aria(id: string, { helper, error, required }: Omit<FieldProps, "label">, caller: CallerAria) {
+  const describedBy = [caller["aria-describedby"], helper && `${id}-helper`, error && `${id}-error`]
+    .filter(Boolean)
+    .join(" ");
   return {
     id,
-    "aria-invalid": error ? true : undefined,
-    "aria-required": required || undefined,
+    "aria-invalid": error ? true : caller["aria-invalid"],
+    "aria-required": required ? true : caller["aria-required"],
     "aria-describedby": describedBy || undefined,
   };
 }
@@ -90,7 +96,7 @@ export function TextField({
         {prefix && <span className="shrink-0 whitespace-nowrap text-text-muted">{prefix}</span>}
         <input
           {...props}
-          {...aria(fid, { helper, error, required })}
+          {...aria(fid, { helper, error, required }, props)}
           className={`h-11 min-w-0 flex-1 bg-transparent outline-none placeholder:text-text-muted disabled:cursor-not-allowed ${className}`}
         />
         {suffix && (
@@ -137,7 +143,7 @@ export function Textarea({
       <textarea
         rows={4}
         {...props}
-        {...aria(fid, { helper, error, required })}
+        {...aria(fid, { helper, error, required }, props)}
         className={`resize-y px-4 py-3 text-body placeholder:text-text-muted disabled:cursor-not-allowed ${ring} ${box(error, props.disabled)} ${className}`}
       />
     </Field>
@@ -163,7 +169,7 @@ export function Select({
       <div className="relative">
         <select
           {...props}
-          {...aria(fid, { helper, error, required })}
+          {...aria(fid, { helper, error, required }, props)}
           className={`h-12 w-full appearance-none truncate pr-11 pl-4 disabled:cursor-not-allowed [&:has(option[value='']:checked)]:text-text-muted [&_option]:text-text-primary ${ring} ${box(error, props.disabled)} ${className}`}
         >
           {placeholder !== undefined && <option value="">{placeholder}</option>}

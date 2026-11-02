@@ -2,7 +2,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createRef } from "react";
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { PasswordField, Select, Textarea, TextField } from "../../src/components/fields";
 
 it("names the input by its label and marks Required", () => {
@@ -118,4 +118,49 @@ it("Textarea is named and reports errors", () => {
   const area = screen.getByRole("textbox", { name: "Notes" });
   expect(area.getAttribute("aria-invalid")).toBe("true");
   expect(document.getElementById(area.getAttribute("aria-describedby")!)!.textContent).toBe("Too long");
+});
+
+// Caller ARIA props merge with the generated ones instead of being overwritten.
+const ariaFields = {
+  TextField: (p: Record<string, unknown>) => <TextField label="Field" {...p} />,
+  PasswordField: (p: Record<string, unknown>) => <PasswordField label="Field" {...p} />,
+  Textarea: (p: Record<string, unknown>) => <Textarea label="Field" {...p} />,
+  Select: (p: Record<string, unknown>) => (
+    <Select label="Field" {...p}>
+      <option value="a">A</option>
+    </Select>
+  ),
+};
+const control = () => screen.getByLabelText("Field", { selector: "input, textarea, select" });
+
+describe.each(Object.entries(ariaFields))("%s ARIA merge", (_, F) => {
+  it("keeps the caller's aria-describedby alone", () => {
+    render(<F aria-describedby="pw-rules" />);
+    expect(control().getAttribute("aria-describedby")).toBe("pw-rules");
+  });
+
+  it("puts the caller's aria-describedby before helper and error", () => {
+    render(<F id="f" aria-describedby="pw-rules" helper="Help" error="Wrong" />);
+    expect(control().getAttribute("aria-describedby")).toBe("pw-rules f-helper f-error");
+  });
+
+  it("aria-invalid is true with an error, even if the caller says false", () => {
+    render(<F error="Wrong" aria-invalid={false} />);
+    expect(control().getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("respects the caller's aria-invalid without an error", () => {
+    render(<F aria-invalid />);
+    expect(control().getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("aria-required is true when required, even if the caller says false", () => {
+    render(<F required aria-required={false} />);
+    expect(control().getAttribute("aria-required")).toBe("true");
+  });
+
+  it("respects the caller's aria-required without required", () => {
+    render(<F aria-required />);
+    expect(control().getAttribute("aria-required")).toBe("true");
+  });
 });
