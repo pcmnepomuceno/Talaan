@@ -55,3 +55,15 @@ it("band and form column share max width and gutter (same left edge)", () => {
     expect(form.className).toContain(c);
   }
 });
+
+it("switching mode keeps the email and clears the password", async () => {
+  render(<LoginForm />);
+  await userEvent.type(screen.getByLabelText("Email"), "a@example.ph");
+  await userEvent.type(screen.getByLabelText("Password"), "Secret1!");
+  await userEvent.click(screen.getByRole("radio", { name: "Create account" }));
+  expect((screen.getByLabelText("Email") as HTMLInputElement).value).toBe("a@example.ph");
+  expect((screen.getByLabelText("Password") as HTMLInputElement).value).toBe("");
+  await userEvent.click(screen.getByRole("radio", { name: "Log in" }));
+  expect((screen.getByLabelText("Email") as HTMLInputElement).value).toBe("a@example.ph");
+  expect((screen.getByLabelText("Password") as HTMLInputElement).value).toBe("");
+});

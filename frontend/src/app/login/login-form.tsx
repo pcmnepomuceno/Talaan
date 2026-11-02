@@ -32,6 +32,8 @@ export function LoginForm() {
   const [mode, setMode] = useState<Mode>("login");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [attempt, setAttempt] = useState(0);
+  // Email survives a mode switch; the form remounts on mode (key), which clears everything else, password included.
+  const [email, setEmail] = useState("");
   const form = useRef<HTMLFormElement>(null);
 
   // Focus the first invalid field after the error state has rendered.
@@ -79,7 +81,16 @@ export function LoginForm() {
               <TextField label="Account name" name="account_name" required autoComplete="name" error={err("account_name")} />
             </>
           )}
-          <TextField label="Email" name="email" type="email" required autoComplete="email" error={err("email")} />
+          <TextField
+            label="Email"
+            name="email"
+            type="email"
+            required
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            error={err("email")}
+          />
           <PasswordField
             label="Password"
             name="password"
