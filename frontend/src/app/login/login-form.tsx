@@ -56,8 +56,9 @@ export function LoginForm() {
       >
         Skip to content
       </a>
-      <header className="bg-bar-bg px-4 pt-[env(safe-area-inset-top)] text-bar-text">
-        <div className="mx-auto flex h-[200px] max-w-[440px] flex-col justify-end gap-3 pb-8">
+      <header className="bg-bar-bg pt-[env(safe-area-inset-top)] text-bar-text">
+        {/* Same max-w and px-4 as <main> below, so logo, tagline and fields share one left edge. */}
+        <div className="mx-auto flex h-[200px] max-w-[440px] flex-col px-4 justify-end gap-3 pb-8">
           <Wordmark variant="on-ink" size={40} />
           <p className="text-body">Track every application in one place.</p>
         </div>

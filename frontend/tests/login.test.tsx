@@ -45,3 +45,13 @@ it("valid log in does nothing (not wired)", async () => {
   expect(document.querySelector('[aria-invalid="true"]')).toBeNull();
   expect(fetch).not.toHaveBeenCalled();
 });
+
+it("band and form column share max width and gutter (same left edge)", () => {
+  render(<LoginForm />);
+  const band = document.querySelector("header > div")!;
+  const form = document.querySelector("main")!;
+  for (const c of ["max-w-[440px]", "px-4", "mx-auto"]) {
+    expect(band.className).toContain(c);
+    expect(form.className).toContain(c);
+  }
+});
