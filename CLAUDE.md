@@ -128,6 +128,7 @@ Next.js (App Router, TypeScript, Tailwind v4, npm) in `frontend/`; deploys to Ve
 - Commands (run in `frontend/`): `npm run dev`, `npm run lint`, `npm run typecheck`, `npm test` (Vitest), `npm run build`. Node 24.
 - Layout: `src/styles/tokens.css` (all colors, radii, type, shadow as a Tailwind `@theme static` block), `src/app/` (routes, `globals.css`, `icon.svg`), `src/components/`, `src/lib/`, `tests/`.
 - Rules: tokens only; no hex outside `tokens.css` (and `app/icon.svg`, enforced by `tests/no-hex.test.ts`); dark mode comes from the variables (`light-dark()` + `color-scheme`), never `dark:` variants; sentence case, no `uppercase`; IBM Plex Sans only (400/500/600), no mono or serif; no component library, CSS-in-JS or animation library; no new dependencies without asking.
+- Forms: every form uses `noValidate` and shows our own inline errors; no native validation popups.
 - Theme: "system" default, override saved in `localStorage` (`theme` = `light` | `dark`), applied by an inline script in `<head>` before paint.
 - Next.js here is newer than common training data; check `frontend/node_modules/next/dist/docs/` before using an unfamiliar API. `agentRules: false` stops `next dev` re-creating `frontend/AGENTS.md`.
 - Changing a token: `npm test` runs the WCAG contrast checks from DESIGN.md and fails below the ratio.
