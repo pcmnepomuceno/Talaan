@@ -15,8 +15,15 @@ export function formatPeso(n: number | null | undefined, { perMonth = true } = {
 // Date-only strings are calendar dates: format them in UTC so no device zone shifts the day.
 // Anything with a time is an instant: format it in Manila. A time without an offset is read as
 // Manila wall time (the Philippines has no DST), never as the device's zone.
+// new Date() rolls 2026-02-30 over to Mar 2, so the leading YYYY-MM-DD must survive a UTC round trip.
+function onCalendar(value: string): boolean {
+  const ymd = value.slice(0, 10);
+  const d = new Date(`${ymd}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === ymd;
+}
+
 export function parse(value: string | null | undefined): { date: Date; zone: string } | null {
-  if (!value) return null;
+  if (!value || !onCalendar(value)) return null;
   const dateOnly = DATE_ONLY.test(value);
   const iso = dateOnly || HAS_OFFSET.test(value) ? value : `${value}+08:00`;
   const date = new Date(iso);
