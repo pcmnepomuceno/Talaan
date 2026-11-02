@@ -14,24 +14,38 @@ const filters: Filter[] = ["all", ...STATUSES];
 export function FilterTabs({ value, onChange }: { value: Filter; onChange: (value: Filter) => void }) {
   const row = useRef<HTMLDivElement>(null);
   const [more, setMore] = useState(false);
+  // The fade shows while more tabs are hidden to the right. Measured on scroll and whenever the
+  // row or any tab changes size (window resize, and the webfont swapping in and widening the tabs).
   useEffect(() => {
     const el = row.current;
     if (!el) return;
-    const update = () => setMore(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+    const update = () => setMore(el.scrollLeft + el.clientWidth < el.scrollWidth - 5); // the row has 4px end padding
     update();
     el.addEventListener("scroll", update, { passive: true });
-    window.addEventListener("resize", update);
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    ro?.observe(el);
+    el.querySelectorAll("button").forEach((b) => ro?.observe(b));
     return () => {
       el.removeEventListener("scroll", update);
-      window.removeEventListener("resize", update);
+      ro?.disconnect();
     };
   }, []);
+
+  // Keep the pressed tab inside the row (a ?status= deep link can put it off-screen). The first
+  // placement and reduced motion are instant; later changes glide.
+  const first = useRef(true);
+  useEffect(() => {
+    const active = row.current?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    const still = first.current || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    first.current = false;
+    active?.scrollIntoView?.({ inline: "nearest", block: "nearest", behavior: still ? "instant" : "smooth" });
+  }, [value]);
   return (
     <div
       ref={row}
       role="group"
       aria-label="Filter by status"
-      className={`-mx-1 flex gap-x-2 overflow-x-auto p-1 [scrollbar-width:none] md:flex-wrap md:overflow-visible [&::-webkit-scrollbar]:hidden ${
+      className={`-mx-1 flex scroll-px-10 gap-x-2 overflow-x-auto p-1 [scrollbar-width:none] md:flex-wrap md:overflow-visible [&::-webkit-scrollbar]:hidden ${
         more ? "max-md:[mask-image:linear-gradient(to_right,black_calc(100%-32px),transparent)]" : ""
       }`}
     >
