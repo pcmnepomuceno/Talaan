@@ -93,16 +93,21 @@ it("two toasts in the same tick both show", () => {
   expect(screen.queryByText("Two")).not.toBeNull();
 });
 
-it("over 3: oldest success is dropped first, errors survive", () => {
+it("caps are per kind: a success shows even with 3 errors on screen", () => {
+  setup();
+  fire(() => ["E1", "E2", "E3"].forEach((m) => api.error(m)));
+  fire(() => api.success("Application saved"));
+  for (const t of ["E1", "E2", "E3", "Application saved"]) expect(screen.queryByText(t)).not.toBeNull();
+});
+
+it("over 3 successes: the oldest success is dropped, errors untouched", () => {
   setup();
   fire(() => {
     api.error("E1");
-    api.success("S1");
-    api.success("S2");
-    api.success("S3");
+    ["S1", "S2", "S3", "S4"].forEach((m) => api.success(m));
   });
   expect(screen.queryByText("S1")).toBeNull();
-  for (const t of ["E1", "S2", "S3"]) expect(screen.queryByText(t)).not.toBeNull();
+  for (const t of ["E1", "S2", "S3", "S4"]) expect(screen.queryByText(t)).not.toBeNull();
 });
 
 it("over 3 errors: the oldest error is dropped", () => {

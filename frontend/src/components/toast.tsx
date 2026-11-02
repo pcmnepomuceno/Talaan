@@ -6,7 +6,8 @@ import { Icon } from "./icon";
 // DESIGN.md 6.9. Two always-mounted live regions (a region added together with its content is
 // often not announced): polite `status` for success, assertive `alert` for errors.
 // Success auto-dismisses after 4s; the timer pauses while hovered or focused. Errors stay.
-// At most 3 are visible: oldest success goes first, an error only when there are more than 3 errors.
+// Caps are per kind: at most 3 successes and 3 errors; a 4th drops the oldest of its own kind,
+// so a burst of errors can never hide a new success.
 // No enter or exit animation, so reduced motion needs no special case.
 const SUCCESS_MS = 4000;
 const MAX = 3;
@@ -23,13 +24,10 @@ export function useToast(): Api {
   return api;
 }
 
-function trim(items: Item[]): Item[] {
-  const out = [...items];
-  while (out.length > MAX) {
-    const i = out.findIndex((t) => t.kind === "success");
-    out.splice(i === -1 ? 0 : i, 1);
-  }
-  return out;
+// Toasts arrive one at a time, so at most one is over the cap.
+function trim(items: Item[], kind: Kind): Item[] {
+  const same = items.filter((t) => t.kind === kind);
+  return same.length > MAX ? items.filter((t) => t !== same[0]) : items;
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -38,7 +36,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const add = useCallback((kind: Kind, message: string) => {
     const id = nextId.current++; // outside the updater: two calls in one tick still get two ids
-    setItems((prev) => trim([...prev, { id, kind, message }]));
+    setItems((prev) => trim([...prev, { id, kind, message }], kind));
   }, []);
   const dismiss = useCallback((id: number) => setItems((prev) => prev.filter((t) => t.id !== id)), []);
   const api = useMemo<Api>(
