@@ -2,6 +2,19 @@
 
 import { useState } from "react";
 import { Banner } from "@/components/banner";
+import { DeleteConfirm } from "@/components/dialog";
+import { EmptyState } from "@/components/empty-state";
+import { ApplicationRow, DetailRows, InterviewRow, LedgerSheet, LedgerSkeleton } from "@/components/ledger";
+import { useToast } from "@/components/toast";
+import { sortInterviewsByDate } from "@/lib/interviews";
+import {
+  type Application,
+  INTERVIEW_MODES,
+  type Interview,
+  type InterviewMode,
+  WORK_MODES,
+  type WorkMode,
+} from "@/lib/types";
 import { Button } from "@/components/button";
 import { PasswordField, Select, Textarea, TextField } from "@/components/fields";
 import { type Filter, FilterTabs } from "@/components/filter-tabs";
@@ -10,16 +23,29 @@ import { SegmentedControl } from "@/components/segmented-control";
 import { OUTCOMES, STATUSES, StatusStamp, stampLabel } from "@/components/status-stamp";
 
 const variants = ["primary", "secondary", "ghost", "destructive"] as const;
-const modes = [
-  { value: "on_site", label: "On-site" },
-  { value: "hybrid", label: "Hybrid" },
-  { value: "remote", label: "Remote" },
-] as const;
-const interviewModes = [
-  { value: "on_site", label: "On-site" },
-  { value: "online", label: "Online" },
-  { value: "async", label: "Async" },
-] as const;
+
+const base = {
+  contact_email: null,
+  remarks: null,
+  created_at: "2026-10-01T00:00:00Z",
+  updated_at: "2026-10-01T00:00:00Z",
+} as const;
+// Fictional data (DESIGN.md section 9), same five rows as light-list.png.
+const apps: Application[] = [
+  { ...base, id: 1, company: "Pinagsama Tech", job_name: "Senior Frontend Engineer", status: "interviewing", mode_of_work: "hybrid", salary: 85000, date_applied: "2026-10-14", contact_website: "https://pinagsamatech.example.ph", remarks: "Referral from a former teammate. Technical round next week." },
+  { ...base, id: 2, company: "Bayanihan Digital", job_name: "Product Designer", status: "offered", mode_of_work: "remote", salary: 95000, date_applied: "2026-09-28", contact_website: null },
+  { ...base, id: 3, company: "Mayon Software Labs", job_name: "Full Stack Developer", status: "applied", mode_of_work: "on_site", salary: 65000, date_applied: "2026-10-19", contact_website: null },
+  { ...base, id: 4, company: "Kape Digital", job_name: "Backend Engineer", status: "screening", mode_of_work: "hybrid", salary: 78000, date_applied: "2026-10-12", contact_website: null },
+  { ...base, id: 5, company: "Kalayaan Logistics", job_name: "UI/UX Researcher", status: "saved", mode_of_work: "remote", salary: 50000, date_applied: null, contact_website: null },
+];
+const edgeApps: Application[] = [
+  { ...base, id: 6, company: "Haraya Solutions Philippines Incorporated Regional Operations", job_name: "Principal Infrastructure and Reliability Engineering Lead (Platform)", status: "withdrawn", mode_of_work: "on_site", salary: null, date_applied: "2026-10-02", contact_website: null },
+];
+const interviews: Interview[] = [
+  { id: 2, job_application_id: 1, interviewer: "Mark Rivera", scheduled_at: "2026-10-24T06:00:00Z", mode: "online", outcome: "pending", remarks: null, created_at: "", updated_at: "" },
+  { id: 1, job_application_id: 1, interviewer: "Ana Santos", scheduled_at: "2026-10-18T02:00:00Z", mode: "online", outcome: "good", remarks: "Background check and portfolio walkthrough.", created_at: "", updated_at: "" },
+  { id: 3, job_application_id: 1, interviewer: null, scheduled_at: "2026-10-26T01:30:00+00:00", mode: "async", outcome: "bad", remarks: null, created_at: "", updated_at: "" },
+];
 
 function Block({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -32,9 +58,12 @@ function Block({ title, children }: { title: string; children: React.ReactNode }
 
 // Every component in its static states. Hover, pressed and focus show on interaction.
 export function Gallery() {
-  const [mode, setMode] = useState<(typeof modes)[number]["value"]>("hybrid");
-  const [iMode, setIMode] = useState<(typeof interviewModes)[number]["value"]>("online");
+  const [mode, setMode] = useState<WorkMode>("hybrid");
+  const [iMode, setIMode] = useState<InterviewMode>("online");
   const [filter, setFilter] = useState<Filter>("all");
+  const [selected, setSelected] = useState(1);
+  const [deleting, setDeleting] = useState(false);
+  const toast = useToast();
   return (
     <div className="flex flex-col gap-8">
       <Block title="Icons at 24px and 20px">
@@ -129,8 +158,8 @@ export function Gallery() {
       </Block>
 
       <Block title="Segmented control">
-        <SegmentedControl label="Work mode" options={modes} value={mode} onChange={setMode} />
-        <SegmentedControl label="Mode" options={interviewModes} value={iMode} onChange={setIMode} />
+        <SegmentedControl label="Work mode" options={WORK_MODES} value={mode} onChange={setMode} />
+        <SegmentedControl label="Mode" options={INTERVIEW_MODES} value={iMode} onChange={setIMode} />
       </Block>
 
       <Block title="Status and outcome stamps">
@@ -143,6 +172,74 @@ export function Gallery() {
 
       <Block title="Filter tabs">
         <FilterTabs value={filter} onChange={setFilter} />
+      </Block>
+
+      <Block title="Ledger sheet (select a row)">
+        <LedgerSheet label="Applications">
+          {apps.map((a) => (
+            <ApplicationRow key={a.id} application={a} selected={a.id === selected} onSelect={() => setSelected(a.id)} />
+          ))}
+        </LedgerSheet>
+        <LedgerSheet label="Long text, no salary">
+          {edgeApps.map((a) => (
+            <ApplicationRow key={a.id} application={a} href="/design" />
+          ))}
+        </LedgerSheet>
+      </Block>
+
+      <Block title="Detail rows">
+        <DetailRows application={apps[0]} />
+        <DetailRows application={{ ...apps[4], salary: null }} />
+      </Block>
+
+      <Block title="Interview rows (sorted by date)">
+        <LedgerSheet label="Interviews">
+          {sortInterviewsByDate(interviews).map((i) => (
+            <InterviewRow key={i.id} interview={i} />
+          ))}
+        </LedgerSheet>
+      </Block>
+
+      <Block title="Delete dialog and toasts">
+        <div className="flex flex-wrap gap-3">
+          <Button variant="destructive" onClick={() => setDeleting(true)}>
+            Delete application
+          </Button>
+          <Button variant="secondary" onClick={() => toast.success("Application saved")}>
+            Show success toast
+          </Button>
+          <Button variant="secondary" onClick={() => toast.error("Could not save the application")}>
+            Show error toast
+          </Button>
+        </div>
+        <DeleteConfirm
+          open={deleting}
+          onCancel={() => setDeleting(false)}
+          onConfirm={() => {
+            setDeleting(false);
+            toast.success("Application deleted");
+          }}
+          title="Delete this application?"
+          message="Pinagsama Tech, Senior Frontend Engineer, and its interviews will be removed. This cannot be undone."
+          confirmLabel="Delete application"
+        />
+      </Block>
+
+      <Block title="Empty state">
+        <EmptyState
+          title="No applications yet"
+          message="Add the first job you applied to."
+          action={
+            <Button>
+              <Icon name="add" />
+              Add application
+            </Button>
+          }
+        />
+      </Block>
+
+      <Block title="Loading skeleton">
+        <LedgerSkeleton />
       </Block>
 
       <Block title="Banner">

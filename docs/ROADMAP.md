@@ -1,6 +1,6 @@
 # Talaan Roadmap
 
-**Current milestone:** Frontend F1 (scaffold, tokens, theme, logo, `/design`, tests, CI) in review. Backend: Milestone 4 done (interviews CRUD, `no-store` middleware for `/api/v1`, `Interview.updated_at` clock fix). CI added (GitHub Actions). Docker done (Dockerfile, `api` compose service). v1b: hashed session tokens done. Next: v1b rate limiting on signup and login, plus the login-timing and duplicate-email leaks.
+**Current milestone:** Frontend F2b (ledger, dialog, toast, formatters) in review; F2a merged. Backend: Milestone 4 done (interviews CRUD, `no-store` middleware for `/api/v1`, `Interview.updated_at` clock fix). CI added (GitHub Actions). Docker done (Dockerfile, `api` compose service). v1b: hashed session tokens done. Next: v1b rate limiting on signup and login, plus the login-timing and duplicate-email leaks.
 
 ## Roadmap
 
@@ -36,6 +36,7 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 ## Backlog
 
 - CI `changes` job clones the full history (`fetch-depth: 0`) only to list changed paths. Deferred (2026-10-28): a full clone of this small repo costs seconds. Revisit if clone time grows (many binary design assets); `gh pr diff --name-only` or the `pulls/{n}/files` API needs no checkout.
+- `LedgerSkeleton` mounts its `role="status"` region together with its "Loading applications" text, so many screen readers do not announce it (code review finding, 2026-11-02). Deferred (2026-11-02): pages get a persistent loading live region in F5.
 - Playwright layout smoke tests in CI (clipping, 44px targets, no horizontal scroll). Reason (2026-11-02): layout can't be tested in jsdom; the F2a review checks (segment clipping at 320px, hover band) were run by hand in Chrome.
 
 ## Maintenance
