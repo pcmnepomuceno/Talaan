@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
@@ -28,15 +30,27 @@ it.each(Object.entries(labels))("stamp %s reads exactly %s", (value, label) => {
   expect(container.textContent).toBe(label);
 });
 
-// Values from the Python enum class body: NAME = "value".
+// (A literal `new URL(path, import.meta.url)` is rewritten by Vite into an asset import.)
+const here = dirname(fileURLToPath(import.meta.url));
+
+// Values from the Python enum class body: NAME = "value". The path is relative to this file, not
+// the working directory, and the body ends at the first blank line (LF or CRLF).
 function enumValues(file: string, cls: string) {
-  const body = readFileSync(`../app/${file}`, "utf8").split(`class ${cls}(`)[1].split(/\n\n/)[0];
+  const source = readFileSync(resolve(here, "../../../app", file), "utf8");
+  const body = source.split(`class ${cls}(`)[1].split(/\r?\n\s*\r?\n/)[0];
   return [...body.matchAll(/=\s*"(\w+)"/g)].map((m) => m[1]);
 }
 
 it("matches the API enum values", () => {
-  expect(STATUSES).toEqual(enumValues("applications/models.py", "ApplicationStatus"));
-  expect(OUTCOMES).toEqual(enumValues("interviews/models.py", "InterviewOutcome"));
+  const statuses = enumValues("applications/models.py", "ApplicationStatus");
+  const outcomes = enumValues("interviews/models.py", "InterviewOutcome");
+  // Exact counts, so a parse that finds nothing or runs into the next class fails loudly.
+  expect(statuses).toHaveLength(9);
+  expect(outcomes).toHaveLength(3);
+  expect(STATUSES).toEqual(statuses);
+  expect(OUTCOMES).toEqual(outcomes);
+  expect(enumValues("applications/models.py", "ModeOfWork")).toEqual(["on_site", "hybrid", "remote"]);
+  expect(enumValues("interviews/models.py", "InterviewMode")).toEqual(["on_site", "online", "async"]);
 });
 
 function Tabs() {
