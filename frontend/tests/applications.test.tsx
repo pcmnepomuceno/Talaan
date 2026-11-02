@@ -15,7 +15,13 @@ let params: { id?: string } = {};
 let search = "";
 vi.mock("../src/lib/api", async (orig) => {
   const real = await orig<typeof import("../src/lib/api")>();
-  return { ...real, deleteApplication: vi.fn(real.deleteApplication) };
+  return {
+    ...real,
+    deleteApplication: vi.fn(real.deleteApplication),
+    getApplications: vi.fn(real.getApplications),
+    getApplication: vi.fn(real.getApplication),
+    getInterviews: vi.fn(real.getInterviews),
+  };
 });
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace }),
@@ -40,6 +46,8 @@ const screenUnderTest = () =>
       </ApplicationsScreen>
     </ToastProvider>,
   );
+// The toast error region is also role="alert" (empty), so find the banner by its text.
+const bannerWith = async (text: string) => (await screen.findByText(text)).closest<HTMLElement>('[role="alert"]')!;
 const rows = async () => within(await screen.findByRole("list", { name: "Applications" })).getAllByRole("link");
 
 it("shows the skeleton, then rows newest first", async () => {
@@ -181,4 +189,32 @@ it("failed delete: error toast, dialog stays open, Cancel and Escape still work"
   await waitFor(() => expect(screen.getAllByText("Couldn't delete the application. Try again.")).toHaveLength(2));
   await userEvent.keyboard("{Escape}");
   expect(dialog().hasAttribute("open")).toBe(false);
+});
+
+it("list fetch failure: alert with Retry, no endless skeleton; Retry recovers", async () => {
+  vi.mocked(api.getApplications).mockRejectedValueOnce(new Error("500"));
+  screenUnderTest();
+  const alert = await bannerWith("Couldn't load applications.");
+  expect(screen.queryByText("Loading applications")).toBeNull();
+  await userEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+  expect(await rows()).toHaveLength(5);
+  expect(screen.queryByText(/Couldn't load/)).toBeNull();
+});
+
+it("detail fetch failure: alert with Retry, no endless loading; Retry recovers", async () => {
+  params = { id: "1" };
+  vi.mocked(api.getApplication).mockRejectedValueOnce(new Error("500"));
+  screenUnderTest();
+  const alert = await bannerWith("Couldn't load this application.");
+  expect(screen.queryByText("Loading application")).toBeNull();
+  await userEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+  expect(await screen.findByRole("list", { name: "Interviews" })).toBeTruthy();
+  expect(screen.queryByText(/Couldn't load/)).toBeNull();
+});
+
+it("interviews fetch failure is an error too, not a half-loaded detail", async () => {
+  params = { id: "1" };
+  vi.mocked(api.getInterviews).mockRejectedValueOnce(new Error("500"));
+  screenUnderTest();
+  await bannerWith("Couldn't load this application.");
 });
