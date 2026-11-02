@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ToastProvider, useToast } from "../../src/components/toast";
@@ -94,6 +95,44 @@ it("error goes in the alert region, stays, and dismisses on click", () => {
   expect(screen.queryByText("Could not save")).not.toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Dismiss notification" }));
   expect(screen.queryByText("Could not save")).toBeNull();
+});
+
+it("dismissing a focused toast moves focus to the next toast, then back to where the user came from", async () => {
+  vi.useRealTimers(); // user-event hangs on fake timers; error toasts have no timer anyway
+  const user = userEvent.setup();
+  render(
+    <ToastProvider>
+      <Grab />
+      <button>Save</button>
+    </ToastProvider>,
+  );
+  fire(() => ["E1", "E2"].forEach((m) => api.error(m)));
+  const save = screen.getByRole("button", { name: "Save" });
+  save.focus();
+  await user.tab();
+  const [first, second] = screen.getAllByRole("button", { name: "Dismiss notification" });
+  expect(document.activeElement).toBe(first);
+  await user.keyboard("{Enter}");
+  expect(screen.queryByText("E1")).toBeNull();
+  expect(document.activeElement).toBe(second);
+  await user.keyboard("{Enter}");
+  expect(screen.queryByText("E2")).toBeNull();
+  expect(document.activeElement).toBe(save);
+});
+
+it("a timer dismissal does not move focus", () => {
+  render(
+    <ToastProvider>
+      <Grab />
+      <input aria-label="Company" />
+    </ToastProvider>,
+  );
+  const input = screen.getByRole("textbox", { name: "Company" });
+  input.focus();
+  fire(() => api.success("Saved"));
+  tick(4000);
+  expect(screen.queryByText("Saved")).toBeNull();
+  expect(document.activeElement).toBe(input);
 });
 
 it("two toasts in the same tick both show", () => {
