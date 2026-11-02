@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
-import { ThemeToggle } from "../src/components/theme-toggle";
+import { ThemeSync, ThemeToggle } from "../src/components/theme-toggle";
 
 afterEach(() => {
   delete document.documentElement.dataset.theme;
@@ -34,4 +34,10 @@ it("falls back to system for an invalid or removed value", () => {
   storage(null);
   expect(document.documentElement.dataset.theme).toBeUndefined();
   expect(checked()).toBe("system");
+});
+
+it("ThemeSync alone follows other tabs", () => {
+  render(<ThemeSync />);
+  storage("dark");
+  expect(document.documentElement.dataset.theme).toBe("dark");
 });
