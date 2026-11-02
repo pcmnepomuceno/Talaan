@@ -120,7 +120,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
       >
         <section
           aria-label="Applications"
-          className={`px-4 pt-4 pb-28 md:pb-8 xl:sticky xl:top-0 xl:h-dvh xl:overflow-y-auto xl:px-6 xl:pt-8 xl:pb-8 ${cls.list}`}
+          className={`px-4 pt-4 pb-[calc(10rem+env(safe-area-inset-bottom))] md:pb-24 xl:sticky xl:top-0 xl:h-dvh xl:overflow-y-auto xl:px-6 xl:pt-8 xl:pb-8 ${cls.list}`}
         >
           <h1 className="sr-only xl:hidden">Applications</h1>
           <div className="mb-4 hidden items-center justify-between gap-3 xl:flex">
