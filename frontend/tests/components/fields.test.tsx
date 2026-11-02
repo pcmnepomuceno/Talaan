@@ -2,7 +2,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createRef } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { PasswordField, Select, Textarea, TextField } from "../../src/components/fields";
 
 it("names the input by its label and marks Required", () => {
@@ -93,11 +93,32 @@ it("PasswordField toggles visibility with one eye button", async () => {
   expect(input.getAttribute("type")).toBe("password");
 });
 
+// jsdom and user-event have no keyboard behaviour for <select>, so this stands in for the browser's
+// default action: press the key and, unless the component called preventDefault, move one enabled
+// option and fire change. It proves the component doesn't block the keys and wires change; it does
+// not test the browser's own select.
+async function arrow(user: ReturnType<typeof userEvent.setup>, select: HTMLSelectElement, key: string) {
+  let prevented = false;
+  const seen = (e: KeyboardEvent) => (prevented = e.defaultPrevented);
+  window.addEventListener("keydown", seen); // after React's root listener has run
+  await user.keyboard(`{${key}}`);
+  window.removeEventListener("keydown", seen);
+  if (prevented) return;
+  const step = key === "ArrowDown" ? 1 : -1;
+  let i = select.selectedIndex + step;
+  while (select.options[i]?.disabled) i += step;
+  if (!select.options[i]) return;
+  select.selectedIndex = i;
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
 it("Select shows the placeholder for an empty value and changes by keyboard", async () => {
+  const onChange = vi.fn();
   render(
-    <Select label="Outcome" placeholder="Choose an outcome" defaultValue="">
+    <Select label="Outcome" placeholder="Choose an outcome" defaultValue="" onChange={(e) => onChange(e.target.value)}>
       <option value="pending">Pending</option>
       <option value="good">Good</option>
+      <option value="bad">Bad</option>
     </Select>,
   );
   const select = screen.getByRole<HTMLSelectElement>("combobox", { name: "Outcome" });
@@ -109,7 +130,14 @@ it("Select shows the placeholder for an empty value and changes by keyboard", as
   await user.selectOptions(select, "good");
   expect(select.value).toBe("good");
   select.focus();
-  await user.keyboard("{ArrowUp}");
+  await arrow(user, select, "ArrowDown");
+  expect(select.value).toBe("bad");
+  await arrow(user, select, "ArrowUp");
+  await arrow(user, select, "ArrowUp");
+  expect(select.value).toBe("pending");
+  await arrow(user, select, "ArrowUp"); // the disabled placeholder is skipped
+  expect(select.value).toBe("pending");
+  expect(onChange.mock.calls.map((c) => c[0])).toEqual(["good", "bad", "good", "pending"]);
   expect(document.activeElement).toBe(select);
 });
 
