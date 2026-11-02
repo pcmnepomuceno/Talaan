@@ -8,12 +8,15 @@ import { Icon } from "./icon";
 // Success auto-dismisses after 4s; the timer pauses while hovered or focused. Errors stay.
 // Caps are per kind: at most 3 successes and 3 errors; a 4th drops the oldest of its own kind,
 // so a burst of errors can never hide a new success.
+// Dismissing the focused toast moves focus to the next toast's Dismiss button, else back to the
+// element focused before focus entered the toasts, so it never falls to <body>.
 // No enter or exit animation, so reduced motion needs no special case.
 const SUCCESS_MS = 4000;
 const MAX = 3;
 
 type Kind = "success" | "error";
 type Item = { id: number; kind: Kind; message: string };
+type Dismiss = (id: number, button?: HTMLElement) => void;
 type Api = { success: (message: string) => void; error: (message: string) => void };
 
 const ToastContext = createContext<Api | null>(null);
@@ -33,12 +36,22 @@ function trim(items: Item[], kind: Kind): Item[] {
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<Item[]>([]);
   const nextId = useRef(0);
+  const stack = useRef<HTMLDivElement>(null);
+  const returnTo = useRef<HTMLElement | null>(null);
 
   const add = useCallback((kind: Kind, message: string) => {
     const id = nextId.current++; // outside the updater: two calls in one tick still get two ids
     setItems((prev) => trim([...prev, { id, kind, message }], kind));
   }, []);
-  const dismiss = useCallback((id: number) => setItems((prev) => prev.filter((t) => t.id !== id)), []);
+  // `button` is passed only when that toast's Dismiss button had focus.
+  const dismiss = useCallback<Dismiss>((id, button) => {
+    if (button) {
+      const all = [...(stack.current?.querySelectorAll<HTMLElement>("[data-dismiss]") ?? [])];
+      const next = all[all.indexOf(button) + 1] ?? returnTo.current;
+      if (next?.isConnected) next.focus();
+    }
+    setItems((prev) => prev.filter((t) => t.id !== id));
+  }, []);
   const api = useMemo<Api>(
     () => ({ success: (m) => add("success", m), error: (m) => add("error", m) }),
     [add],
@@ -57,7 +70,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext value={api}>
       {children}
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 mx-auto flex max-w-[440px] flex-col gap-2 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+      <div
+        ref={stack}
+        onFocus={(e) => {
+          const from = e.relatedTarget;
+          if (from instanceof HTMLElement && !stack.current?.contains(from)) returnTo.current = from;
+        }}
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-50 mx-auto flex max-w-[440px] flex-col gap-2 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]"
+      >
         {region("error", "alert")}
         {region("success", "status")}
       </div>
@@ -65,7 +85,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
-function ToastView({ item, onDismiss }: { item: Item; onDismiss: (id: number) => void }) {
+function ToastView({ item, onDismiss }: { item: Item; onDismiss: Dismiss }) {
   const [hover, setHover] = useState(false);
   const [focus, setFocus] = useState(false);
   const paused = hover || focus;
@@ -100,7 +120,8 @@ function ToastView({ item, onDismiss }: { item: Item; onDismiss: (id: number) =>
       <button
         type="button"
         aria-label="Dismiss notification"
-        onClick={() => onDismiss(item.id)}
+        data-dismiss
+        onClick={(e) => onDismiss(item.id, document.activeElement === e.currentTarget ? e.currentTarget : undefined)}
         className="flex size-11 shrink-0 items-center justify-center rounded-sm"
       >
         <Icon name="close" />
