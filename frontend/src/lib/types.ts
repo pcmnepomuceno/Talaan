@@ -1,5 +1,22 @@
 import type { IconName } from "@/components/icon";
-import type { Outcome, Status } from "@/components/status-stamp";
+
+// Values match the API enums exactly (app/applications/models.py ApplicationStatus,
+// app/interviews/models.py InterviewOutcome).
+export const STATUSES = [
+  "saved",
+  "applied",
+  "screening",
+  "interviewing",
+  "offered",
+  "accepted",
+  "rejected",
+  "withdrawn",
+  "ghosted",
+] as const;
+export const OUTCOMES = ["pending", "good", "bad"] as const;
+
+export type Status = (typeof STATUSES)[number];
+export type Outcome = (typeof OUTCOMES)[number];
 
 // Field names match the API exactly (app/applications/schemas.py ApplicationRead,
 // app/interviews/schemas.py InterviewRead). DESIGN.md says "job title" and "notes";

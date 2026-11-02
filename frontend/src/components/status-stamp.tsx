@@ -1,20 +1,7 @@
-// Values match the API enums exactly (app/applications/models.py ApplicationStatus,
-// app/interviews/models.py InterviewOutcome).
-export const STATUSES = [
-  "saved",
-  "applied",
-  "screening",
-  "interviewing",
-  "offered",
-  "accepted",
-  "rejected",
-  "withdrawn",
-  "ghosted",
-] as const;
-export const OUTCOMES = ["pending", "good", "bad"] as const;
+// The enum lists live in lib/types.ts (lib never imports from components); re-exported here.
+import { OUTCOMES, STATUSES, type Outcome, type Status } from "../lib/types";
 
-export type Status = (typeof STATUSES)[number];
-export type Outcome = (typeof OUTCOMES)[number];
+export { OUTCOMES, STATUSES, type Outcome, type Status };
 
 // DESIGN.md 3.2: sentence-case label plus text, bg and border tokens. Full class names so
 // Tailwind can see them. Outcomes reuse saved, offered and rejected.

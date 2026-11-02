@@ -1,4 +1,4 @@
-import type { Status } from "@/components/status-stamp";
+import type { Status } from "./types";
 
 const TZ = "Asia/Manila";
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
