@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act, render } from "@testing-library/react";
+import { StrictMode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { FilterTabs } from "../../src/components/filter-tabs";
 
@@ -35,6 +36,22 @@ it("scrolls the pressed tab into view on mount, instantly, without moving the pa
   render(<FilterTabs value="ghosted" onChange={() => {}} />);
   expect(scrollIntoView).toHaveBeenCalledWith({ inline: "nearest", block: "nearest", behavior: "instant" });
   expect(active().textContent).toBe("Ghosted");
+});
+
+it("under StrictMode (effects run twice) the first deep-link placement is still instant, as in production", () => {
+  const { rerender } = render(
+    <StrictMode>
+      <FilterTabs value="ghosted" onChange={() => {}} />
+    </StrictMode>,
+  );
+  expect(scrollIntoView).toHaveBeenCalled();
+  for (const [arg] of scrollIntoView.mock.calls) expect(arg.behavior).toBe("instant");
+  rerender(
+    <StrictMode>
+      <FilterTabs value="offered" onChange={() => {}} />
+    </StrictMode>,
+  );
+  expect(scrollIntoView).toHaveBeenLastCalledWith({ inline: "nearest", block: "nearest", behavior: "smooth" });
 });
 
 it("scrolls the new tab when the value changes, smooth unless reduced motion", () => {
