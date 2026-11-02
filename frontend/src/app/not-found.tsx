@@ -6,7 +6,7 @@ export const metadata: Metadata = { title: "Page not found" };
 
 export default function NotFound() {
   return (
-    <main className="mx-auto max-w-[440px] px-4 py-16">
+    <main id="content" tabIndex={-1} className="mx-auto max-w-[440px] px-4 py-16 outline-none">
       <EmptyState
         title="Page not found."
         message="The page does not exist or was moved."
