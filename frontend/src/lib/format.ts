@@ -15,7 +15,7 @@ export function formatPeso(n: number | null | undefined, { perMonth = true } = {
 // Date-only strings are calendar dates: format them in UTC so no device zone shifts the day.
 // Anything with a time is an instant: format it in Manila. A time without an offset is read as
 // Manila wall time (the Philippines has no DST), never as the device's zone.
-function parse(value: string | null | undefined): { date: Date; zone: string } | null {
+export function parse(value: string | null | undefined): { date: Date; zone: string } | null {
   if (!value) return null;
   const dateOnly = DATE_ONLY.test(value);
   const iso = dateOnly || HAS_OFFSET.test(value) ? value : `${value}+08:00`;
