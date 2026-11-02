@@ -1,16 +1,22 @@
 // @vitest-environment jsdom
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { StrictMode } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 import ApplicationDetailPage from "../src/app/(app)/applications/(ledger)/[id]/page";
 import { ApplicationsScreen, panes } from "../src/app/(app)/applications/(ledger)/screen";
 import { ToastProvider } from "../src/components/toast";
+import * as api from "../src/lib/api";
 import { deleteApplication, resetMock } from "../src/lib/api";
 
 const push = vi.fn();
 const replace = vi.fn();
 let params: { id?: string } = {};
 let search = "";
+vi.mock("../src/lib/api", async (orig) => {
+  const real = await orig<typeof import("../src/lib/api")>();
+  return { ...real, deleteApplication: vi.fn(real.deleteApplication) };
+});
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace }),
   useParams: () => params,
@@ -131,4 +137,24 @@ it("cancel keeps the application", async () => {
 it("panes: separate screens below 1280, both from 1280", () => {
   expect(panes(false)).toEqual({ list: "", detail: "hidden xl:block" });
   expect(panes(true)).toEqual({ list: "hidden xl:block", detail: "" });
+});
+
+it("one delete = one deleteApplication call and one toast, also under StrictMode", async () => {
+  params = { id: "1" };
+  vi.mocked(api.deleteApplication).mockClear();
+  render(
+    <StrictMode>
+      <ToastProvider>
+        <ApplicationsScreen>
+          <ApplicationDetailPage />
+        </ApplicationsScreen>
+      </ToastProvider>
+    </StrictMode>,
+  );
+  await screen.findByRole("list", { name: "Interviews" });
+  await userEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
+  await userEvent.click(await screen.findByRole("button", { name: "Delete application" }));
+  await waitFor(() => expect(push).toHaveBeenCalledTimes(1));
+  expect(api.deleteApplication).toHaveBeenCalledTimes(1);
+  expect(screen.getAllByText("Application deleted.")).toHaveLength(1);
 });
