@@ -1,6 +1,6 @@
 # Talaan Roadmap
 
-**Current milestone:** Frontend F2b (ledger, dialog, toast, formatters) in review; F2a merged. Backend: Milestone 4 done (interviews CRUD, `no-store` middleware for `/api/v1`, `Interview.updated_at` clock fix). CI added (GitHub Actions). Docker done (Dockerfile, `api` compose service). v1b: hashed session tokens done. Next: v1b rate limiting on signup and login, plus the login-timing and duplicate-email leaks.
+**Current milestone:** Frontend F3 (app shell, responsive layout, mock screens) in review; F2a and F2b merged. Backend: Milestone 4 done (interviews CRUD, `no-store` middleware for `/api/v1`, `Interview.updated_at` clock fix). CI added (GitHub Actions). Docker done (Dockerfile, `api` compose service). v1b: hashed session tokens done. Next: v1b rate limiting on signup and login, plus the login-timing and duplicate-email leaks.
 
 ## Roadmap
 
@@ -23,7 +23,7 @@ Skipped on purpose: voice mock interviews, auto-apply bots, server-side scraping
 Next.js app in `frontend/`, built from `docs/DESIGN.md`. Each milestone is mergeable alone.
 - F1: scaffold and tokens (Next.js, Tailwind theme from tokens, theme handling, font, logo, `/design`, contrast and no-hex tests, CI job).
 - F2: base components (buttons, fields, segmented control, stamps, filter tabs, ledger sheet, dialogs, toast, banner, empty state, skeleton).
-- F3: app shell and responsive layout (bar, bottom nav, rail, side nav, two panes) with mock data.
+- F3 (done, in review): app shell and responsive layout (bar, bottom nav, rail, side nav, two panes) with mock data.
 - F4: auth screens wired to the API.
 - F5: application list, detail and forms.
 - F6: interviews.
@@ -38,6 +38,8 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - CI `changes` job clones the full history (`fetch-depth: 0`) only to list changed paths. Deferred (2026-10-28): a full clone of this small repo costs seconds. Revisit if clone time grows (many binary design assets); `gh pr diff --name-only` or the `pulls/{n}/files` API needs no checkout.
 - `LedgerSkeleton` mounts its `role="status"` region together with its "Loading applications" text, so many screen readers do not announce it (code review finding, 2026-11-02). Deferred (2026-11-02): pages get a persistent loading live region in F5.
 - Playwright layout smoke tests in CI (clipping, 44px targets, no horizontal scroll). Reason (2026-11-02): layout can't be tested in jsdom; the F2a review checks (segment clipping at 320px, hover band) were run by hand in Chrome.
+- An unknown application id renders a client-side not-found view (HTTP 200). F5 decides whether the server should return 404.
+- Detail has no "Add interview" action until F6. Rail label "Applications" (14px) fits the 80px rail with no side padding; revisit if the nav gets a third item or a larger font.
 
 ## Maintenance
 
