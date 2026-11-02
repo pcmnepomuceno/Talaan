@@ -5,6 +5,7 @@ import { Button } from "@/components/button";
 import { PasswordField, TextField } from "@/components/fields";
 import { Wordmark } from "@/components/logo";
 import { SegmentedControl } from "@/components/segmented-control";
+import { SkipLink } from "@/components/skip-link";
 
 type Mode = "login" | "signup";
 const modes = [
@@ -50,12 +51,7 @@ export function LoginForm() {
   const err = (n: string) => errors[n];
   return (
     <>
-      <a
-        href="#content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-sm focus:bg-surface-card focus:px-4 focus:py-3 focus:text-text-primary"
-      >
-        Skip to content
-      </a>
+      <SkipLink />
       <header className="bg-bar-bg pt-[env(safe-area-inset-top)] text-bar-text">
         {/* Same max-w and px-4 as <main> below, so logo, tagline and fields share one left edge. */}
         <div className="mx-auto flex h-[200px] max-w-[440px] flex-col px-4 justify-end gap-3 pb-8">
