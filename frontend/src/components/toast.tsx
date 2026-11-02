@@ -84,8 +84,9 @@ function ToastView({ item, onDismiss }: { item: Item; onDismiss: (id: number) =>
   const ok = item.kind === "success";
   return (
     <div
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      // Mouse only: a touch tap fires an emulated mouseenter with no leave, which would pause forever.
+      onPointerEnter={(e) => e.pointerType === "mouse" && setHover(true)}
+      onPointerLeave={(e) => e.pointerType === "mouse" && setHover(false)}
       onFocus={() => setFocus(true)}
       onBlur={() => setFocus(false)}
       className={`pointer-events-auto flex min-h-12 items-center gap-2 rounded-sm border py-1 pr-1 pl-4 shadow-float ${
