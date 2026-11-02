@@ -9,6 +9,7 @@ import { DeleteConfirm } from "@/components/dialog";
 import { EmptyState } from "@/components/empty-state";
 import { FilterTabs, type Filter } from "@/components/filter-tabs";
 import { Icon } from "@/components/icon";
+import { LoadError } from "@/components/load-error";
 import { ApplicationRow, LedgerSheet, LedgerSkeleton } from "@/components/ledger";
 import { useToast } from "@/components/toast";
 import { deleteApplication, getApplication, getApplications, getInterviews, parseStatus } from "@/lib/api";
@@ -26,12 +27,13 @@ export function panes(hasDetail: boolean) {
 export type DetailState =
   | { kind: "loading" }
   | { kind: "missing" }
+  | { kind: "error"; retry: () => void }
   | { kind: "ready"; application: Application; interviews: Interview[] };
 
 const DetailContext = createContext<DetailState>({ kind: "loading" });
 export const useDetail = () => useContext(DetailContext);
 
-type ListData = { key: string; items: Application[]; total: number };
+type ListData = { key: string; failed?: true; items: Application[]; total: number };
 type DetailData = { id: string; state: DetailState };
 
 export function ApplicationsScreen({ children }: { children: ReactNode }) {
@@ -46,16 +48,22 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
   const [detail, setDetail] = useState<DetailData | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [listTry, setListTry] = useState(0);
+  const [detailTry, setDetailTry] = useState(0);
 
   // The list reloads after a delete (version); the detail depends on the id only.
-  const listKey = `${status ?? "all"}:${version}`;
+  const listKey = `${status ?? "all"}:${version}:${listTry}`;
   useEffect(() => {
     let live = true;
     (async () => {
-      const items = await getApplications(status);
-      // A filter with no matches still needs the overall total to pick "empty" over "no match".
-      const total = status && items.length === 0 ? (await getApplications()).length : items.length;
-      if (live) setList({ key: listKey, items, total });
+      try {
+        const items = await getApplications(status);
+        // A filter with no matches still needs the overall total to pick "empty" over "no match".
+        const total = status && items.length === 0 ? (await getApplications()).length : items.length;
+        if (live) setList({ key: listKey, items, total });
+      } catch {
+        if (live) setList({ key: listKey, failed: true, items: [], total: 0 });
+      }
     })();
     return () => {
       live = false;
@@ -66,17 +74,28 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
     if (id === undefined) return;
     let live = true;
     (async () => {
-      const n = /^\d+$/.test(id) ? Number(id) : NaN;
-      const application = Number.isNaN(n) ? null : await getApplication(n);
-      const state: DetailState = application
-        ? { kind: "ready", application, interviews: await getInterviews(n) }
-        : { kind: "missing" };
+      let state: DetailState;
+      try {
+        const n = /^\d+$/.test(id) ? Number(id) : NaN;
+        const application = Number.isNaN(n) ? null : await getApplication(n);
+        state = application
+          ? { kind: "ready", application, interviews: await getInterviews(n) }
+          : { kind: "missing" };
+      } catch {
+        state = {
+          kind: "error",
+          retry: () => {
+            setDetail(null);
+            setDetailTry((t) => t + 1);
+          },
+        };
+      }
       if (live) setDetail({ id, state });
     })();
     return () => {
       live = false;
     };
-  }, [id]);
+  }, [id, detailTry]);
 
   const hasDetail = id !== undefined;
   const loadingList = list?.key !== listKey;
@@ -138,6 +157,8 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
           <div className="mt-3">
             {loadingList ? (
               <LedgerSkeleton />
+            ) : list.failed ? (
+              <LoadError title="Couldn't load applications." onRetry={() => setListTry((t) => t + 1)} />
             ) : list.total === 0 ? (
               <EmptyState
                 title="No applications yet."

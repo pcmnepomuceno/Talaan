@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/button";
+import { LoadError } from "@/components/load-error";
 import { DetailRows, InterviewRow, LedgerSheet } from "@/components/ledger";
 import { StatusStamp } from "@/components/status-stamp";
 import { sortInterviewsByDate } from "@/lib/interviews";
@@ -17,6 +18,7 @@ export function ApplicationDetail() {
       </div>
     );
   }
+  if (state.kind === "error") return <LoadError title="Couldn't load this application." onRetry={state.retry} />;
   if (state.kind === "missing") {
     return (
       <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
