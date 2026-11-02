@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Logo, Wordmark } from "@/components/logo";
 import { OUTCOMES, STATUSES, StatusStamp } from "@/components/status-stamp";
+import { ToastProvider } from "@/components/toast";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Gallery } from "./gallery";
 
@@ -78,6 +79,7 @@ function Panel({ theme, title }: { theme: "light" | "dark"; title: string }) {
 
 export default function DesignPage() {
   return (
+    <ToastProvider>
     <main className="mx-auto flex max-w-[1120px] flex-col gap-8 p-4 pb-12">
       <header className="flex flex-col gap-3">
         <h1 className="text-page-title">Design system</h1>
@@ -155,5 +157,6 @@ export default function DesignPage() {
         </div>
       </section>
     </main>
+    </ToastProvider>
   );
 }

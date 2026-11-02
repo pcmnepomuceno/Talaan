@@ -24,6 +24,10 @@ npm run lint && npm run typecheck && npm test && npm run build
 | `StatusStamp` | Any status or outcome; `STATUSES`/`OUTCOMES` match the API enums |
 | `FilterTabs` | "All" plus each status, `aria-pressed` buttons, scrolls sideways |
 | `Banner` | Inline error banner, `role="alert"` |
+| `LedgerSheet`, `ApplicationRow`, `InterviewRow`, `DetailRows`, `LedgerSkeleton` | `ledger.tsx`; rows are whole-row links (`href`) or buttons (`onSelect`), `selected` sets `aria-current` |
+| `Dialog`, `DeleteConfirm` | `dialog.tsx`; native `<dialog>`: bottom sheet under 768px, centered from 768px; Escape or Cancel only |
+| `ToastProvider`, `useToast()` | `success(msg)` auto-dismisses after 4s (paused on hover or focus), `error(msg)` stays; max 3 |
+| `EmptyState` | Title, one sentence, optional action button |
 
 All of them are on `/design` in every state, in a light and a dark panel.
 
@@ -31,3 +35,6 @@ All of them are on `/design` in every state, in a light and a dark panel.
 - Fields show focus as a 2px primary ring over the border; everything else uses the global ring in `globals.css` (`@layer base`, so utilities can override it).
 - Adding an icon: download `https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/<name>/default/24px.svg` and paste the path `d` into `icon.tsx`.
 - Component tests use React Testing Library and user-event; put `// @vitest-environment jsdom` at the top of the file.
+
+- Formatters (`src/lib/format.ts`) always use Asia/Manila and return `null` for missing or invalid input; callers omit the field. `types.ts` uses the API's field names, not DESIGN.md wording.
+- jsdom has no `<dialog>` methods; `tests/setup.ts` stubs `showModal`/`close`/Escape only. Focus trap and inert background are checked in a real browser on `/design`.

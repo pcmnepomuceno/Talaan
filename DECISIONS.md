@@ -200,3 +200,12 @@
 - **Decision:** `frontend/package.json` `browserslist` moves from Firefox 120 to Firefox 121. Chrome/Edge 123 and Safari/iOS Safari 17.5 are unchanged. This amends point (2) of the 2026-10-27 frontend scaffold entry.
 - **Rationale:** The components style state with `:has()`: the segmented control and theme toggle highlight the checked radio (`has-checked:`), draw the focus ring on the visible segment (`has-focus-visible:`), and the select shows its placeholder style when the empty option is selected. Firefox 121 is the first Firefox with `:has()`; on 120 those states would silently not render. The other engines in the floor already support it.
 - **Alternative:** JavaScript state for each of these (more code, and the select would need to be controlled); keep 120 and accept broken selected and focus styles there.
+
+---
+
+# Decision: Toast caps are per kind
+
+- **Date:** 2026-11-02
+- **Decision:** At most 3 success toasts and 3 error toasts are visible. A fourth of either kind drops the oldest toast of that same kind. This replaces the F2b rule (3 in total, oldest success dropped first), recorded in DESIGN.md 6.9.
+- **Rationale:** Errors never auto-dismiss. Under the shared cap, 3 errors on screen meant a new success was dropped in the same update, so a retry that worked showed no confirmation and screen readers announced nothing.
+- **Alternative:** Keep one cap of 3 and drop the oldest error instead (hides an unresolved error); no cap (a burst of errors covers the screen).

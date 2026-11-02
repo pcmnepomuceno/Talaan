@@ -1,4 +1,4 @@
-# Talaan Design System v2.1 (Design.md)
+# Talaan Design System v2.2 (Design.md)
 
 This file is the single source of truth for Talaan's look. Screens must use these exact token values. Do not substitute a Material 3 palette or any color not listed here. Do not copy the layout, content or branding of any other product.
 
@@ -130,7 +130,7 @@ Neutral hints (for example "Enter the amount before tax") use `color-text-muted`
 ### 5.3 Elevation and borders (one rule)
 - The ledger sheet, inputs, selects, stamps, banners and nav bars use a 1px border and no shadow.
 - Only three things have a shadow: the floating add button, bottom sheets and dialogs, and toasts. Shadow token: `0 4px 12px rgba(14, 22, 38, 0.14)`.
-- Never combine a border and a shadow on the same element.
+- Never combine a border and a shadow on the same element. One exception: toasts keep their 1px border (tinted fills need it against the page) and also carry the shadow.
 - Minimum touch target: 44 x 44px.
 
 ---
@@ -139,7 +139,7 @@ Neutral hints (for example "Enter the amount before tax") use `color-text-muted`
 All values below are token names. Every component must work in light and dark mode through tokens alone.
 
 ### 6.1 Buttons
-Height 48px, radius `radius-sm`, label Body Medium. Focus: 2px `color-focus-ring` with 2px offset.
+Height 48px, radius `radius-sm`, label Body Medium. Focus: 2px `color-focus-ring` with 2px offset. Hover uses the Pressed colors.
 
 | Variant | Default | Pressed | Disabled |
 |---|---|---|---|
@@ -159,14 +159,14 @@ Height 48, padding 12 x 16, radius `radius-sm`, text 16px, bg `color-surface-car
 | Disabled | 1px `color-border-subtle` | bg `color-surface-subtle`, text `color-text-muted` |
 | Error | 1.5px `color-error-text` | bg `color-error-bg`, message below in `color-error-text` with a leading icon |
 
-Input, select and textarea borders always use `color-border-input` (3:1 against the surface), never `color-border-subtle`. Field label: Caption Bold, above the field. Required fields show "Required" in `color-text-muted` at the right of the label row. A prefix such as the peso sign and a suffix such as "/ month" sit inside the field on one line and never wrap.
+Input, select and textarea borders always use `color-border-input` (3:1 against the surface), never `color-border-subtle`. Every form uses `noValidate` and shows its own inline errors; there are no native browser validation popups. Field label: Caption Bold, above the field. Required fields show "Required" in `color-text-muted` at the right of the label row. A prefix such as the peso sign and a suffix such as "/ month" sit inside the field on one line and never wrap.
 
 ### 6.3 Segmented control (Work mode: On-site, Hybrid, Remote)
-Track height 44, bg `color-surface-subtle`, 1px `color-border-subtle`, radius `radius-sm`, padding 4. Selected segment: bg `color-primary`, text `color-text-inverse`, radius 2. Unselected: no fill, text `color-text-secondary`.
+Track height 44, bg `color-surface-subtle`, 1px `color-border-subtle`, radius `radius-sm`, padding 4. Selected segment: bg `color-primary`, text `color-text-inverse`, radius 2. Unselected: no fill, text `color-text-secondary`. Each segment has a 44px-tall hit area around the 36px visible segment, with 4px horizontal padding inside the label. Segments are equal width when the control is full width, and sized to their labels when it is compact (the theme toggle).
 
 ### 6.4 Status stamp and filter tabs
 - **Status stamp**: height 28, padding 4 x 10, radius `radius-xs`, Stamp type, sentence case label, uses the status tokens (text, bg, 1px border). It is a flat rectangle, never a pill, and has no dot or icon. Interview outcome stamps use the same component.
-- **Filter tab**: height 36, padding 6 x 14, radius `radius-sm`, Stamp type, label only (a status name or "All"), horizontally scrollable. Active: bg `color-primary`, text `color-text-inverse`. Inactive: bg `color-surface-card`, text `color-text-secondary`, 1px `color-border-subtle`.
+- **Filter tab**: visible height 36 inside a 44px-tall hit area, padding 6 x 14, radius `radius-sm`, Stamp type, label only (a status name or "All"), horizontally scrollable. Active: bg `color-primary`, text `color-text-inverse`. Inactive: bg `color-surface-card`, text `color-text-secondary`, 1px `color-border-subtle`.
 
 ### 6.5 Ledger sheet and application row
 The applications list is one ledger sheet: a single container (bg `color-surface-card`, 1px `color-border-subtle`, radius `radius-sm`, no shadow) holding rows separated by 1px `color-border-subtle` rules. Rows are not separate cards. Each row is at least 44px tall, tappable as a whole, padding 16:
@@ -175,8 +175,11 @@ The applications list is one ledger sheet: a single container (bg `color-surface
 3. Line 3: work mode and salary on the left (Caption Bold for salary, format `Hybrid · ₱85,000 / month`) and date applied on the right (Caption, `color-text-muted`, format `Oct 14, 2026`). When status is Saved and there is no date, show "Not applied yet".
 On desktop the selected row has bg `color-primary-tint` (no accent stripe).
 
+### 6.5b Detail rows
+The detail screen's key details are ruled rows in one ledger sheet: label in Body `color-text-secondary` on the left, value in Body at weight 600 `color-text-primary` on the right with tabular numbers. A row whose value is missing (no salary, no website, no date) is omitted, never shown as a zero or a dash.
+
 ### 6.6 Interview entries
-Interviews on the detail screen use the same ledger sheet, one row per interview in date order, separated by rules. Each row: date and time in PHT (Row Title, for example `Oct 24, 2026, 2:00 PM PHT`) and the outcome stamp (Pending, Good or Bad, always shown); below it the mode with an icon (On-site, Online, Async), the interviewer name only when present (Caption, `color-text-secondary`), and notes (Caption, `color-text-muted`). No "Next" or "Upcoming" labels, no interview titles, no stage names.
+Interviews on the detail screen use the same ledger sheet, one row per interview in date order, separated by rules. Each row: date and time in PHT (Row Title, for example `Oct 24, 2026, 2:00 PM PHT`) and the outcome stamp (Pending, Good or Bad, always shown); below it the mode with an icon (On-site, Online, Async), the interviewer name only when present (Caption, `color-text-secondary`), and notes (Caption, `color-text-muted`). Icons: On-site `apartment`, Online `videocam`, Async `schedule`, interviewer `person`. Separator between inline items is `·`. No "Next" or "Upcoming" labels, no interview titles, no stage names.
 
 ### 6.7 Navigation
 - **Top app bar**: height 56, padding 0 16, bg `color-bar-bg`, text and icons `color-bar-text`, no border. Main screens show the logo mark and the wordmark "Talaan". Inner screens show a back arrow, the screen title (Bar Title) and, where needed, text buttons "Edit" and "Delete" on the right. No bell, no avatar, no user icon, no kebab menu, and no decorative page title such as "Ledger". Titles are sentence case.
@@ -187,13 +190,13 @@ Interviews on the detail screen use the same ledger sheet, one row per interview
 Scrim `color-overlay`. Mobile sheet radius `radius-sheet` on the top corners; desktop dialog radius `radius-sheet`, centered, max width 440. bg `color-surface-card`, padding 24 20 32, shadow token. Contents: icon badge (40px square, radius `radius-sm`, bg `color-error-bg`), title (Section Title), message (Caption, `color-text-muted`), then full-width buttons: Destructive (48) above Secondary "Cancel" (48). Focus is trapped inside; Escape closes.
 
 ### 6.9 Toast
-Height 48, padding 12 x 16, radius `radius-sm`, shadow token. Success: `color-success-bg` / `color-success-border` / `color-success-text`. Error: `color-error-bg` / `color-error-border` / `color-error-text`. Auto-dismiss after 4 seconds; errors stay until dismissed.
+Height 48, padding 12 x 16, radius `radius-sm`, shadow token. Success: `color-success-bg` / `color-success-border` / `color-success-text`. Error: `color-error-bg` / `color-error-border` / `color-error-text`. Success toasts auto-dismiss after 4 seconds, and the timer pauses while the toast is hovered with a mouse or focused (a touch tap does not pause it); errors stay until dismissed. Every toast has a 44px "Dismiss" button. Toasts appear bottom center, 16px from the edge plus the safe area, above the bottom navigation on mobile. Caps are per kind: at most 3 successes and 3 errors are visible, and a fourth drops the oldest toast of its own kind. Success toasts are announced politely and errors assertively.
 
 ### 6.10 Banner (inline)
-Radius `radius-sm`, padding 16, 1px border. Error banner uses the three error tokens, a leading outline icon, a bold one-line title and one line of text.
+Radius `radius-sm`, padding 16, 1px border. Error banner uses the three error tokens, a leading outline icon, a one-line title (Body 16 at weight 600) and one line of text.
 
 ### 6.11 Empty state
-Centered, padding 48 24, 48px outline icon (Material Symbol "description") in `color-text-muted`, title Section Title, one plain sentence in Caption `color-text-muted` (no exclamation marks), one 44px primary button. Example: "No applications yet. Add the first job you applied to." with a button "Add application".
+Centered, padding 48 24, 48px outline icon (Material Symbol "description") in `color-text-muted`, title Section Title, one plain sentence in Caption `color-text-muted` (no exclamation marks), one standard 48px primary Button. Example: "No applications yet. Add the first job you applied to." with a button "Add application".
 
 ### 6.12 Loading skeleton
 Rows keep their ledger sheet and rules; each row shows three bars. Base `color-border-subtle`, highlight `color-surface-subtle`. Gentle opacity pulse 0.6 to 1.0 over 1.8s. Radius 4.
@@ -228,8 +231,8 @@ Rows keep their ledger sheet and rules; each row shows three bars. Base `color-b
 ---
 
 ## 9. Formatting and Localization
-- **Currency**: `₱85,000 / month` (monthly gross, Philippine peso).
-- **Dates**: `Oct 14, 2026`. **Times**: 12-hour with `PHT`, for example `2:00 PM PHT`.
+- **Currency**: `₱85,000 / month` (monthly gross, Philippine peso). A missing salary is omitted, never shown as ₱0.
+- **Dates**: `Oct 14, 2026`. **Times**: 12-hour with `PHT`, for example `2:00 PM PHT`, always in Philippine time regardless of the device's time zone. A date without a time (such as date applied) is a calendar date and never shifts with the device's time zone.
 - **Sample data**: only fictional Philippine companies: Pinagsama Tech, Bayanihan Digital, Kalayaan Logistics, Mayon Software Labs, Kape Digital, Haraya Solutions. Never real companies or real websites. Use `example.ph` for emails. The same application must use the same data on every screen.
 - **Icons**: Material Symbols Outlined, 24px (20px inside fields), weight 400, never filled except the active nav icon.
 - **Language**: English, plain and neutral.
