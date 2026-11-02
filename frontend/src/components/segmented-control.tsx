@@ -40,7 +40,7 @@ export function SegmentedControl<T extends string>({
               onChange={() => onChange(o.value)}
               className="sr-only"
             />
-            <span className="flex min-w-0 flex-1 items-center justify-center rounded-xs px-2 text-body-medium text-text-secondary transition-colors duration-100 group-has-checked:bg-primary group-has-checked:text-text-inverse group-has-focus-visible:outline-2 group-has-focus-visible:outline-offset-2 group-has-focus-visible:outline-focus-ring">
+            <span className="flex min-w-0 flex-1 items-center justify-center rounded-xs px-1 text-body-medium text-text-secondary transition-colors duration-100 group-has-checked:bg-primary group-has-checked:text-text-inverse group-has-focus-visible:outline-2 group-has-focus-visible:outline-offset-2 group-has-focus-visible:outline-focus-ring">
               <span className="truncate">{o.label}</span>
             </span>
           </label>
