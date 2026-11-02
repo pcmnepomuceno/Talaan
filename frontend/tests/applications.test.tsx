@@ -158,3 +158,27 @@ it("one delete = one deleteApplication call and one toast, also under StrictMode
   expect(api.deleteApplication).toHaveBeenCalledTimes(1);
   expect(screen.getAllByText("Application deleted.")).toHaveLength(1);
 });
+
+it("failed delete: error toast, dialog stays open, Cancel and Escape still work", async () => {
+  params = { id: "1" };
+  screenUnderTest();
+  await screen.findByRole("list", { name: "Interviews" });
+  const dialog = () => document.querySelector("dialog")!;
+  vi.mocked(api.deleteApplication).mockRejectedValueOnce(new Error("500"));
+  await userEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
+  await userEvent.click(await screen.findByRole("button", { name: "Delete application" }));
+  expect(await screen.findByText("Couldn't delete the application. Try again.")).toBeTruthy();
+  expect(push).not.toHaveBeenCalled();
+  expect(dialog().hasAttribute("open")).toBe(true);
+  expect((screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(false);
+  expect((screen.getByRole("button", { name: "Delete application" }) as HTMLButtonElement).disabled).toBe(false);
+  await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(dialog().hasAttribute("open")).toBe(false);
+  // reopen: Escape closes it too
+  vi.mocked(api.deleteApplication).mockRejectedValueOnce(new Error("500"));
+  await userEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
+  await userEvent.click(await screen.findByRole("button", { name: "Delete application" }));
+  await waitFor(() => expect(screen.getAllByText("Couldn't delete the application. Try again.")).toHaveLength(2));
+  await userEvent.keyboard("{Escape}");
+  expect(dialog().hasAttribute("open")).toBe(false);
+});
