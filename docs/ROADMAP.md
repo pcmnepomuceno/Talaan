@@ -1,6 +1,6 @@
 # Talaan Roadmap
 
-**Current milestone:** Frontend F1 (scaffold, tokens, theme, logo, `/design`, tests, CI) in review. Backend: Milestone 4 done (interviews CRUD, `no-store` middleware for `/api/v1`, `Interview.updated_at` clock fix). CI added (GitHub Actions). Docker done (Dockerfile, `api` compose service). v1b: hashed session tokens done. Next: v1b rate limiting on signup and login, plus the login-timing and duplicate-email leaks.
+**Current milestone:** Frontend F2b (ledger, dialog, toast, formatters) in review; F2a merged. Backend: Milestone 4 done (interviews CRUD, `no-store` middleware for `/api/v1`, `Interview.updated_at` clock fix). CI added (GitHub Actions). Docker done (Dockerfile, `api` compose service). v1b: hashed session tokens done. Next: v1b rate limiting on signup and login, plus the login-timing and duplicate-email leaks.
 
 ## Roadmap
 
