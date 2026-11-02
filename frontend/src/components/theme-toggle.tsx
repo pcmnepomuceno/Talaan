@@ -51,6 +51,6 @@ export function ThemeToggle() {
   // Server snapshot is "system" so hydration matches; the client re-reads the real value after.
   const theme = useSyncExternalStore(subscribe, read, () => "system" as Theme);
   return (
-    <SegmentedControl label="Theme" hideLabel options={options} value={theme} onChange={write} className="w-fit" />
+    <SegmentedControl label="Theme" hideLabel options={options} value={theme} onChange={write} fit />
   );
 }
