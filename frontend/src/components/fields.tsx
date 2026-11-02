@@ -5,8 +5,8 @@ import { Icon } from "./icon";
 
 // DESIGN.md 6.2. React 19 passes `ref` as a normal prop, so spreading `props` onto the native
 // element forwards it along with every native attribute (name, autoComplete, inputMode...).
-// `required` shows "Required" and sets aria-required; it is not the native attribute, so the
-// browser shows no validation popups.
+// `required` shows "Required" and sets aria-required. TextField and Textarea do not set the native
+// attribute (no browser validation popups); Select does, so an empty placeholder value is invalid.
 type FieldProps = { label: string; helper?: string; error?: string; required?: boolean };
 
 function Field({
@@ -150,8 +150,9 @@ export function Textarea({
   );
 }
 
-// Native <select>. `placeholder` adds an empty first option; while it is selected the text is
-// muted (CSS :has, so it works controlled or not). Options reset to primary text for the menu.
+// Native <select>. `placeholder` adds an empty first option, disabled and hidden so it shows as the
+// initial value (pass value="" or defaultValue="") but cannot be picked again from the menu. While
+// it is selected the text is muted (CSS :has). Options reset to primary text for the menu.
 export function Select({
   label,
   helper,
@@ -169,10 +170,15 @@ export function Select({
       <div className="relative">
         <select
           {...props}
+          required={required}
           {...aria(fid, { helper, error, required }, props)}
           className={`h-12 w-full appearance-none truncate pr-11 pl-4 disabled:cursor-not-allowed [&:has(option[value='']:checked)]:text-text-muted [&_option]:text-text-primary ${ring} ${box(error, props.disabled)} ${className}`}
         >
-          {placeholder !== undefined && <option value="">{placeholder}</option>}
+          {placeholder !== undefined && (
+            <option value="" disabled hidden>
+              {placeholder}
+            </option>
+          )}
           {children}
         </select>
         <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-text-secondary">

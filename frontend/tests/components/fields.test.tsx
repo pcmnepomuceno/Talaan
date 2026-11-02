@@ -164,3 +164,32 @@ describe.each(Object.entries(ariaFields))("%s ARIA merge", (_, F) => {
     expect(control().getAttribute("aria-required")).toBe("true");
   });
 });
+
+it("Select placeholder cannot be picked again once a value is chosen", async () => {
+  render(
+    <Select label="Status" placeholder="Choose a status" defaultValue="">
+      <option value="saved">Saved</option>
+    </Select>,
+  );
+  const select = screen.getByRole<HTMLSelectElement>("combobox", { name: "Status" });
+  const placeholder = screen.getByText<HTMLOptionElement>("Choose a status");
+  expect(placeholder.disabled).toBe(true);
+  expect(placeholder.hidden).toBe(true);
+  expect(select.value).toBe(""); // still shown as the initial empty value
+
+  const user = userEvent.setup();
+  await user.selectOptions(select, "saved");
+  await user.selectOptions(select, ""); // user-event skips disabled options, like the browser menu
+  expect(select.value).toBe("saved");
+});
+
+it("Select passes required to the native element so an empty value is invalid", () => {
+  render(
+    <Select label="Status" placeholder="Choose a status" defaultValue="" required>
+      <option value="saved">Saved</option>
+    </Select>,
+  );
+  const select = screen.getByRole<HTMLSelectElement>("combobox", { name: "Status" });
+  expect(select.required).toBe(true);
+  expect(select.validity.valueMissing).toBe(true);
+});
