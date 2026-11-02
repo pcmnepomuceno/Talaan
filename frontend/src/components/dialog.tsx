@@ -18,10 +18,12 @@ export function Dialog({
   title,
   description,
   badge,
+  busy = false,
   children,
 }: {
   open: boolean;
   onClose: () => void;
+  busy?: boolean;
   title: string;
   description?: string;
   badge?: ReactNode;
@@ -52,9 +54,10 @@ export function Dialog({
       ref={ref}
       aria-labelledby={`${id}-title`}
       aria-describedby={description ? `${id}-desc` : undefined}
+      aria-busy={busy || undefined}
       onCancel={(e) => {
         e.preventDefault();
-        onClose();
+        if (!busy) onClose();
       }}
       onClose={() => {
         // `!open` also skips a stale close event that lands after a re-open.
@@ -77,6 +80,7 @@ export function Dialog({
 }
 
 // DESIGN.md section 8.6. Cancel gets initial focus so Enter never confirms by accident.
+// `busy` (request in flight) disables both buttons and Escape, so a double-click deletes once.
 export function DeleteConfirm({
   open,
   onCancel,
@@ -84,6 +88,7 @@ export function DeleteConfirm({
   title,
   message,
   confirmLabel,
+  busy = false,
 }: {
   open: boolean;
   onCancel: () => void;
@@ -91,11 +96,13 @@ export function DeleteConfirm({
   title: string;
   message: string;
   confirmLabel: string;
+  busy?: boolean;
 }) {
   return (
     <Dialog
       open={open}
       onClose={onCancel}
+      busy={busy}
       title={title}
       description={message}
       badge={
@@ -105,10 +112,10 @@ export function DeleteConfirm({
       }
     >
       <div className="mt-6 flex flex-col gap-3">
-        <Button variant="destructive" className="w-full" onClick={onConfirm}>
+        <Button variant="destructive" className="w-full" onClick={onConfirm} disabled={busy}>
           {confirmLabel}
         </Button>
-        <Button variant="secondary" className="w-full" onClick={onCancel} data-autofocus>
+        <Button variant="secondary" className="w-full" onClick={onCancel} disabled={busy} data-autofocus>
           Cancel
         </Button>
       </div>
