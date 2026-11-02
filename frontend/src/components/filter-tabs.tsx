@@ -23,7 +23,7 @@ export function FilterTabs({ value, onChange }: { value: Filter; onChange: (valu
               className={`flex h-9 w-full items-center justify-center rounded-sm border px-3.5 text-stamp-label whitespace-nowrap transition-colors duration-100 group-focus-visible:outline-2 group-focus-visible:outline-offset-2 group-focus-visible:outline-focus-ring ${
                 active
                   ? "border-primary bg-primary text-text-inverse"
-                  : "border-border-subtle bg-surface-card text-text-secondary hover:border-border-input"
+                  : "border-border-subtle bg-surface-card text-text-secondary group-hover:border-border-input"
               }`}
             >
               {f === "all" ? "All" : stampLabel(f)}
