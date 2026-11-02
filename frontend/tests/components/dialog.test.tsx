@@ -139,6 +139,38 @@ it("DeleteConfirm: Cancel calls onCancel once; confirm never calls onCancel", as
   expect(onCancel).toHaveBeenCalledTimes(1);
 });
 
+it("DeleteConfirm busy: double-click confirms once, buttons disabled, aria-busy, Escape ignored", async () => {
+  const onConfirm = vi.fn();
+  function Busy() {
+    const [open, setOpen] = useState(true);
+    const [busy, setBusy] = useState(false);
+    return (
+      <DeleteConfirm
+        open={open}
+        busy={busy}
+        onCancel={() => setOpen(false)}
+        onConfirm={() => {
+          onConfirm();
+          setBusy(true); // the DELETE request is still in flight
+        }}
+        title="Delete?"
+        message="Gone for good."
+        confirmLabel="Delete it"
+      />
+    );
+  }
+  render(<Busy />);
+  await userEvent.dblClick(screen.getByRole("button", { name: "Delete it" }));
+  expect(onConfirm).toHaveBeenCalledTimes(1);
+  const d = screen.getByRole("dialog");
+  expect(d.getAttribute("aria-busy")).toBe("true");
+  for (const name of ["Delete it", "Cancel"]) {
+    expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
+  }
+  await userEvent.keyboard("{Escape}");
+  expect(screen.getByRole("dialog")).toBe(d);
+});
+
 it("a scrim click does not close it", async () => {
   render(<Demo />);
   await userEvent.click(screen.getByRole("button", { name: "Delete" }));
