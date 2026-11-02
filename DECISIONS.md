@@ -225,3 +225,12 @@
 
 - **Date:** 2026-11-03
 - **Decision:** `frontend/package.json` `allowScripts` has `"unrs-resolver": false` (an npm deny-list entry, not a new dependency): this transitive ESLint resolver's postinstall only re-checks a native binding that its platform `optionalDependencies` already install, so denying it removes install-time code execution at no cost (lint and tests pass on a clean `npm ci`).
+
+---
+
+# Decision: Tablet rail is 88px
+
+- **Date:** 2026-11-03
+- **Decision:** The navigation rail from 768 to 1279 is 88px wide, up from 80px. The content offset (`md:pl-22`) matches. This amends DESIGN.md section 7 (the approved DESIGN.md edit for this change) and the CLAUDE.md route note.
+- **Rationale:** The bold "Applications" label does not fit in an 80px rail. At 88px it fits with `tracking-tight` (77px label in a 79px pill).
+- **Alternative:** Keep 80px and shrink the label token or abbreviate the label (worse legibility, and a second token only for the rail).

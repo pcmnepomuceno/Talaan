@@ -12,7 +12,7 @@ const items: { href: string; label: string; icon: "table_chart" | "manage_accoun
 
 const isActive = (path: string, href: string) => path === href || path.startsWith(`${href}/`);
 
-// DESIGN 6.7 and 7. One <nav>, restyled per breakpoint: bottom bar (under 768), 80px rail (768),
+// DESIGN 6.7 and 7. One <nav>, restyled per breakpoint: bottom bar (under 768), 88px rail (768),
 // 240px ink side nav with the logo (1280). On the ink nav the tint pill is nearly invisible in dark,
 // so the active item gets a lighter fill (15% bar-text) and a 3px left marker instead.
 export function MainNav() {

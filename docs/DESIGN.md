@@ -208,7 +208,7 @@ Rows keep their ledger sheet and rules; each row shows three bars. Base `color-b
 | Breakpoint | Width | Layout |
 |---|---|---|
 | Mobile | under 768 | Single column, 16px gutter, bottom navigation, floating add button |
-| Tablet | 768 to 1279 | Single column list centered, max content width 640, left side navigation rail (80px, icons with labels beneath) replaces bottom nav |
+| Tablet | 768 to 1279 | Single column list centered, max content width 640, left side navigation rail (88px, icons with labels beneath) replaces bottom nav |
 | Desktop | 1280 and up | Left side navigation (240px) with `Applications` and `Account`. Applications screen is two panes: the ledger sheet (400px) and detail (fills the rest, max width 720). Selecting a row fills the detail pane; there is no separate detail page. |
 
 - The add and edit form opens as a centered dialog (max width 560) on tablet and desktop, and as a full screen on mobile.
