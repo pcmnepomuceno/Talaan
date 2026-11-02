@@ -193,3 +193,10 @@ it("Select passes required to the native element so an empty value is invalid", 
   expect(select.required).toBe(true);
   expect(select.validity.valueMissing).toBe(true);
 });
+
+// className is for layout (grid spans, margins), so it goes on the outer wrapper, the layout child.
+it.each(Object.entries(ariaFields))("%s puts className on the outer wrapper", (_, F) => {
+  const { container } = render(<F className="md:col-span-2" />);
+  expect((container.firstChild as HTMLElement).classList.contains("md:col-span-2")).toBe(true);
+  expect(control().classList.contains("md:col-span-2")).toBe(false);
+});
