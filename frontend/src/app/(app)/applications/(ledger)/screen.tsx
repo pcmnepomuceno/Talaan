@@ -90,9 +90,16 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
   const confirmDelete = useCallback(async () => {
     if (!ready) return;
     setBusy(true);
-    await deleteApplication(ready.id);
+    try {
+      await deleteApplication(ready.id);
+    } catch {
+      // Dialog stays open and dismissable (busy is cleared below) so the user can retry or cancel.
+      toast.error("Couldn't delete the application. Try again.");
+      return;
+    } finally {
+      setBusy(false);
+    }
     setVersion((v) => v + 1);
-    setBusy(false);
     setConfirming(false);
     toast.success("Application deleted.");
     router.push(`/applications${qs}`);
