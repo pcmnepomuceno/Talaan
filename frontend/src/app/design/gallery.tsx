@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Banner } from "@/components/banner";
 import { Button } from "@/components/button";
 import { PasswordField, Select, Textarea, TextField } from "@/components/fields";
-import { FilterTabs } from "@/components/filter-tabs";
+import { type Filter, FilterTabs } from "@/components/filter-tabs";
 import { Icon, iconNames } from "@/components/icon";
 import { SegmentedControl } from "@/components/segmented-control";
 import { OUTCOMES, STATUSES, StatusStamp, stampLabel } from "@/components/status-stamp";
@@ -34,7 +34,7 @@ function Block({ title, children }: { title: string; children: React.ReactNode }
 export function Gallery() {
   const [mode, setMode] = useState<(typeof modes)[number]["value"]>("hybrid");
   const [iMode, setIMode] = useState<(typeof interviewModes)[number]["value"]>("online");
-  const [filter, setFilter] = useState<Parameters<typeof FilterTabs>[0]["value"]>("all");
+  const [filter, setFilter] = useState<Filter>("all");
   return (
     <div className="flex flex-col gap-8">
       <Block title="Icons at 24px and 20px">
