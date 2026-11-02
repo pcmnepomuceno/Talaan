@@ -39,3 +39,16 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* DESIGN.md 6.12: gentle opacity pulse 0.6 to 1.0 over 1.8s. */
+@theme {
+  --animate-ledger-pulse: ledger-pulse 1.8s ease-in-out infinite alternate;
+  @keyframes ledger-pulse {
+    from {
+      opacity: 0.6;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}
