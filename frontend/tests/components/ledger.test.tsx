@@ -122,3 +122,11 @@ it("empty state", () => {
   expect(screen.getByRole("heading", { name: "No applications yet" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Add application" })).toBeTruthy();
 });
+
+it("row title is clamped to 2 lines and carries the full text in title", () => {
+  const long = "Senior Principal Staff Software Engineer, Platform Reliability and Developer Experience";
+  render(<ApplicationRow application={app({ job_name: long })} href="/applications/1" />);
+  const t = screen.getByText(long);
+  expect(t.getAttribute("title")).toBe(long);
+  expect(t.className).toContain("line-clamp-2");
+});
