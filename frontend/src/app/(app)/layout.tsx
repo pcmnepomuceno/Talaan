@@ -6,11 +6,11 @@ import { ToastProvider } from "@/components/toast";
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="[--bottom-nav:4rem] md:[--bottom-nav:0px]">
-    <ToastProvider>
-      <SkipLink />
-      <MainNav />
-      <div className="md:pl-22 xl:pl-60">{children}</div>
-    </ToastProvider>
+      <ToastProvider>
+        <SkipLink />
+        <MainNav />
+        <div className="md:pl-22 xl:pl-60">{children}</div>
+      </ToastProvider>
     </div>
   );
 }

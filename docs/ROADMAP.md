@@ -40,6 +40,7 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - Playwright layout smoke tests in CI (clipping, 44px targets, no horizontal scroll). Reason (2026-11-02): layout can't be tested in jsdom; the F2a review checks (segment clipping at 320px, hover band) were run by hand in Chrome.
 - An unknown application id renders a client-side not-found view (HTTP 200). F5 decides whether the server should return 404.
 - Detail has no "Add interview" action until F6. The 88px rail fits the bold 14px label "Applications" only with `tracking-tight` (77px label in a 79px pill, 4px from the rail edges). A longer label or a third item needs a wider rail or a smaller label token.
+- Add a formatter (Prettier) and a CI format check. Reason (2026-11-03): no formatter config exists, so JSX indentation drifted by hand in the F3 layouts (code review finding 9). Not added in F3 to keep the PR scoped; needs a dependency decision.
 
 ## Maintenance
 
