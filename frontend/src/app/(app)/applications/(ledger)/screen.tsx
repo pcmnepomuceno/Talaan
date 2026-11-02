@@ -125,7 +125,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
     router.push(`/applications${qs}`);
   }
 
-  const editHref = `/applications/${id}/edit`;
+  const editHref = `/applications/${id}/edit${qs}`;
   const actions = ready && (
     <>
       <BarAction href={editHref}>Edit</BarAction>
