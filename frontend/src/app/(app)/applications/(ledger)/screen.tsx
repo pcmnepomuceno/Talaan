@@ -77,10 +77,10 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
       let state: DetailState;
       try {
         const n = parseId(id);
-        const application = n === null ? null : await getApplication(n);
-        state = application
-          ? { kind: "ready", application, interviews: await getInterviews(application.id) }
-          : { kind: "missing" };
+        // Independent requests: one round trip, not two. A null application means not found.
+        const [application, interviews] =
+          n === null ? [null, []] : await Promise.all([getApplication(n), getInterviews(n)]);
+        state = application ? { kind: "ready", application, interviews } : { kind: "missing" };
       } catch {
         state = {
           kind: "error",

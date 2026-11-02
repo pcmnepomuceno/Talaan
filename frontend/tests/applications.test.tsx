@@ -242,3 +242,17 @@ it("Back to a deleted id shows loading then not-found, never the old content", a
   expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
   expect(await screen.findByText("Application not found.")).toBeTruthy();
 });
+
+it("detail requests the application and its interviews together", async () => {
+  params = { id: "1" };
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  const real = vi.mocked(api.getApplication).getMockImplementation()!;
+  vi.mocked(api.getApplication).mockImplementationOnce(async (n) => (await gate, real(n)));
+  vi.mocked(api.getInterviews).mockClear();
+  screenUnderTest();
+  // getApplication is still pending, yet interviews were already requested.
+  await waitFor(() => expect(api.getInterviews).toHaveBeenCalledWith(1));
+  release();
+  expect(await screen.findByRole("list", { name: "Interviews" })).toBeTruthy();
+});
