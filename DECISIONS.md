@@ -218,3 +218,10 @@
 - **Decision:** The Create account fields are in this order: Invite code, Account name, Email, Password. DESIGN.md section 8 item 1 changes to match (the only DESIGN.md edit in F3). This follows the Stitch screen instead of the earlier DESIGN.md order.
 - **Rationale:** Signup is by invitation. The invite code gates it, so a person without a valid code finds out before filling in three other fields.
 - **Alternative:** Keep the code last (DESIGN.md v2.2), which puts the field most likely to fail at the end of the form.
+
+---
+
+# Decision: Deny the unrs-resolver install script
+
+- **Date:** 2026-11-03
+- **Decision:** `frontend/package.json` `allowScripts` has `"unrs-resolver": false` (an npm deny-list entry, not a new dependency): this transitive ESLint resolver's postinstall only re-checks a native binding that its platform `optionalDependencies` already install, so denying it removes install-time code execution at no cost (lint and tests pass on a clean `npm ci`).
