@@ -35,6 +35,7 @@ export const useDetail = () => useContext(DetailContext);
 
 type ListData = { key: string; failed?: true; items: Application[]; total: number };
 type DetailData = { id: string; state: DetailState };
+const keyOf = (status: string | undefined, reload: number) => `${status ?? "all"}:${reload}`;
 
 export function ApplicationsScreen({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -43,16 +44,15 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
   const status = parseStatus(useSearchParams().get("status"));
   const qs = status ? `?status=${status}` : "";
 
-  const [version, setVersion] = useState(0);
+  const [reload, setReload] = useState(0);
   const [list, setList] = useState<ListData | null>(null);
   const [detail, setDetail] = useState<DetailData | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [listTry, setListTry] = useState(0);
   const [detailTry, setDetailTry] = useState(0);
 
-  // The list reloads after a delete (version); the detail depends on the id only.
-  const listKey = `${status ?? "all"}:${version}:${listTry}`;
+  // The list reloads after a delete and on Retry (reload); the detail depends on the id only.
+  const listKey = keyOf(status, reload);
   useEffect(() => {
     let live = true;
     (async () => {
@@ -60,15 +60,15 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
         const items = await getApplications(status);
         // A filter with no matches still needs the overall total to pick "empty" over "no match".
         const total = status && items.length === 0 ? (await getApplications()).length : items.length;
-        if (live) setList({ key: listKey, items, total });
+        if (live) setList({ key: keyOf(status, reload), items, total });
       } catch {
-        if (live) setList({ key: listKey, failed: true, items: [], total: 0 });
+        if (live) setList({ key: keyOf(status, reload), failed: true, items: [], total: 0 });
       }
     })();
     return () => {
       live = false;
     };
-  }, [status, listKey]);
+  }, [status, reload]);
 
   useEffect(() => {
     if (id === undefined) return;
@@ -118,7 +118,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
     } finally {
       setBusy(false);
     }
-    setVersion((v) => v + 1);
+    setReload((n) => n + 1);
     setDetail(null); // Back to the deleted id must refetch (loading, then not found), never show old content.
     setConfirming(false);
     toast.success("Application deleted.");
@@ -159,7 +159,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
             {loadingList ? (
               <LedgerSkeleton />
             ) : list.failed ? (
-              <LoadError title="Couldn't load applications." onRetry={() => setListTry((t) => t + 1)} />
+              <LoadError title="Couldn't load applications." onRetry={() => setReload((n) => n + 1)} />
             ) : list.total === 0 ? (
               <EmptyState
                 title="No applications yet."
