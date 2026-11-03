@@ -3,7 +3,7 @@
 Contract first. Applications (milestone 3) and interviews (milestone 4) CRUD are built. All routes live under `/api/v1`, except `/health` and `/ping`, which sit at the root. Items marked **Open** need a decision.
 
 ## Auth
-- Browsers: `session_token` HttpOnly cookie (30 days).
+- Browsers: session cookie (30 days), see Cookie below.
 - Non-browser clients must not depend on cookies alone. v1.1 adds hashed personal API tokens sent as `Authorization: Bearer <token>`; every protected route accepts either.
 - Every `/api/v1` response, errors included, carries `Cache-Control: no-store` (one middleware).
 
@@ -14,6 +14,7 @@ Contract first. Applications (milestone 3) and interviews (milestone 4) CRUD are
 | POST | `/login` | 200; sets cookie |
 | POST | `/logout` | 204 |
 | GET | `/me` | current user |
+| POST | `/account/delete` | body `{"password"}`; 204; permanent, see Account deletion |
 | GET | `/applications` | paginated; `?status=` |
 | POST | `/applications` | 201 |
 | POST | `/applications/quick` | 201; quick-add |
@@ -27,10 +28,21 @@ Contract first. Applications (milestone 3) and interviews (milestone 4) CRUD are
 `/health` and `/ping` are unauthenticated and unversioned so pingers and Render checks survive version bumps (DECISIONS.md, 2026-10-20).
 
 ## Status codes
-200 OK, 201 Created, 204 No Content (delete, logout), 401 not logged in or bad credentials, 404 not found **or not yours**, 409 duplicate email, 422 validation, 429 rate limited, 400 invalid invite code on `/signup`, 503 `/health` when the database is unreachable, or `/login` and `/signup` when the rate limiter cannot reach it (fail closed).
+200 OK, 201 Created, 204 No Content (delete, logout), 401 not logged in or bad credentials, 404 not found **or not yours**, 409 duplicate email, 422 validation, 429 rate limited, 403 wrong password on `/account/delete` or a blocked cross-site request, 400 invalid invite code on `/signup`, 503 `/health` when the database is unreachable, or `/login`, `/signup` and `/account/delete` when the rate limiter cannot reach it (fail closed).
 
 ## Errors
 FastAPI default: `{"detail": "message"}`. Validation errors (422) use FastAPI's `detail` list. Clients branch on status code, not on message text.
+
+## Cookie
+Name `session_token`, or `__Host-session_token` when `COOKIE_SECURE` is true (the default). Attributes: `HttpOnly`, `SameSite=Lax`, `Path=/`, `Max-Age=2592000` (30 days), no `Domain`, and `Secure` only when `COOKIE_SECURE` is true. Never `SameSite=None`. Logout and account deletion send the same name and attributes with `Max-Age=0`. A plain-http client (curl, Safari on `http://localhost`) does not send a Secure cookie back: set `COOKIE_SECURE=false` in local `.env`.
+
+## Cross-site requests
+POST/PUT/PATCH/DELETE (login and signup included) return `403 {"detail": "Cross-site request blocked."}` when `Sec-Fetch-Site` is `cross-site` or an `Origin` header is present and not listed in `ALLOWED_ORIGINS`. `ALLOWED_ORIGINS` is a comma-separated list of exact origins (default `http://localhost:3000`; spaces and a trailing slash are ignored; `*` is refused at startup). A request with no `Origin` (curl, scripts) is allowed. GET is never checked. There is no CORS: browsers reach the API through the frontend's Next.js proxy, so the API is same-site from the browser's point of view.
+
+## Account deletion
+`POST /account/delete` with `{"password": "..."}` and a valid session cookie. Deletes the user and, permanently, all their applications, interviews and sessions, in one transaction, then clears the cookie.
+- `204` deleted. `401` no, expired or already-deleted session (also the loser of two simultaneous deletes). `403 {"detail": "Incorrect password."}` wrong password (not 401, so a client does not treat it as an expired session). `429` too many wrong attempts (5 per user and 10 per IP per 15 minutes; `ACCOUNT_DELETE_*` env). `503` database failure; nothing is deleted.
+- Used invite codes stay used (`used_by_user_id` becomes NULL). The same email can sign up again, but only with a new invite code; the old account does not come back.
 
 ## Signup
 `POST /signup` body: `{"email", "password", "account_name", "invite_code"}`. `invite_code` is required (missing is 422). Codes look like `TLN-XXXX-XXXX-XXXX`; case, dashes, spaces and a pasted line ending are ignored. Admins create codes with `python -m app.admin create-invite` (no HTTP endpoint). A code works once and expires (default 14 days).
@@ -40,7 +52,7 @@ Unknown, expired, already used, malformed and over-length codes all return the s
 ## Rate limits
 `POST /login`: 10 attempts per IP and 5 failed attempts per email, per 15 minutes (a successful login removes only its own attempt from the email count; earlier failures stay counted). `POST /signup`: 5 attempts per IP per hour. Over a limit: `429 {"detail": "Too many attempts. Try again later."}` with a `Retry-After` header in seconds. The body is the same for every limit. Blocked attempts are not counted. Defaults come from env (`LOGIN_IP_LIMIT`, `LOGIN_EMAIL_LIMIT`, `SIGNUP_IP_LIMIT` and the `*_WINDOW_SECONDS` pair for each).
 
-The client IP is the socket peer. `TRUST_PROXY=true` (only behind a proxy you control) uses the right-most `X-Forwarded-For` value instead; with `false` that header is ignored. Authenticated endpoints are not rate limited yet. `/login` returns the same 401 for an unknown email and a wrong password, including passwords over 72 bytes.
+The client IP is the socket peer. `TRUST_PROXY=true` (only behind a proxy you control) uses the right-most `X-Forwarded-For` value instead; with `false` that header is ignored. Only `/account/delete` among authenticated endpoints is rate limited. `/login` returns the same 401 for an unknown email and a wrong password, including passwords over 72 bytes.
 
 Limits are exact under concurrency (one advisory lock per key; DECISIONS.md). To check by hand, send 20 parallel logins for a fresh email. The result must be exactly 5x 401 and 15x 429:
 
