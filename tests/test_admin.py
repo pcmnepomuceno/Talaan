@@ -90,20 +90,36 @@ def test_cli_runs_as_a_real_process_and_creates_a_code(db):
     import subprocess
     import sys
 
+    from app.database import SessionLocal
+
     env = {**os.environ}
-    out = subprocess.run(
-        [sys.executable, "-m", "app.admin", "create-invite", "--note", "subprocess-test"],
-        capture_output=True, text=True, env=env, check=False,
-    )
-    assert out.returncode == 0, out.stderr
-    code = code_from(out.stdout)
+    note = "subprocess-test"
+    row = None
+    revoked = None
     try:
-        db.expire_all()
-        row = db.query(InviteCode).filter_by(note="subprocess-test").one()
-        assert row.code_hash == invites.hash_code(invites.normalize(code))
-    finally:
-        cleanup = subprocess.run(
-            [sys.executable, "-m", "app.admin", "revoke-invite", str(row.id)],
+        out = subprocess.run(
+            [sys.executable, "-m", "app.admin", "create-invite", "--note", note],
             capture_output=True, text=True, env=env, check=False,
         )
-        assert cleanup.returncode == 0, cleanup.stderr
+        assert out.returncode == 0, out.stderr
+        code = code_from(out.stdout)
+        db.expire_all()
+        row = db.query(InviteCode).filter_by(note=note).one()
+        assert row.code_hash == invites.hash_code(invites.normalize(code))
+    finally:
+        if row is not None:
+            revoked = subprocess.run(
+                [sys.executable, "-m", "app.admin", "revoke-invite", str(row.id)],
+                capture_output=True, text=True, env=env, check=False,
+            )
+        # The subprocess committed for real, outside the test's rolled-back transaction.
+        # Remove anything left (failed revoke, or a failure before row was set) so later
+        # tests that expect an empty invite_codes table are not broken.
+        cleanup = SessionLocal()
+        try:
+            cleanup.query(InviteCode).filter_by(note=note).delete()
+            cleanup.commit()
+        finally:
+            cleanup.close()
+    # Outside finally, so a failure above is reported instead of masked.
+    assert revoked.returncode == 0, revoked.stderr
