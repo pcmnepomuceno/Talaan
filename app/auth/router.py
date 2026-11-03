@@ -137,7 +137,13 @@ def login(
         expires_at=datetime.now(timezone.utc) + SESSION_LIFETIME
     )
     db.add(session)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # The account was deleted between the password check and this insert (the FK
+        # insert waited for the delete to commit). No session row exists; same 401.
+        db.rollback()
+        raise HTTPException(status_code=401, detail="Invalid email or password.") from None
     db.refresh(session)
 
     set_session_cookie(response, session_token, int(SESSION_LIFETIME.total_seconds()))

@@ -86,3 +86,10 @@ def parse_origins(raw: str | None) -> frozenset[str]:
 
 
 ALLOWED_ORIGINS = parse_origins(os.getenv("ALLOWED_ORIGINS"))
+
+
+# Account deletion (POST /account/delete): wrong-password budget per user, attempts per IP.
+ACCOUNT_DELETE_USER_LIMIT = _int("ACCOUNT_DELETE_USER_LIMIT", 5, minimum=1)
+ACCOUNT_DELETE_USER_WINDOW_SECONDS = _int("ACCOUNT_DELETE_USER_WINDOW_SECONDS", 900, minimum=1)
+ACCOUNT_DELETE_IP_LIMIT = _int("ACCOUNT_DELETE_IP_LIMIT", 10, minimum=1)
+ACCOUNT_DELETE_IP_WINDOW_SECONDS = _int("ACCOUNT_DELETE_IP_WINDOW_SECONDS", 900, minimum=1)

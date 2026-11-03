@@ -57,3 +57,8 @@ class UserLogin(BaseModel):
         if value is None:
             return value
         return str(value).strip().lower()
+
+
+class AccountDelete(BaseModel):
+    # No length or complexity rules: any wrong value, however odd, gets the same 403.
+    password: str
