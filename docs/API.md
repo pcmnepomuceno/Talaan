@@ -49,6 +49,8 @@ seq 20 | xargs -P20 -I{} curl -s -o /dev/null -w '%{http_code}\n' \
 #      15 429
 ```
 
+Inside Docker Compose (`docker compose up -d`), every request from the host reaches the `api` container from the Docker bridge gateway IP (for example `172.18.0.1`), so all local clients (browser, curl, tests by hand) share one per-IP bucket. For local work, raise `LOGIN_IP_LIMIT` and `SIGNUP_IP_LIMIT` (and `LOGIN_EMAIL_LIMIT` if needed) in `.env`; the `api` service reads `.env` through `env_file` (optional file), and its own `DATABASE_URL` still wins. Recreate the container after editing `.env` (`docker compose up -d api`).
+
 Your IP must also have fewer than 5 login attempts in the last 15 minutes, or the per-IP limit (10) answers first (for example 20x 429). For a fresh IP every run, start the server with `TRUST_PROXY=true` and add `-H "X-Forwarded-For: 198.51.100.$((RANDOM % 250 + 1))"`. The same burst with 20 different emails from one IP must give exactly 10x 401 and 10x 429. Restart the server after pulling, because without `--reload` it keeps running the old code.
 
 ## Ownership

@@ -14,6 +14,7 @@ the **Current milestone** in `docs/ROADMAP.md`. Other docs: `docs/PROJECT_BRIEF.
 - FastAPI (Python), SQLAlchemy, PostgreSQL 16 (Docker)
 - Password hashing: `bcrypt` directly (`passlib` dropped: unmaintained, broken on bcrypt 5.x)
 - Docker: `docker compose up -d` (db + api on :8000), then `docker compose run --rm api python -m alembic upgrade head` (never auto-run).
+  The `api` service reads `.env` via `env_file` (`required: false`); its own `DATABASE_URL` wins. Inside Compose every host request comes from the bridge gateway IP, so all local clients share one rate-limit bucket: raise the `LOGIN_*`/`SIGNUP_*` limits in `.env` for local work.
 - Run: `cp .env.example .env`, `docker compose up -d db`, `pip install -r requirements-dev.txt`,
   `alembic upgrade head`, `uvicorn app.main:app --reload --no-proxy-headers`
   (`--no-proxy-headers` keeps uvicorn from rewriting the client address from `X-Forwarded-For`;
