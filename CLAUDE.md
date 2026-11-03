@@ -119,7 +119,7 @@ Routers mount under `/api/v1` (`/api/v1/signup`, `/login`, `/logout`, `/me`).
 - [x] `JobApplication`/`Interview` models match schema
 - [x] Login 401, no token in login body, idempotent logout 204
 - [x] Auth + health tests (pytest + httpx; 23 tests, `_test` database)
-- [x] M8: login/signup rate limiting in Postgres (`rate_limit_events`; per IP and per email; 429 + `Retry-After`; 503 fail closed), constant-work login (dummy hash), 72-byte login guard; 179 tests. See DECISIONS.md 2026-11-03
+- [x] M8: login/signup rate limiting in Postgres (`rate_limit_events`; per IP and per email; 429 + `Retry-After`; 503 fail closed), constant-work login (dummy hash), 72-byte login guard; tests: see CI. See DECISIONS.md 2026-11-03
 - [ ] Manually exercise the app end-to-end (`/docs`, curl cookie jar, psql)
 - [x] Domain layout move; routers under `/api/v1`
 - [x] Applications CRUD (ownership 404, pagination, status filter, `saved` migration; 64 tests)
