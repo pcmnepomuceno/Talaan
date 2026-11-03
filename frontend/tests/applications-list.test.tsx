@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ApplicationsScreen } from "../src/app/(app)/applications/(ledger)/screen";
 import { ANNOUNCE_MS } from "../src/app/(app)/applications/(ledger)/use-list";
 import { ToastProvider } from "../src/components/toast";
-import { clearCaches } from "../src/lib/cache";
+import { clearCaches, getList } from "../src/lib/cache";
 import { STATUSES } from "../src/lib/types";
 import { type Fake, installFake, json, makeApp } from "./helpers/fake-api";
 
@@ -235,6 +235,40 @@ it("a response that arrives after a cache clear does not repopulate the cache", 
   act(() => clearCaches()); // a write happened while the first request was in flight
   release();
   await waitFor(() => expect(rowLinks()).toHaveLength(3)); // the refetch, not the stale 1-row page
+});
+
+it("a page-1 response landing in the same tick as a cache clear is neither stored nor shown", async () => {
+  setup(3);
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  fake.on("GET", /^\/applications\?/, async () => (await gate, json(200, { items: [makeApp(1)], total: 1, limit: 50, offset: 0 })));
+  mount();
+  await act(async () => {
+    clearCaches();
+    release();
+    await gate;
+  });
+  await waitFor(() => expect(rowLinks()).toHaveLength(3));
+  expect(getList()?.total).toBe(3);
+});
+
+it("a Load more response landing in the same tick as a cache clear is neither stored nor shown", async () => {
+  setup(120);
+  mount();
+  await screen.findByRole("list", { name: "Applications" });
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  fake.on("GET", /offset=50/, async () => (await gate, json(200, { items: [makeApp(500)], total: 121, limit: 50, offset: 50 })));
+  await userEvent.click(screen.getByRole("button", { name: "Load more" }));
+  await act(async () => {
+    clearCaches();
+    release();
+    await gate;
+  });
+  await waitFor(() => expect(fake.callsTo("GET", /offset=0/)).toHaveLength(2));
+  await waitFor(() => expect(getList()?.items).toHaveLength(50));
+  expect(getList()?.items.some((a) => a.id === 500)).toBe(false);
+  expect(screen.queryByRole("link", { name: /Company 500/ })).toBeNull();
 });
 
 it("Load more is disabled while a cached tab is refreshing", async () => {

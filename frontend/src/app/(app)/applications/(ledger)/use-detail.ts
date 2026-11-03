@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getApplication, getInterviews, parseId } from "@/lib/api";
-import { dropDetail, getDetail, setDetail } from "@/lib/cache";
+import { cacheVersion, dropDetail, getDetail, onCachesCleared, setDetail } from "@/lib/cache";
 import { ApiError } from "@/lib/http";
 import type { Page } from "@/lib/mappers";
 import type { Application, Interview } from "@/lib/types";
@@ -42,15 +42,19 @@ export function useApplicationDetail(id: string | undefined) {
 
   const n = id === undefined ? null : parseId(id);
 
+  // A response whose request started before a clearCaches() (a write, login, logout) is stale: it
+  // is neither applied nor cached. `live` alone misses one that lands before React re-renders.
   useEffect(() => {
     if (n === null) return;
     let live = true;
+    const v = cacheVersion();
+    const current = () => live && cacheVersion() === v;
     getApplication(n).then(
       (a) => {
         if (a === null) dropDetail(n); // gone (or never ours): a revisit must not show the old record
-        if (live) setAppRes({ a });
+        if (current()) setAppRes({ a });
       },
-      () => live && setAppRes("error"),
+      () => current() && setAppRes("error"),
     );
     return () => {
       live = false;
@@ -60,12 +64,14 @@ export function useApplicationDetail(id: string | undefined) {
   useEffect(() => {
     if (n === null) return;
     let live = true;
+    const v = cacheVersion();
+    const current = () => live && cacheVersion() === v;
     getInterviews(n).then(
-      (p) => live && setIvRes(p),
+      (p) => current() && setIvRes(p),
       (e) => {
         const gone = e instanceof ApiError && e.status === 404;
         if (gone) dropDetail(n);
-        if (live) setIvRes(gone ? "gone" : "error");
+        if (current()) setIvRes(gone ? "gone" : "error");
       },
     );
     return () => {
@@ -88,6 +94,16 @@ export function useApplicationDetail(id: string | undefined) {
     setIvRes(null);
     setIvTry((t) => t + 1);
   }, []);
+  // A clear drops both results (so the cache-store effect never pairs an old one with a new one)
+  // and refetches: the user sees the skeleton, then fresh data.
+  useEffect(
+    () =>
+      onCachesCleared(() => {
+        retryApp();
+        retryInterviews();
+      }),
+    [retryApp, retryInterviews],
+  );
   /** After a delete: back to this id must refetch, never show the deleted content. */
   const reset = useCallback(() => {
     setAppRes(null);

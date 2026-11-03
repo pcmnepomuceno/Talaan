@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getApplications } from "@/lib/api";
-import { getList, onCachesCleared, setList } from "@/lib/cache";
+import { cacheVersion, getList, onCachesCleared, setList } from "@/lib/cache";
 import type { Application, Status } from "@/lib/types";
 
 // One status tab = one cached list, fetched 50 at a time from the server (the API pages and
@@ -66,17 +66,19 @@ export function useApplicationList(status: Status | undefined) {
 
   useEffect(() => {
     let live = true;
+    const v = cacheVersion();
     const cached = getList(status);
     getApplications(status).then(
       (page) => {
-        // Only a live request may write the cache: a write or tab switch since then makes it stale.
-        if (!live) return;
+        // Only a live request from the current cache version may write the cache: a write or tab
+        // switch since it started makes it stale (`live` alone misses one landing before a re-render).
+        if (!live || cacheVersion() !== v) return;
         const entry = { ...page, nextOffset: page.items.length };
         setList(status, entry);
         setFetched({ key, ...entry, failed: false, refreshFailed: false, more: "idle" });
       },
       () => {
-        if (live)
+        if (live && cacheVersion() === v)
           setFetched({
             key,
             items: cached?.items ?? [],
@@ -100,6 +102,7 @@ export function useApplicationList(status: Status | undefined) {
 
   const loadMore = useCallback(async () => {
     const at = keyRef.current;
+    const v = cacheVersion();
     const cur = getList(status);
     if (!cur || moreBusy.current) return;
     moreBusy.current = true;
@@ -107,7 +110,7 @@ export function useApplicationList(status: Status | undefined) {
     setFetched((f) => (f && f.key === at ? { ...f, more: "loading" } : f));
     try {
       const page = await getApplications(status, cur.nextOffset);
-      if (keyRef.current !== at) return;
+      if (keyRef.current !== at || cacheVersion() !== v) return;
       const items = appendUnique(cur.items, page.items);
       const added = items.length - cur.items.length;
       if (added === 0) {
@@ -123,7 +126,7 @@ export function useApplicationList(status: Status | undefined) {
       setAnnouncement(`${added} more ${added === 1 ? "application" : "applications"} loaded`);
       setFocusId(items[cur.items.length].id);
     } catch {
-      if (keyRef.current === at) setFetched((f) => (f && f.key === at ? { ...f, more: "failed" } : f));
+      if (keyRef.current === at && cacheVersion() === v) setFetched((f) => (f && f.key === at ? { ...f, more: "failed" } : f));
     } finally {
       moreBusy.current = false;
     }

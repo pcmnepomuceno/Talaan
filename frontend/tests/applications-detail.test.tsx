@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import ApplicationDetailPage from "../src/app/(app)/applications/(ledger)/[id]/page";
 import { ApplicationsScreen } from "../src/app/(app)/applications/(ledger)/screen";
 import { ToastProvider } from "../src/components/toast";
-import { clearCaches } from "../src/lib/cache";
+import { clearCaches, getDetail } from "../src/lib/cache";
 import { type Fake, installFake, json, makeInterview } from "./helpers/fake-api";
 
 const replace = vi.fn();
@@ -69,6 +69,23 @@ it("a write clears the cached detail, so a revisit shows the skeleton, never old
   mount();
   expect(screen.queryByRole("heading", { name: "Frontend Engineer" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+});
+
+it("a detail fetch in flight when a write clears the caches is neither stored nor shown; the detail refetches", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  fake.on("GET", /^\/applications\/1$/, async () => (await gate, json(200, { ...fake.db.apps[0], company: "Stale Co" })));
+  mount();
+  // The write and the stale response land in the same tick, before React re-renders.
+  await act(async () => {
+    clearCaches();
+    release();
+    await gate;
+  });
+  await screen.findByRole("list", { name: "Interviews" });
+  await waitFor(() => expect(getDetail(1)?.application.company).toBe("Pinagsama Tech"));
+  expect(screen.queryByText("Stale Co")).toBeNull();
+  expect(fake.callsTo("GET", /^\/applications\/1$/)).toHaveLength(2);
 });
 
 it("while the first load runs: aria-busy, and the live region says Loading application", async () => {
