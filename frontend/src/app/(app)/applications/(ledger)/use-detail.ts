@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getApplication, getInterviews, parseId } from "@/lib/api";
-import { getDetail, setDetail } from "@/lib/cache";
+import { dropDetail, getDetail, setDetail } from "@/lib/cache";
 import { ApiError } from "@/lib/http";
 import type { Page } from "@/lib/mappers";
 import type { Application, Interview } from "@/lib/types";
@@ -46,7 +46,10 @@ export function useApplicationDetail(id: string | undefined) {
     if (n === null) return;
     let live = true;
     getApplication(n).then(
-      (a) => live && setAppRes({ a }),
+      (a) => {
+        if (a === null) dropDetail(n); // gone (or never ours): a revisit must not show the old record
+        if (live) setAppRes({ a });
+      },
       () => live && setAppRes("error"),
     );
     return () => {
@@ -59,7 +62,11 @@ export function useApplicationDetail(id: string | undefined) {
     let live = true;
     getInterviews(n).then(
       (p) => live && setIvRes(p),
-      (e) => live && setIvRes(e instanceof ApiError && e.status === 404 ? "gone" : "error"),
+      (e) => {
+        const gone = e instanceof ApiError && e.status === 404;
+        if (gone) dropDetail(n);
+        if (live) setIvRes(gone ? "gone" : "error");
+      },
     );
     return () => {
       live = false;

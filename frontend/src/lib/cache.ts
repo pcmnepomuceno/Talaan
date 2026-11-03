@@ -17,6 +17,7 @@ export const getList = (status?: string) => lists.get(listKey(status));
 export const setList = (status: string | undefined, entry: ListEntry) => void lists.set(listKey(status), entry);
 export const getDetail = (id: number) => details.get(id);
 export const setDetail = (id: number, entry: DetailEntry) => void details.set(id, entry);
+export const dropDetail = (id: number) => void details.delete(id);
 
 export const cacheVersion = () => version;
 

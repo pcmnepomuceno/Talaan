@@ -79,6 +79,23 @@ it("while the first load runs: aria-busy, and the live region says Loading appli
   expect(detailSection().getAttribute("aria-busy")).toBeNull();
 });
 
+it.each([
+  ["the application", /^\/applications\/1$/],
+  ["its interviews", /^\/applications\/1\/interviews/],
+])("a 404 on %s evicts the cached detail: the next visit never flashes the deleted record", async (_what, path) => {
+  const first = mount();
+  await screen.findByRole("list", { name: "Interviews" });
+  first.unmount();
+  fake.on("GET", path, () => json(404, { detail: "Application not found." })); // deleted elsewhere
+  const second = mount();
+  expect(await screen.findByText("Application not found.")).toBeTruthy();
+  second.unmount();
+  fake.on("GET", /^\/applications\/1/, () => new Promise<Response>(() => {}), false);
+  mount();
+  expect(screen.queryByRole("heading", { name: "Frontend Engineer" })).toBeNull();
+  expect(screen.getAllByRole("status")[0].textContent).toBe("Loading application");
+});
+
 it("a 404 on the application shows not-found even though interviews also 404", async () => {
   fake.db.apps = [];
   mount();
