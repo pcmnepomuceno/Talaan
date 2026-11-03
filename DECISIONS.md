@@ -286,3 +286,13 @@
 - **No lock for the delete:** removing one row can only free budget. A concurrent caller that counted the row before it was deleted is at worst stricter for that one check.
 - **Cost:** the owner can still be locked out for the window by someone who knows the email (the accepted trade-off in "Auth rate limiting in Postgres"). `record()` flushes each row to get its id, so login sends two INSERTs instead of one batched INSERT: one extra round trip inside the locked transaction.
 - **Alternative:** keep clearing the key (resets attacker budgets); record attempts only after a failed verify (drops the record-before-verify order, so concurrent guesses would not see each other during bcrypt).
+
+---
+
+# Decision: Advisory lock ids come from SHA-256, locked in id order
+
+- **Date:** 2026-11-03
+- **Decision:** This replaces the lock id and lock order in "Rate limits are exact per key". `enforce()` no longer calls `pg_advisory_xact_lock(hashtext(key))` in key-string order. It computes each key's lock id in Python (the first 8 bytes of SHA-256 of the key, as a signed 64-bit int), removes duplicate ids, and takes `pg_advisory_xact_lock(:id)` in ascending id order.
+- **Why:** sorting by key string does not order the locks themselves. If two keys collide on one id, two callers can take the same ids in opposite orders (A locks [a, b] = ids [5, 1], B locks [c, d] = ids [1, 5]) and deadlock. Postgres aborts one, `fail_closed` turns that into a 503, and a valid login fails. Sorting by id gives every caller the same order for shared locks, so no wait cycle can form. `hashtext` is 32-bit, so collisions were plausible at scale; 64 bits makes them far rarer, and the ordering makes them harmless anyway (extra waiting only).
+- **Test:** a burst with a mocked id function that forces the collision above. With key-string order it fails with 503s (deadlock), three runs out of three; with id order it passes.
+- **Alternative:** one combined lock per call (hash of all keys). Unrelated calls that share one key would then not serialize on it, which breaks exactness.

@@ -103,6 +103,18 @@ def delete_event(db: Session, event_id: int) -> None:
     db.query(RateLimitEvent).filter(RateLimitEvent.id == event_id).delete(synchronize_session=False)
 
 
+def lock_id(key: str) -> int:
+    """Advisory lock id for a key: the first 8 bytes of SHA-256(key) as a signed bigint."""
+    return int.from_bytes(hashlib.sha256(key.encode("utf-8")).digest()[:8], "big", signed=True)
+
+
+def lock_ids(keys) -> list[int]:
+    """Deduplicated lock ids in ascending order. Ordering by the id itself (not by key)
+    means every caller takes any shared locks in the same order, even when two different
+    keys collide on one id, so lock waits cannot form a cycle."""
+    return sorted({lock_id(key) for key in keys})
+
+
 def enforce(db: Session, *limits: tuple[str, int, int]) -> dict[str, int]:
     """Check every (key, limit, window_seconds). If none is over, record one attempt per key
     and return {key: event id}, so a caller can later delete its own attempt.
@@ -112,13 +124,12 @@ def enforce(db: Session, *limits: tuple[str, int, int]) -> dict[str, int]:
     A DB error: 503.
 
     Atomic per key: a transaction-scoped advisory lock per key serializes concurrent
-    callers from prune to commit, so a burst lets exactly `limit` through. Keys are locked
-    in sorted order, so two callers with the same keys cannot deadlock. The commit releases
-    the locks: never hold them across slow work."""
+    callers from prune to commit, so a burst lets exactly `limit` through. See lock_ids for
+    why callers cannot deadlock. The commit releases the locks: never hold them across
+    slow work."""
     with fail_closed(db):
-        for key in sorted({key for key, _, _ in limits}):
-            # hashtext collisions only make two keys share a lock (extra waiting, no error).
-            db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": key})
+        for lock in lock_ids(key for key, _, _ in limits):
+            db.execute(text("SELECT pg_advisory_xact_lock(:id)"), {"id": lock})
         waits = [w for key, limit, window in limits if (w := check(db, key, limit, window)) is not None]
         ids = {} if waits else {key: record(db, key) for key, _, _ in limits}
         db.commit()

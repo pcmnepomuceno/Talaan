@@ -80,6 +80,23 @@ def test_parallel_burst_on_two_keys_in_either_order_is_exact_and_does_not_deadlo
         cleanup(ip, email)
 
 
+def test_colliding_lock_ids_in_interleaved_key_sets_do_not_deadlock(monkeypatch):
+    """Set A = (a, b), set B = (c, d), with forced collisions id(a) == id(d) and
+    id(b) == id(c). Locking in key order, A takes [5, 1] and B takes [1, 5]: opposite
+    orders, a deadlock (which fail_closed would turn into 503). In id order both take [1, 5]."""
+    run = uuid.uuid4()
+    a, b, c, d = (f"test:lock:{run}:{name}" for name in "abcd")
+    ids = {a: 5, b: 1, c: 1, d: 5}
+    monkeypatch.setattr(rate_limit, "lock_id", lambda key: ids[key] + 900_000_000_000)
+    set_a, set_b = [(a, LIMIT, 60), (b, LIMIT, 60)], [(c, LIMIT, 60), (d, LIMIT, 60)]
+    try:
+        # Each set has its own keys, so each lets LIMIT through. A deadlock shows up as 503s.
+        assert burst(lambda i: set_a if i % 2 else set_b) == (2 * LIMIT, N - 2 * LIMIT)
+        assert [count(k) for k in (a, b, c, d)] == [LIMIT] * 4
+    finally:
+        cleanup(a, b, c, d)
+
+
 def test_login_releases_the_locks_before_bcrypt(monkeypatch):
     """Through the real route and real sessions: while the password is being verified,
     another connection can take both keys' advisory locks, and both rows are committed."""
@@ -97,7 +114,7 @@ def test_login_releases_the_locks_before_bcrypt(monkeypatch):
         other = SessionLocal()
         try:
             for key in (ip_key, em_key):
-                seen[key] = other.execute(text("SELECT pg_try_advisory_xact_lock(hashtext(:k))"), {"k": key}).scalar()
+                seen[key] = other.execute(text("SELECT pg_try_advisory_xact_lock(:id)"), {"id": rate_limit.lock_id(key)}).scalar()
             seen["rows"] = (count(ip_key), count(em_key))
         finally:
             other.close()

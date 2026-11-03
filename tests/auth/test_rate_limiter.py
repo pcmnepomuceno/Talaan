@@ -141,3 +141,19 @@ def test_fail_closed_still_503_when_rollback_fails(db, monkeypatch):
     with pytest.raises(HTTPException) as exc, rate_limit.fail_closed(db):
         raise OperationalError("select", {}, Exception("db down"))
     assert exc.value.status_code == 503
+
+
+def test_lock_id_is_a_stable_signed_64_bit_int():
+    ids = {rate_limit.lock_id(f"k{i}") for i in range(1000)}
+    assert len(ids) == 1000
+    assert all(-(2**63) <= i < 2**63 for i in ids)
+    assert any(i < 0 for i in ids)  # signed: uses the whole bigint range
+    assert rate_limit.lock_id("login:ip:unknown") == rate_limit.lock_id("login:ip:unknown")
+
+
+def test_lock_ids_order_by_id_and_dedupe_collisions(monkeypatch):
+    ids = {"a": 5, "b": 1, "c": 1, "d": 5}
+    monkeypatch.setattr(rate_limit, "lock_id", ids.__getitem__)
+    # Key order would give [5, 1] for (a, b) and [1, 5] for (c, d): a deadlock cycle.
+    assert rate_limit.lock_ids(["a", "b"]) == rate_limit.lock_ids(["c", "d"]) == [1, 5]
+    assert rate_limit.lock_ids(["b", "c"]) == [1]  # two keys, one lock taken once
