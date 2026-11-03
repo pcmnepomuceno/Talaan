@@ -234,3 +234,22 @@
 - **Decision:** The navigation rail from 768 to 1279 is 88px wide, up from 80px. The content offset (`md:pl-22`) matches. This amends DESIGN.md section 7 (the approved DESIGN.md edit for this change) and the CLAUDE.md route note.
 - **Rationale:** The bold "Applications" label does not fit in an 80px rail. At 88px it fits with `tracking-tight` (77px label in a 79px pill).
 - **Alternative:** Keep 80px and shrink the label token or abbreviate the label (worse legibility, and a second token only for the rail).
+
+---
+
+# Decision: Auth rate limiting in Postgres, and constant-work login
+
+- **Date:** 2026-11-03
+- **Decision:** Login and signup are rate limited with a sliding window stored in a new `rate_limit_events` table (key, created_at; index on both). Defaults, all from env: login 10 attempts per IP and 5 failed attempts per email per 15 minutes; signup 5 per IP per hour. Over the limit returns 429 with `Retry-After` and one body for every limit. Each check deletes the checked key's expired rows, so no cron is needed.
+- **Why Postgres:** Render free restarts and spins down, which would reset in-memory counters. Redis would cost money. The table costs one indexed query pair per attempt.
+- **Why both IP and email keys:** the IP limit stops one client trying many emails; the email limit stops many IPs (or a botnet) guessing one account. Email keys are the SHA-256 of the stripped, lowercased address, so no raw email is stored and any length gives a fixed-length key. Unknown emails are counted too; otherwise only real accounts could be locked and that would reveal them.
+- **Client IP:** the socket peer. Only with `TRUST_PROXY=true` is the right-most `X-Forwarded-For` value used (the one our own proxy appended; everything to its left is client-controlled). `TRUST_PROXY` is the only trust switch: uvicorn runs with `--no-proxy-headers`, otherwise it would rewrite the peer from forwarded headers on its own. IPv6 is bucketed to its /64 and IPv4-mapped IPv6 is unwrapped. A missing or invalid address maps to the shared key `unknown`, so it is still limited. The Render proxy hop must be checked at deploy (M11).
+- **Login timing:** an unknown email now verifies against a dummy bcrypt hash built once at startup with the same algorithm and cost, and returns the same 401 as a wrong password. No early return. Passwords over 72 bytes (which bcrypt 5 rejects with an exception) are hashed on their first 72 bytes for equal cost and then rejected, so they return 401 instead of 500; signup already refuses them.
+- **Fail closed:** a DB error in the limiter returns 503, never a pass. 503 and not 429 because the fault is ours and a 429 would invent a `Retry-After`. Login cannot work without the DB anyway.
+- **Accepted trade-offs:**
+  - Check-then-record is not atomic, so concurrent requests can overshoot a limit by a small amount.
+  - Successful logins count against the per-IP limit, so a shared IP (campus, office) can hit it. Accepted for now; raise `LOGIN_IP_LIMIT` if it happens.
+  - An attacker who knows an email can lock it for the window with bad guesses. The owner can log in again when the window passes.
+  - Rows are pruned per key only. Keys that never return, and expired sessions, stay until a purge exists. That purge is a blocker for M11.
+- **Duplicate-email leak (partial fix):** signup still reveals whether an email exists (400 "Email already exists."). The response is unchanged. Enumeration is now limited by the signup rate limit and, in M9, by the invite code. The full fix is email verification, planned for a later milestone.
+- **Alternative:** in-process counters (reset on restart, one per worker); `slowapi` (new dependency, still needs a store); a CAPTCHA (cost, frontend work).

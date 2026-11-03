@@ -1,6 +1,6 @@
 # Talaan Roadmap
 
-**Current milestone:** Frontend F3 (app shell, responsive layout, mock screens) in review; F2a and F2b merged. Backend: Milestone 4 done (interviews CRUD, `no-store` middleware for `/api/v1`, `Interview.updated_at` clock fix). CI added (GitHub Actions). Docker done (Dockerfile, `api` compose service). v1b: hashed session tokens done. Next: v1b rate limiting on signup and login, plus the login-timing and duplicate-email leaks.
+**Current milestone:** Frontend F3 (app shell, responsive layout, mock screens) in review; F2a and F2b merged. Backend: Milestone 4 done (interviews CRUD, `no-store` middleware for `/api/v1`, `Interview.updated_at` clock fix). CI added (GitHub Actions). Docker done (Dockerfile, `api` compose service). v1b: hashed session tokens done; M8 (login/signup rate limiting in Postgres, login timing fix) built on `feature/auth-rate-limit`, in review. Next: M9 invite-code signup, M10 account deletion and cookie flags, M11 deploy. **M11 blocker:** purge `rate_limit_events` and expired `sessions` (pruning is per key only, so rows for keys that never return stay). The duplicate-email leak is only limited (rate limit now, invite code in M9); email verification is the full fix, planned later.
 
 ## Roadmap
 
