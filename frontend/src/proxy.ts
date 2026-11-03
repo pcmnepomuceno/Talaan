@@ -11,8 +11,6 @@ const PUBLIC = ["/login", "/design"];
 
 export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
-  // /api is the backend (rewritten in next.config.ts): it answers 401 itself, never redirect it.
-  if (pathname === "/api" || pathname.startsWith("/api/")) return NextResponse.next();
   if (PUBLIC.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return NextResponse.next();
   if (COOKIES.some((name) => request.cookies.has(name))) return NextResponse.next();
 
@@ -21,6 +19,8 @@ export function proxy(request: NextRequest) {
   return NextResponse.redirect(login);
 }
 
+// The matcher is the only /api exclusion: /api is the backend (rewritten in next.config.ts) and
+// answers 401 itself, so the proxy never runs there.
 export const config = {
   matcher: ["/((?!api|_next/static|_next/image|favicon.ico|icon.svg|robots.txt|sitemap.xml).*)"],
 };

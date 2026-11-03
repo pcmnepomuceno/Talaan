@@ -34,12 +34,6 @@ describe("proxy", () => {
     expect(redirect("/design")).toBeNull();
   });
 
-  it("never redirects /api/*, with or without a cookie", () => {
-    for (const path of ["/api/v1/me", "/api/v1/login", "/api/v1/account/delete"]) {
-      expect(redirect(path)).toBeNull();
-      expect(redirect(path, "session_token=abc")).toBeNull();
-    }
-  });
 });
 
 describe("matcher", () => {
@@ -49,7 +43,15 @@ describe("matcher", () => {
     expect(runs("/login")).toBe(true);
   });
   it("skips /api, _next assets and public files", () => {
-    for (const url of ["/api/v1/me", "/_next/static/x.js", "/_next/image", "/icon.svg", "/favicon.ico"]) {
+    for (const url of [
+      "/api/v1/me",
+      "/api/v1/login",
+      "/api/v1/account/delete",
+      "/_next/static/x.js",
+      "/_next/image",
+      "/icon.svg",
+      "/favicon.ico",
+    ]) {
       expect(runs(url)).toBe(false);
     }
   });
