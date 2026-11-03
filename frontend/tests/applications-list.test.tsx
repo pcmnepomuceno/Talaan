@@ -82,6 +82,40 @@ it("de-duplicates by id when a row shifts between pages", async () => {
   expect(rowLinks()).toHaveLength(60);
 });
 
+it("a Load more page of only duplicates stops offering Load more and revalidates page 1", async () => {
+  setup(120);
+  mount();
+  await screen.findByRole("list", { name: "Applications" });
+  // Rows were inserted elsewhere: offset 50 now holds only rows this tab already shows.
+  const seen = [...fake.db.apps].reverse().slice(0, 50);
+  fake.on("GET", /offset=50/, () => json(200, { items: seen, total: 120, limit: 50, offset: 50 }));
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  fake.on("GET", /offset=0/, async () => {
+    await gate;
+    return json(200, { items: seen, total: 120, limit: 50, offset: 0 });
+  });
+  await userEvent.click(screen.getByRole("button", { name: "Load more" }));
+  await waitFor(() => expect(fake.callsTo("GET", /offset=0/)).toHaveLength(2)); // page 1 again
+  expect(screen.queryByRole("button", { name: "Load more" })).toBeNull(); // no dead button meanwhile
+  expect(rowLinks()).toHaveLength(50);
+  release();
+  // Fresh page 1: Load more is back and asks for the real next page.
+  await userEvent.click(await screen.findByRole("button", { name: "Load more" }));
+  await waitFor(() => expect(rowLinks()).toHaveLength(100));
+});
+
+it("the next offset counts the rows the server sent, not the rows left after de-duplication", async () => {
+  setup(60);
+  mount();
+  await screen.findByRole("list", { name: "Applications" });
+  fake.db.apps.push(makeApp(61)); // page 2 now starts with a row already shown
+  await userEvent.click(screen.getByRole("button", { name: "Load more" }));
+  await waitFor(() => expect(rowLinks()).toHaveLength(60));
+  // offset 50 + 11 rows sent = 61 = total: nothing left to load, so no button that would loop
+  expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+});
+
 it("a Load more failure keeps the loaded rows and offers a retry that works", async () => {
   setup(80);
   mount();

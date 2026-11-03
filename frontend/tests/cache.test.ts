@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { cacheVersion, clearCaches, getDetail, getList, onCachesCleared, setDetail, setList } from "../src/lib/cache";
 import { deleteAccount, login, logout } from "../src/lib/auth";
 
-const entry = { items: [], total: 0 };
+const entry = { items: [], total: 0, nextOffset: 0 };
 beforeEach(() => {
   clearCaches();
   vi.stubGlobal("location", { pathname: "/account", search: "", replace: vi.fn() });

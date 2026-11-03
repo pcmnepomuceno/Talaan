@@ -90,7 +90,7 @@ it("deleteApplication: DELETE, and 404 counts as success", async () => {
 });
 
 it("writes clear the caches; a failed write does not", async () => {
-  const entry = { items: [], total: 0 };
+  const entry = { items: [], total: 0, nextOffset: 0 };
   setList(undefined, entry);
   fake.failNext("DELETE", /^\/applications\/2$/, 500);
   await deleteApplication(2).catch(() => {});
@@ -107,7 +107,7 @@ it("writes clear the caches; a failed write does not", async () => {
 });
 
 it("a write the server accepted clears the caches even when the response does not map", async () => {
-  const entry = { items: [], total: 0 };
+  const entry = { items: [], total: 0, nextOffset: 0 };
   const initial = toApplicationInput(makeApp(1));
   fake.on("POST", /^\/applications$/, () => json(201, { ...makeApp(77), status: "hired" }));
   setList(undefined, entry);

@@ -210,7 +210,7 @@ it.each([
 
 it("a create the server accepted but the client cannot map still lands on the saved record, with no retry offered", async () => {
   fake.on("POST", /^\/applications$/, () => json(201, { ...fake.db.apps[0], id: 88, status: "hired" }));
-  setList(undefined, { items: [], total: 0 });
+  setList(undefined, { items: [], total: 0, nextOffset: 0 });
   mountNew("?status=saved");
   await fillMinimum();
   await userEvent.click(save());

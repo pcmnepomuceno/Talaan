@@ -159,7 +159,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
                     />
                   ))}
                 </LedgerSheet>
-                {view.items.length < view.total && (
+                {view.nextOffset < view.total && (
                   <div className="mt-3 flex flex-col items-center gap-3">
                     {view.more === "failed" ? (
                       <LoadError title="Couldn't load more applications." onRetry={loadMore} />

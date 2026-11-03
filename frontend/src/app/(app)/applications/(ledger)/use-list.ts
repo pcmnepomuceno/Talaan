@@ -8,7 +8,9 @@ import type { Application, Status } from "@/lib/types";
 // One status tab = one cached list, fetched 50 at a time from the server (the API pages and
 // filters). Cached rows show at once while page 1 is refetched; the fresh page 1 then REPLACES the
 // entry, dropping any extra pages the user had loaded, because their offsets may have shifted.
-// Any write (clearCaches) empties the cache and refetches the current tab.
+// Any write (clearCaches) empties the cache and refetches the current tab. Load more asks for
+// nextOffset (rows the server has sent), not items.length (rows left after de-duplication); a
+// page that adds no new row means the offsets shifted, so Load more is withdrawn and page 1 refetched.
 export type ListView =
   | { kind: "loading" }
   | { kind: "failed" }
@@ -16,12 +18,13 @@ export type ListView =
       kind: "ready";
       items: Application[];
       total: number;
+      nextOffset: number;
       refreshing: boolean; // showing cached rows while page 1 is refetched
       refreshFailed: boolean; // showing cached rows, the background refetch failed
       more: "idle" | "loading" | "failed";
     };
 
-type Fetched = { key: string; items: Application[]; total: number; failed: boolean; refreshFailed: boolean; more: "idle" | "loading" | "failed" };
+type Fetched = { key: string; items: Application[]; total: number; nextOffset: number; failed: boolean; refreshFailed: boolean; more: "idle" | "loading" | "failed" };
 
 /** Adds `incoming` rows whose id is not already present, in order. */
 export function appendUnique(existing: Application[], incoming: Application[]): Application[] {
@@ -68,11 +71,21 @@ export function useApplicationList(status: Status | undefined) {
       (page) => {
         // Only a live request may write the cache: a write or tab switch since then makes it stale.
         if (!live) return;
-        setList(status, page);
-        setFetched({ key, ...page, failed: false, refreshFailed: false, more: "idle" });
+        const entry = { ...page, nextOffset: page.items.length };
+        setList(status, entry);
+        setFetched({ key, ...entry, failed: false, refreshFailed: false, more: "idle" });
       },
       () => {
-        if (live) setFetched({ key, items: cached?.items ?? [], total: cached?.total ?? 0, failed: !cached, refreshFailed: !!cached, more: "idle" });
+        if (live)
+          setFetched({
+            key,
+            items: cached?.items ?? [],
+            total: cached?.total ?? 0,
+            nextOffset: cached?.nextOffset ?? 0,
+            failed: !cached,
+            refreshFailed: !!cached,
+            more: "idle",
+          });
       },
     );
     return () => {
@@ -93,16 +106,22 @@ export function useApplicationList(status: Status | undefined) {
     setAnnouncement("");
     setFetched((f) => (f && f.key === at ? { ...f, more: "loading" } : f));
     try {
-      const page = await getApplications(status, cur.items.length);
+      const page = await getApplications(status, cur.nextOffset);
       if (keyRef.current !== at) return;
       const items = appendUnique(cur.items, page.items);
       const added = items.length - cur.items.length;
-      setList(status, { items, total: page.total });
-      setFetched((f) => (f && f.key === at ? { ...f, items, total: page.total, more: "idle" } : f));
-      if (added > 0) {
-        setAnnouncement(`${added} more ${added === 1 ? "application" : "applications"} loaded`);
-        setFocusId(items[cur.items.length].id);
+      if (added === 0) {
+        // Nothing new: the offsets shifted under us. Stop offering Load more (nextOffset = total)
+        // and refetch page 1, which replaces this entry with a fresh start.
+        setList(status, { items, total: page.total, nextOffset: page.total });
+        setTick((n) => n + 1);
+        return;
       }
+      const nextOffset = cur.nextOffset + page.items.length;
+      setList(status, { items, total: page.total, nextOffset });
+      setFetched((f) => (f && f.key === at ? { ...f, items, total: page.total, nextOffset, more: "idle" } : f));
+      setAnnouncement(`${added} more ${added === 1 ? "application" : "applications"} loaded`);
+      setFocusId(items[cur.items.length].id);
     } catch {
       if (keyRef.current === at) setFetched((f) => (f && f.key === at ? { ...f, more: "failed" } : f));
     } finally {
@@ -114,7 +133,7 @@ export function useApplicationList(status: Status | undefined) {
   if (fetched?.key === key) {
     view = fetched.failed
       ? { kind: "failed" }
-      : { kind: "ready", items: fetched.items, total: fetched.total, refreshing: false, refreshFailed: fetched.refreshFailed, more: fetched.more };
+      : { kind: "ready", items: fetched.items, total: fetched.total, nextOffset: fetched.nextOffset, refreshing: false, refreshFailed: fetched.refreshFailed, more: fetched.more };
   } else {
     const cached = getList(status);
     view = cached ? { kind: "ready", ...cached, refreshing: true, refreshFailed: false, more: "idle" } : { kind: "loading" };

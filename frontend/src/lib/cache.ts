@@ -4,7 +4,9 @@
 // it on login, logout and account deletion so one user's rows are never visible to the next.
 import type { Application, Interview } from "./types";
 
-export type ListEntry = { items: Application[]; total: number };
+// nextOffset = the server offset of the next page: offset + rows the server sent, which can be more
+// than items.length when de-duplication dropped rows. Load more is offered while it is below total.
+export type ListEntry = { items: Application[]; total: number; nextOffset: number };
 export type DetailEntry = { application: Application; interviews: { items: Interview[]; total: number } | null };
 
 const lists = new Map<string, ListEntry>();
