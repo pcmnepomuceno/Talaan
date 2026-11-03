@@ -263,3 +263,14 @@
 - **Rationale:** a stored hash keeps the cost it was made with, but the login dummy hash for unknown emails is built at startup with the current `BCRYPT_ROUNDS`. If the cost changes, unknown emails and real accounts take different times to verify (one step up roughly doubles the time), so response time again reveals which emails are registered: the gap the constant-work login closed.
 - **Possible future change:** rehash on successful login. Read the cost from the stored hash prefix (`$2b$12$`), and when it differs from `BCRYPT_ROUNDS`, store a new hash of the password just verified. Even then, accounts that never log in keep the old cost, so a cost change still needs a plan for them.
 - **Alternative:** build rehash-on-login now. Not worth it yet: before launch every hash already has cost 12.
+
+---
+
+# Decision: Rate limits are exact per key (advisory lock)
+
+- **Date:** 2026-11-03
+- **Decision:** This replaces the accepted trade-off in "Auth rate limiting in Postgres" that concurrent requests may overshoot a limit. `rate_limit.enforce()` takes `pg_advisory_xact_lock(hashtext(key))` for each key, then prunes, counts and either inserts the attempt or returns the 429 wait, all in one transaction. Concurrent callers on the same key wait for each other, so a burst lets exactly `limit` attempts through. Login locks its two keys (IP, email) in sorted order, so two logins cannot deadlock.
+- **Why:** manual testing sent 20 parallel logins for a fresh email and got 16x 401 instead of 5. Every request passed the count before any insert was committed, so even the per-IP limit of 10 was exceeded.
+- **Lock scope:** transaction-scoped, released by the commit that happens before bcrypt runs, so slow password checks never hold it. A rollback (fail-closed 503) also releases it. Because nothing outlives the transaction, this works with Neon's pooled (PgBouncer, transaction mode) connections. A session-level `pg_advisory_lock` would not: the pooler can give the next transaction a different server connection.
+- **Cost:** requests on the same key are serialized for the length of a short transaction (a few milliseconds). A `hashtext` collision makes two unrelated keys share a lock, which only adds waiting.
+- **Alternative:** `SERIALIZABLE` isolation with retries (more code, retries on every conflict), or a per-key counter row updated with `SELECT ... FOR UPDATE` (needs an upsert first, and a different table shape).
