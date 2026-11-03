@@ -9,7 +9,7 @@ from app import config
 from app.auth import rate_limit
 from app.auth.models import RateLimitEvent
 from app.auth.models import Session as SessionModel
-from tests.conftest import USER_EMAIL, USER_PASSWORD
+from tests.conftest import USER_EMAIL, USER_PASSWORD, create_invite
 
 BAD = "Wr0ng!pass"
 
@@ -19,9 +19,14 @@ def login(client, email=USER_EMAIL, password=BAD, xff=None):
     return client.post("/api/v1/login", json={"email": email, "password": password}, headers=headers)
 
 
-def signup(client, i, xff=None):
+def signup(client, db, i, xff=None):
     headers = {"X-Forwarded-For": xff} if xff else {}
-    body = {"email": f"new{i}@example.com", "password": "Str0ng!pass", "account_name": "N"}
+    body = {
+        "email": f"new{i}@example.com",
+        "password": "Str0ng!pass",
+        "account_name": "N",
+        "invite_code": create_invite(db),
+    }
     return client.post("/api/v1/signup", json=body, headers=headers)
 
 
@@ -128,22 +133,22 @@ def test_rightmost_xff_is_the_key_when_trusted(client, monkeypatch, trust_proxy)
     assert login(client, "c@example.com", xff="2.2.2.2, 4.4.4.4").status_code == 401
 
 
-def test_signup_ip_limit_hits_on_attempt_6(client):
+def test_signup_ip_limit_hits_on_attempt_6(client, db):
     for i in range(5):
-        assert signup(client, i).status_code == 200
-    assert signup(client, 99).status_code == 429
+        assert signup(client, db, i).status_code == 200
+    assert signup(client, db, 99).status_code == 429
 
 
-def test_signup_and_login_limits_are_separate_buckets(client):
+def test_signup_and_login_limits_are_separate_buckets(client, db):
     for i in range(10):
         login(client, f"u{i}@example.com")
-    assert signup(client, 1).status_code == 200
+    assert signup(client, db, 1).status_code == 200
 
 
 def test_table_never_holds_a_raw_email(client, db, user):
     login(client, "  MiXed@Example.COM ")
     login(client, USER_EMAIL, password=USER_PASSWORD)
-    signup(client, 1)
+    signup(client, db, 1)
     keys = [e.key for e in db.query(RateLimitEvent)]
     assert keys
     assert all("@" not in k and "example" not in k.lower() for k in keys)
@@ -163,7 +168,7 @@ def test_limiter_db_error_fails_closed_with_503(client, db, user, monkeypatch):
     assert r.status_code == 503
     assert db.query(SessionModel).count() == 0
     assert "session_token" not in r.headers.get("set-cookie", "")
-    assert signup(client, 1).status_code == 503
+    assert signup(client, db, 1).status_code == 503
 
 
 def test_ip_and_email_attempts_are_committed_before_bcrypt_runs(client, db, user, monkeypatch):

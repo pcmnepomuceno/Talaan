@@ -11,6 +11,9 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     account_name: str
+    # Required. No max_length here on purpose: pydantic would answer an over-length code with
+    # a 422, which differs from the generic 400 every other bad code gets. The route bounds it.
+    invite_code: str
 
     @field_validator("email", mode="before")
     @classmethod

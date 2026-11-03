@@ -20,7 +20,7 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
 from app import config
-from app.auth import rate_limit
+from app.auth import invites, rate_limit
 from app.auth.models import Session as SessionModel
 from app.auth.security import (
     DUMMY_PASSWORD_HASH,
@@ -43,6 +43,15 @@ def signup(user_data: UserCreate, request: Request, db: Session = Depends(get_db
     ip_key = "signup:ip:" + rate_limit.client_ip(request)
     rate_limit.enforce(db, (ip_key, config.SIGNUP_IP_LIMIT, config.SIGNUP_IP_WINDOW_SECONDS))
 
+    # Invite code before the duplicate-email check: only code holders can learn whether an
+    # email exists. Non-consuming here; the code is consumed below with the user insert.
+    body = invites.normalize(user_data.invite_code)
+    if body is None:
+        raise invites.invalid()
+    code_hash = invites.hash_code(body)
+    if not invites.is_valid(db, code_hash):
+        raise invites.invalid()
+
     normalized_email = user_data.email  # stripped and lowercased by the schema validator
 
     #Check if email already exists
@@ -53,13 +62,18 @@ def signup(user_data: UserCreate, request: Request, db: Session = Depends(get_db
     # Hash the password
     hashed_password = hash_password(user_data.password)
 
-    # Create a new user
+    # One transaction: create the user, then consume the code. If another signup took the
+    # code in between, consume() matches no row: roll the user back, same generic error.
     user = UserModel(
         email=normalized_email,
         password_hash=hashed_password,
         account_name=user_data.account_name
     )
     db.add(user)
+    db.flush()
+    if not invites.consume(db, code_hash, user.id):
+        db.rollback()
+        raise invites.invalid()
     db.commit()
     db.refresh(user)
 
