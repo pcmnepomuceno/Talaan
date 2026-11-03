@@ -45,3 +45,15 @@ it("gives each instance its own radio group name", () => {
   const names = screen.getAllByRole<HTMLInputElement>("radio").map((r) => r.name);
   expect(new Set(names).size).toBe(2);
 });
+
+it("value null: no radio is checked, required and error wire up as a radiogroup", () => {
+  render(
+    <SegmentedControl label="Work mode" options={modes} value={null} onChange={() => {}} required error="Choose a work mode." />,
+  );
+  expect(screen.getAllByRole("radio").every((r) => !(r as HTMLInputElement).checked)).toBe(true);
+  const group = screen.getByRole("radiogroup", { name: /Work mode/ });
+  expect(group.getAttribute("aria-required")).toBe("true");
+  expect(group.getAttribute("aria-invalid")).toBe("true");
+  expect(group.getAttribute("aria-describedby")).toBe(screen.getByText("Choose a work mode.").closest("p")!.id);
+  expect(screen.getByText("Required")).toBeTruthy();
+});
