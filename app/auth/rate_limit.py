@@ -12,7 +12,6 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, Request
-from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -78,12 +77,14 @@ def check(db: Session, key: str, limit: int, window_seconds: int) -> int | None:
     db.query(RateLimitEvent).filter(
         RateLimitEvent.key == key, RateLimitEvent.created_at <= now - window
     ).delete(synchronize_session=False)
-    count, oldest = db.query(func.count(RateLimitEvent.id), func.min(RateLimitEvent.created_at)).filter(
-        RateLimitEvent.key == key
-    ).one()
+    events = db.query(RateLimitEvent.created_at).filter(RateLimitEvent.key == key)
+    count = events.count()
     if count < limit:
         return None
-    return max(1, math.ceil((oldest + window - now).total_seconds()))
+    # A slot frees when count drops to limit - 1, i.e. when the (count - limit)-th event
+    # (0-based, oldest first) expires. Usually that is the oldest; after an overshoot it is later.
+    freeing = events.order_by(RateLimitEvent.created_at).offset(count - limit).limit(1).scalar()
+    return max(1, math.ceil((freeing + window - now).total_seconds()))
 
 
 def record(db: Session, key: str) -> None:

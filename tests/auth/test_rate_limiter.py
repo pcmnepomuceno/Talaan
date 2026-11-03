@@ -95,6 +95,21 @@ def test_window_expiry_and_prune_with_injected_clock(db, monkeypatch):
     assert db.query(RateLimitEvent).filter_by(key="k").count() == 0  # pruned in the same check
 
 
+def test_retry_after_over_the_limit_by_more_than_one_frees_a_slot(db, monkeypatch):
+    t0 = rate_limit.utcnow()
+    for i in range(5):  # 5 events at t0+0..4 against a limit of 3 (overshoot by 2)
+        monkeypatch.setattr(rate_limit, "utcnow", lambda i=i: t0 + timedelta(seconds=i))
+        rate_limit.record(db, "k")
+    now = t0 + timedelta(seconds=10)
+    monkeypatch.setattr(rate_limit, "utcnow", lambda: now)
+    wait = rate_limit.check(db, "k", 3, 60)
+    assert wait == 52  # the event at t0+2 must expire, not the oldest (t0+0 would say 50)
+    monkeypatch.setattr(rate_limit, "utcnow", lambda: now + timedelta(seconds=wait - 1))
+    assert rate_limit.check(db, "k", 3, 60) == 1
+    monkeypatch.setattr(rate_limit, "utcnow", lambda: now + timedelta(seconds=wait))
+    assert rate_limit.check(db, "k", 3, 60) is None
+
+
 def test_clear_only_touches_its_key(db):
     rate_limit.record(db, "a")
     rate_limit.record(db, "b")
