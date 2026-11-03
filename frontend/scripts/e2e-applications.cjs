@@ -176,12 +176,35 @@ withEnv(async ({ base, createInvite }) => {
   // 11. delete -> empty again
   await page.goto(`${base}/applications/${id}?status=offered`);
   await page.getByRole("heading", { name: "Frontend Engineer 🚀" }).first().waitFor();
+  await page.setViewportSize({ width: 1280, height: 900 }); // two panes: the detail stays mounted
   await page.getByRole("button", { name: "Delete" }).first().click();
+  await page.getByRole("dialog").getByRole("button", { name: "Delete application" }).waitFor();
+  // Watch the whole DOM from before the confirm click: "Application not found" must never appear.
+  await page.evaluate(() => {
+    window.__notFoundSeen = false;
+    const look = () => {
+      if (document.body.textContent.includes("Application not found")) window.__notFoundSeen = true;
+    };
+    window.__notFoundObserver = new MutationObserver(look);
+    window.__notFoundObserver.observe(document.body, { subtree: true, childList: true, characterData: true });
+    look();
+  });
+  const detailGets = [];
+  const onReq = (r) => r.method() === "GET" && new RegExp(`/api/v1/applications/${id}(/|$|\\?)`).test(r.url()) && detailGets.push(r.url());
+  page.on("request", onReq);
   await page.getByRole("button", { name: "Delete application" }).click();
   await urlIs(/\/applications\?status=offered$/);
-  check("delete returns to the list keeping ?status=", pathOf(page.url()) === "/applications?status=offered");
   check("toast 'Application deleted.'", (await toastText()).some((t) => t.includes("Application deleted.")));
   await page.getByText("No applications with this status.").waitFor();
+  await page.waitForTimeout(1000); // a late refetch would land by now
+  const notFoundSeen = await page.evaluate(() => {
+    window.__notFoundObserver.disconnect();
+    return window.__notFoundSeen;
+  });
+  page.off("request", onReq);
+  check("1280px delete: 'Application not found' never appeared in the DOM", !notFoundSeen);
+  check("1280px delete: the deleted id was not fetched again", detailGets.length === 0, JSON.stringify(detailGets));
+  check("delete returns to the list keeping ?status=", pathOf(page.url()) === "/applications?status=offered");
   await page.getByRole("button", { name: "All", exact: true }).click();
   await page.getByText("No applications yet.").waitFor();
   check("after delete the empty state is back", true);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getApplication, getInterviews, parseId } from "@/lib/api";
 import { cacheVersion, dropDetail, getDetail, onCachesCleared, setDetail } from "@/lib/cache";
 import { ApiError } from "@/lib/http";
@@ -19,6 +19,7 @@ export type InterviewsState =
 export type DetailState =
   | { kind: "loading" }
   | { kind: "missing" }
+  | { kind: "removed" } // deleted here: render nothing until the route changes
   | { kind: "error"; retry: () => void }
   | { kind: "ready"; application: Application; refreshing: boolean; interviews: InterviewsState };
 
@@ -30,6 +31,11 @@ export function useApplicationDetail(id: string | undefined) {
   const [ivRes, setIvRes] = useState<IvRes | null>(null);
   const [appTry, setAppTry] = useState(0);
   const [ivTry, setIvTry] = useState(0);
+  // A delete from this screen: `removing` (a ref, read synchronously by the clearCaches listener)
+  // is set before the request, so the clear it triggers does not refetch; `removed` is set on
+  // success, so this id is never fetched or rendered again ("Application not found." included).
+  const removing = useRef(false);
+  const [removed, setRemoved] = useState<number | null>(null);
 
   // New id (or none): drop the results of the previous one during render, so old content can never
   // show for a moment under a different id.
@@ -38,6 +44,7 @@ export function useApplicationDetail(id: string | undefined) {
     setSeen(id);
     setAppRes(null);
     setIvRes(null);
+    setRemoved(null); // Back to a deleted id is a fresh visit: fetch it (and show not-found)
   }
 
   const n = id === undefined ? null : parseId(id);
@@ -45,7 +52,11 @@ export function useApplicationDetail(id: string | undefined) {
   // A response whose request started before a clearCaches() (a write, login, logout) is stale: it
   // is neither applied nor cached. `live` alone misses one that lands before React re-renders.
   useEffect(() => {
-    if (n === null) return;
+    removing.current = false;
+  }, [n]);
+
+  useEffect(() => {
+    if (n === null || n === removed) return;
     let live = true;
     const v = cacheVersion();
     const current = () => live && cacheVersion() === v;
@@ -59,10 +70,10 @@ export function useApplicationDetail(id: string | undefined) {
     return () => {
       live = false;
     };
-  }, [n, appTry]);
+  }, [n, appTry, removed]);
 
   useEffect(() => {
-    if (n === null) return;
+    if (n === null || n === removed) return;
     let live = true;
     const v = cacheVersion();
     const current = () => live && cacheVersion() === v;
@@ -77,7 +88,7 @@ export function useApplicationDetail(id: string | undefined) {
     return () => {
       live = false;
     };
-  }, [n, ivTry]);
+  }, [n, ivTry, removed]);
 
   // Cache only a fully fresh detail (both requests landed).
   useEffect(() => {
@@ -99,13 +110,19 @@ export function useApplicationDetail(id: string | undefined) {
   useEffect(
     () =>
       onCachesCleared(() => {
+        if (removing.current) return; // our own delete: this id must not be fetched again
         retryApp();
         retryInterviews();
       }),
     [retryApp, retryInterviews],
   );
-  /** After a delete: back to this id must refetch, never show the deleted content. */
-  const reset = useCallback(() => {
+  /** Call before the DELETE request, with false again if it fails. */
+  const setRemoving = useCallback((on: boolean) => {
+    removing.current = on;
+  }, []);
+  /** After a successful DELETE of `id`: never fetch or show it again on this visit. */
+  const markRemoved = useCallback((id: number) => {
+    setRemoved(id);
     setAppRes(null);
     setIvRes(null);
   }, []);
@@ -113,6 +130,7 @@ export function useApplicationDetail(id: string | undefined) {
   let state: DetailState;
   if (id === undefined) state = { kind: "loading" };
   else if (n === null) state = { kind: "missing" };
+  else if (n === removed) state = { kind: "removed" };
   else if (appRes === "error") state = { kind: "error", retry: retryApp };
   else if (ivRes === "gone" || (appRes && appRes.a === null)) state = { kind: "missing" };
   else {
@@ -131,5 +149,5 @@ export function useApplicationDetail(id: string | undefined) {
       state = { kind: "ready", application, refreshing: fresh === null, interviews };
     }
   }
-  return { state, reset };
+  return { state, setRemoving, markRemoved };
 }

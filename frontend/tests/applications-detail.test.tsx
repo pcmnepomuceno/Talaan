@@ -151,6 +151,39 @@ it("delete: 404 from the API counts as already gone, same toast, back to the lis
   expect(screen.getByText("Application deleted.")).toBeTruthy();
 });
 
+it("delete success: the open detail never refetches the deleted id and never says not found", async () => {
+  mount();
+  await screen.findByRole("list", { name: "Interviews" });
+  const before = fake.callsTo("GET", /^\/applications\/1/).length;
+  const seen: string[] = [];
+  const obs = new MutationObserver(() => {
+    if (document.body.textContent?.includes("Application not found")) seen.push("not found");
+  });
+  obs.observe(document.body, { subtree: true, childList: true, characterData: true });
+  await userEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
+  await userEvent.click(await screen.findByRole("button", { name: "Delete application" }));
+  await waitFor(() => expect(replace).toHaveBeenCalledWith("/applications"));
+  // replace is mocked, so the route stays on /applications/1: the worst case for a stray refetch.
+  await new Promise((r) => setTimeout(r, 50));
+  obs.disconnect();
+  expect(seen).toEqual([]);
+  expect(screen.queryByText("Application not found.")).toBeNull();
+  expect(screen.queryByRole("heading", { name: "Frontend Engineer" })).toBeNull();
+  expect(fake.callsTo("GET", /^\/applications\/1/)).toHaveLength(before);
+});
+
+it("delete failure: a later cache clear still refetches the open detail", async () => {
+  mount();
+  await screen.findByRole("list", { name: "Interviews" });
+  fake.failNext("DELETE", /^\/applications\/1$/);
+  await userEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
+  await userEvent.click(await screen.findByRole("button", { name: "Delete application" }));
+  await screen.findByText("Couldn't delete the application. Try again.");
+  const before = fake.callsTo("GET", /^\/applications\/1$/).length;
+  act(() => clearCaches());
+  await waitFor(() => expect(fake.callsTo("GET", /^\/applications\/1$/)).toHaveLength(before + 1));
+});
+
 it("delete: a server failure keeps the dialog open and the application", async () => {
   mount();
   await screen.findByRole("list", { name: "Interviews" });

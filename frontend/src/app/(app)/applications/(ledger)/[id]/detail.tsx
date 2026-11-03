@@ -15,6 +15,7 @@ export function ApplicationDetail() {
   const state = useDetail();
   const status = parseStatus(useSearchParams().get("status"));
   // The screen's persistent live region announces "Loading application"; the skeleton is visual only.
+  if (state.kind === "removed") return null;
   if (state.kind === "loading") return <LedgerSkeleton rows={2} silent />;
   if (state.kind === "error") return <LoadError title="Couldn't load this application." onRetry={state.retry} />;
   if (state.kind === "missing") return <NotFoundState qs={status ? `?status=${status}` : ""} />;

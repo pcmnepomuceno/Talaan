@@ -51,7 +51,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
   }, [focusId, qs, clearFocus]);
 
   const hasDetail = id !== undefined;
-  const { state, reset } = useApplicationDetail(id);
+  const { state, setRemoving, markRemoved } = useApplicationDetail(id);
   // Opening another detail makes "N more applications loaded" old news: never fall back to it.
   useEffect(() => clearAnnouncement(), [id, clearAnnouncement]);
   const ready = state.kind === "ready" ? state.application : null;
@@ -65,16 +65,20 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
   async function confirmDelete() {
     if (!ready) return;
     setBusy(true);
+    setRemoving(true); // the cache clear inside deleteApplication must not refetch this id
     try {
       await deleteApplication(ready.id);
     } catch {
+      setRemoving(false);
       // Dialog stays open and dismissable (busy is cleared below) so the user can retry or cancel.
       toast.error("Couldn't delete the application. Try again.");
       return;
     } finally {
       setBusy(false);
     }
-    reset(); // Back to the deleted id must refetch (loading, then not found), never show old content.
+    // In the same tick as the clear: the open detail (two panes from 1280) never fetches or shows the
+    // deleted id again, so no "Application not found." flash. Back to it later is a fresh visit.
+    markRemoved(ready.id);
     setConfirming(false);
     toast.success("Application deleted.");
     // replace, not push: Back would otherwise land on the id that no longer exists.
