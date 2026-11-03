@@ -15,6 +15,7 @@ the **Current milestone** in `docs/ROADMAP.md`. Other docs: `docs/PROJECT_BRIEF.
 - Password hashing: `bcrypt` directly (`passlib` dropped: unmaintained, broken on bcrypt 5.x)
 - Docker: `docker compose up -d` (db + api on :8000), then `docker compose run --rm api python -m alembic upgrade head` (never auto-run).
   The `api` service reads `.env` via `env_file` (`required: false`); its own `DATABASE_URL` wins. Inside Compose every host request comes from the bridge gateway IP, so all local clients share one rate-limit bucket: raise the `LOGIN_*`/`SIGNUP_*` limits in `.env` for local work.
+- Invites (admin CLI, uses `DATABASE_URL`): `python -m app.admin create-invite [--note TEXT] [--expires-in 14d]` (prints the code once), `list-invites`, `revoke-invite ID` (unused only). In Docker: `docker compose run --rm api python -m app.admin ...`.
 - Run: `cp .env.example .env`, `docker compose up -d db`, `pip install -r requirements-dev.txt`,
   `alembic upgrade head`, `uvicorn app.main:app --reload --no-proxy-headers`
   (`--no-proxy-headers` keeps uvicorn from rewriting the client address from `X-Forwarded-For`;
@@ -34,6 +35,9 @@ FKs live on the "many" side only (query `created_by`, never store lists on Users
 **Sessions** (matches model): id, token_hash (UNIQUE, SHA-256 hex of the `session_token`
 HttpOnly cookie value; raw token never stored), user_id → Users.id, created_at, expires_at
 (both `DateTime(timezone=True)`)
+
+**InviteCodes** (matches model): id, code_hash (UNIQUE, SHA-256 hex of the normalized 12-char code; plaintext never stored),
+note?, created_at, expires_at, used_at?, used_by_user_id? → Users.id (`ON DELETE SET NULL`)
 
 **Job Applications** (matches model)
 id, company, job_name, contact_website?, contact_email?, status (ENUM),
@@ -56,6 +60,7 @@ ENUM value lists and column choices are logged in DECISIONS.md (2026-10-20).
 
 ## Auth design decisions
 - **`BCRYPT_ROUNDS`** (`app/config.py`, default 12): cost for `hash_password` (read at call time) and for the login dummy hash (built once at startup), so they always match. `tests/conftest.py` sets 4; never lower it outside tests. **Must stay fixed after launch**: old hashes keep their cost, so a change reintroduces a timing gap between known and unknown emails (rehash-on-login is a possible future change; DECISIONS.md 2026-11-03).
+- **Invite codes** (`app/auth/invites.py`, `app/admin.py`): signup requires `invite_code`. Format `TLN-XXXX-XXXX-XXXX` (12 Crockford base32 chars, 60 bits); input is normalized (strip, uppercase, drop dashes/whitespace/`TLN`) then SHA-256 hashed. Single use, with expiry. Signup order: rate limit, non-consuming code check, duplicate email, then one transaction: insert user + atomic `UPDATE ... RETURNING` to consume (no row: roll back, same error). Every bad-code case is `400 {"detail": "Invalid or expired invite code."}`. No bypass flag, no admin endpoint; tests make codes with `create_invite` in `tests/conftest.py`. Never log or return a plaintext code except the one-time CLI print. DECISIONS.md 2026-11-03.
 - **Rate limits** (`app/auth/rate_limit.py`, Postgres): login per IP and per email, signup per IP; limits from env (`.env.example`). Client IP is the socket peer; `TRUST_PROXY=true` uses the right-most `X-Forwarded-For`. `TRUST_PROXY` is the only trust switch (run uvicorn with `--no-proxy-headers`). Limiter DB error returns 503.
 - **Sessions over JWT**: instant revocation (delete the row); no horizontal-scaling need.
 - **Session lifetime 30 days**: `SESSION_LIFETIME` in `app/routes/auth.py`, used
@@ -101,7 +106,8 @@ Decision changes get a new dated entry in DECISIONS.md (append; never rewrite ol
 Domain packages (`app/`). Applications and interviews have CRUD. A middleware in `main.py` sets `Cache-Control: no-store` on every `/api/v1` response.
 
     app/main.py, config.py, database.py, health.py
-    app/auth/          router, schemas, models [Session, RateLimitEvent], dependencies, security, rate_limit
+    app/auth/          router, schemas, models [Session, RateLimitEvent, InviteCode], dependencies, security, rate_limit, invites
+    app/admin.py       CLI: python -m app.admin {create-invite,list-invites,revoke-invite}
     app/users/         router, schemas, models
     app/applications/  models, schemas, router, dependencies (service planned)
     app/interviews/    models, schemas, router, dependencies (service planned)
@@ -120,6 +126,7 @@ Routers mount under `/api/v1` (`/api/v1/signup`, `/login`, `/logout`, `/me`).
 - [x] Login 401, no token in login body, idempotent logout 204
 - [x] Auth + health tests (pytest + httpx; 23 tests, `_test` database)
 - [x] M8: login/signup rate limiting in Postgres (`rate_limit_events`; per IP and per email; 429 + `Retry-After`; 503 fail closed), constant-work login (dummy hash), 72-byte login guard; tests: see CI. See DECISIONS.md 2026-11-03
+- [x] M9: invite-code signup (`invite_codes` table, hashed single-use codes with expiry, `python -m app.admin` CLI, atomic consume; see DECISIONS.md 2026-11-03)
 - [ ] Manually exercise the app end-to-end (`/docs`, curl cookie jar, psql)
 - [x] Domain layout move; routers under `/api/v1`
 - [x] Applications CRUD (ownership 404, pagination, status filter, `saved` migration; 64 tests)
@@ -152,7 +159,7 @@ Next.js (App Router, TypeScript, Tailwind v4, npm) in `frontend/`; deploys to Ve
 - PATCH has no optimistic concurrency (no ETag/version): concurrent edits are last-write-wins
 - No-store middleware matches the prefix `/api/v1`, so a future `/api/v10` would match too; use `/api/v1/`
 - Cookie `samesite="lax"` and `secure=True` in production (via config)
-- Signup reveals whether an email exists ("Email already exists"); decide whether to accept or change
+- Signup reveals whether an email exists ("Email already exists"), but only to holders of a valid invite code (M9); email verification is the full fix
 - `sessions.user_id` FK: add `ON DELETE CASCADE` and an index (new migration)
 - Stale stub docstrings in `app/` reference the old learning-mode rules and passlib; clean up.
 - Google OAuth signup: needs nullable `password_hash` + `auth_provider`/`google_id`

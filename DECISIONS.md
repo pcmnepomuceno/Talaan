@@ -296,3 +296,20 @@
 - **Why:** sorting by key string does not order the locks themselves. If two keys collide on one id, two callers can take the same ids in opposite orders (A locks [a, b] = ids [5, 1], B locks [c, d] = ids [1, 5]) and deadlock. Postgres aborts one, `fail_closed` turns that into a 503, and a valid login fails. Sorting by id gives every caller the same order for shared locks, so no wait cycle can form. `hashtext` is 32-bit, so collisions were plausible at scale; 64 bits makes them far rarer, and the ordering makes them harmless anyway (extra waiting only).
 - **Test:** a burst with a mocked id function that forces the collision above. With key-string order it fails with 503s (deadlock), three runs out of three; with id order it passes.
 - **Alternative:** one combined lock per call (hash of all keys). Unrelated calls that share one key would then not serialize on it, which breaks exactness.
+
+---
+
+# Decision: Invite-code signup (hashed, single-use, CLI-managed)
+
+- **Date:** 2026-11-03
+- **Decision:** `POST /signup` requires an `invite_code`. Codes live in a new `invite_codes` table (`code_hash` unique, `note`, `created_at`, `expires_at`, `used_at`, `used_by_user_id`). A code is 12 Crockford base32 characters from `secrets`, shown as `TLN-XXXX-XXXX-XXXX`. Input is normalized (strip, uppercase, drop dashes and whitespace, optional `TLN`) and capped at 64 characters before hashing. Codes are created, listed and revoked with `python -m app.admin`. There is no admin HTTP endpoint and no bypass flag.
+- **Supersedes:** the v1b roadmap line "invite code via env var behind a swappable check_signup_allowed()". The roadmap text is left as written (its own rule); a table gives single use and expiry per person, which one shared env value cannot.
+- **Hashed like session tokens:** only the SHA-256 is stored, so a database read does not hand out working codes. The plaintext is printed once by `create-invite` and is never logged or returned by the API.
+- **Single use plus expiry (default 14 days, 1h to 365d):** limits how long a leaked or forwarded code is useful.
+- **CLI, not an endpoint:** an endpoint needs its own admin auth, which costs work and adds attack surface. The CLI needs only database access. Zero budget, no new dependency.
+- **Order inside signup:** rate limit (records the attempt, so bad codes count against the per-IP limit), non-consuming code check, duplicate email, then one transaction: insert the user, then `UPDATE invite_codes SET used_at, used_by_user_id WHERE code_hash=:h AND used_at IS NULL AND expires_at > :now RETURNING id`. If no row comes back the user is rolled back and the generic error returned. One code makes one user even under concurrent signups; a race test with threads fails when the `used_at IS NULL` guard is removed.
+- **Code checked before the duplicate email:** whether an email exists is now visible only to people holding a valid code (the leak noted in the rate-limit decision shrinks to code holders; email verification is still the full fix). A failed signup of any kind (duplicate email, 422, anything) leaves the code unused.
+- **One generic error:** unknown, expired, used, malformed (including I, L, O, U) and over-length codes all return `400 {"detail": "Invalid or expired invite code."}` with identical headers, so a client cannot tell them apart. `invite_code` has no schema `max_length`: pydantic would answer 422 and reveal the length rule.
+- **`used_by_user_id` is `ON DELETE SET NULL`:** deleting an account (M10) never fails on a used code, and the code stays used.
+- **Accepted trade-off:** codes have 60 bits of entropy and are stored as plain SHA-256 (no salt, no slow hash). Someone holding a leaked database could in theory brute-force unused, unexpired codes offline, at very high cost. Expiry and single use bound the damage, so 12 characters is accepted.
+- **Alternative:** a single invite code in an env var (no per-person revocation or expiry, reusable once leaked); an admin endpoint (needs admin auth); longer codes or a slow hash (worse to type, slower, and not worth it for this threat).
