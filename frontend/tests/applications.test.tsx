@@ -2,28 +2,18 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import EditPage from "../src/app/(app)/applications/[id]/edit/page";
 import ApplicationDetailPage from "../src/app/(app)/applications/(ledger)/[id]/page";
 import { ApplicationsScreen, panes } from "../src/app/(app)/applications/(ledger)/screen";
 import { ToastProvider } from "../src/components/toast";
-import * as api from "../src/lib/api";
-import { deleteApplication, resetMock } from "../src/lib/api";
+import { clearCaches } from "../src/lib/cache";
+import { type Fake, installFake } from "./helpers/fake-api";
 
 const push = vi.fn();
 const replace = vi.fn();
 let params: { id?: string } = {};
 let search = "";
-vi.mock("../src/lib/api", async (orig) => {
-  const real = await orig<typeof import("../src/lib/api")>();
-  return {
-    ...real,
-    deleteApplication: vi.fn(real.deleteApplication),
-    getApplications: vi.fn(real.getApplications),
-    getApplication: vi.fn(real.getApplication),
-    getInterviews: vi.fn(real.getInterviews),
-  };
-});
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace }),
   useParams: () => params,
@@ -31,8 +21,11 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/applications",
 }));
 
+let fake: Fake;
+afterEach(() => vi.restoreAllMocks());
 beforeEach(() => {
-  resetMock();
+  clearCaches();
+  fake = installFake();
   push.mockClear();
   replace.mockClear();
   params = {};
@@ -96,7 +89,7 @@ it("filter with no matches says so (not the empty state)", async () => {
 });
 
 it("empty state when there are no applications", async () => {
-  for (const id of [1, 2, 3, 4, 5]) await deleteApplication(id);
+  fake.db.apps = [];
   screenUnderTest();
   expect(await screen.findByText("No applications yet.")).toBeTruthy();
   expect(screen.getAllByRole("link", { name: "Add application" }).length).toBeGreaterThan(0);
@@ -150,7 +143,6 @@ it("panes: separate screens below 1280, both from 1280", () => {
 
 it("one delete = one deleteApplication call and one toast, also under StrictMode", async () => {
   params = { id: "1" };
-  vi.mocked(api.deleteApplication).mockClear();
   render(
     <StrictMode>
       <ToastProvider>
@@ -164,7 +156,7 @@ it("one delete = one deleteApplication call and one toast, also under StrictMode
   await userEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
   await userEvent.click(await screen.findByRole("button", { name: "Delete application" }));
   await waitFor(() => expect(push).toHaveBeenCalledTimes(1));
-  expect(api.deleteApplication).toHaveBeenCalledTimes(1);
+  expect(fake.callsTo("DELETE", /./)).toHaveLength(1);
   expect(screen.getAllByText("Application deleted.")).toHaveLength(1);
 });
 
@@ -173,7 +165,7 @@ it("failed delete: error toast, dialog stays open, Cancel and Escape still work"
   screenUnderTest();
   await screen.findByRole("list", { name: "Interviews" });
   const dialog = () => document.querySelector("dialog")!;
-  vi.mocked(api.deleteApplication).mockRejectedValueOnce(new Error("500"));
+  fake.failNext("DELETE", /^\/applications\/1$/);
   await userEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
   await userEvent.click(await screen.findByRole("button", { name: "Delete application" }));
   expect(await screen.findByText("Couldn't delete the application. Try again.")).toBeTruthy();
@@ -184,7 +176,7 @@ it("failed delete: error toast, dialog stays open, Cancel and Escape still work"
   await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
   expect(dialog().hasAttribute("open")).toBe(false);
   // reopen: Escape closes it too
-  vi.mocked(api.deleteApplication).mockRejectedValueOnce(new Error("500"));
+  fake.failNext("DELETE", /^\/applications\/1$/);
   await userEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
   await userEvent.click(await screen.findByRole("button", { name: "Delete application" }));
   await waitFor(() => expect(screen.getAllByText("Couldn't delete the application. Try again.")).toHaveLength(2));
@@ -193,7 +185,7 @@ it("failed delete: error toast, dialog stays open, Cancel and Escape still work"
 });
 
 it("list fetch failure: alert with Retry, no endless skeleton; Retry recovers", async () => {
-  vi.mocked(api.getApplications).mockRejectedValueOnce(new Error("500"));
+  fake.failNext("GET", /^\/applications\?/);
   screenUnderTest();
   const alert = await bannerWith("Couldn't load applications.");
   expect(screen.queryByText("Loading applications")).toBeNull();
@@ -204,7 +196,7 @@ it("list fetch failure: alert with Retry, no endless skeleton; Retry recovers", 
 
 it("detail fetch failure: alert with Retry, no endless loading; Retry recovers", async () => {
   params = { id: "1" };
-  vi.mocked(api.getApplication).mockRejectedValueOnce(new Error("500"));
+  fake.failNext("GET", /^\/applications\/1$/);
   screenUnderTest();
   const alert = await bannerWith("Couldn't load this application.");
   expect(screen.queryByText("Loading application")).toBeNull();
@@ -215,7 +207,7 @@ it("detail fetch failure: alert with Retry, no endless loading; Retry recovers",
 
 it("interviews fetch failure is an error too, not a half-loaded detail", async () => {
   params = { id: "1" };
-  vi.mocked(api.getInterviews).mockRejectedValueOnce(new Error("500"));
+  fake.failNext("GET", /interviews/);
   screenUnderTest();
   await bannerWith("Couldn't load this application.");
 });
@@ -248,12 +240,10 @@ it("detail requests the application and its interviews together", async () => {
   params = { id: "1" };
   let release!: () => void;
   const gate = new Promise<void>((r) => (release = r));
-  const real = vi.mocked(api.getApplication).getMockImplementation()!;
-  vi.mocked(api.getApplication).mockImplementationOnce(async (n) => (await gate, real(n)));
-  vi.mocked(api.getInterviews).mockClear();
+  fake.on("GET", /^\/applications\/1$/, async () => (await gate, json(200, fake.db.apps[0])));
   screenUnderTest();
-  // getApplication is still pending, yet interviews were already requested.
-  await waitFor(() => expect(api.getInterviews).toHaveBeenCalledWith(1));
+  // The application is still pending, yet interviews were already requested.
+  await waitFor(() => expect(fake.callsTo("GET", /interviews/)).toHaveLength(1));
   release();
   expect(await screen.findByRole("list", { name: "Interviews" })).toBeTruthy();
 });

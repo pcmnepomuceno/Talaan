@@ -148,10 +148,12 @@ export function DetailRows({ application: a }: { application: Application }) {
 }
 
 // DESIGN.md 6.12: the same sheet and rules, three bars per row.
-export function LedgerSkeleton({ rows = 3, label = "Loading applications" }: { rows?: number; label?: string }) {
+// `silent`: the page owns a persistent live region and announces the loading itself (a status
+// region that mounts together with its text is often not announced).
+export function LedgerSkeleton({ rows = 3, label = "Loading applications", silent = false }: { rows?: number; label?: string; silent?: boolean }) {
   return (
-    <div role="status">
-      <span className="sr-only">{label}</span>
+    <div role={silent ? undefined : "status"}>
+      {!silent && <span className="sr-only">{label}</span>}
       <ul aria-hidden className={`${sheet} ${rules}`}>
         {Array.from({ length: rows }, (_, n) => (
           <li key={n} className="flex animate-ledger-pulse flex-col gap-3 p-4 motion-reduce:animate-none">
