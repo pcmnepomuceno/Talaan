@@ -90,9 +90,11 @@ export function LoginForm({
     setAttempt((n) => n + 1);
   }
 
-  function handleError(err: unknown, m: Mode) {
-    const common = errorMessage(err);
-    if (common || !(err instanceof ApiError)) return fail({}, common ?? "Something went wrong. Try again.");
+  function handleError(error: unknown, m: Mode) {
+    const common = errorMessage(error);
+    if (common) return fail({}, common);
+    // errorMessage() is non-null for anything that is not an ApiError, so this cast is safe.
+    const err = error as ApiError;
     const known = m === "login" ? ["email", "password"] : SIGNUP_FIELDS;
     const mapped: Record<string, string> = {};
     if (err.status === 422) {
