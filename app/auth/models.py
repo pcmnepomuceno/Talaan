@@ -28,6 +28,24 @@ class Session(Base):
     expires_at = Column(DateTime(timezone=True), nullable=False)  # Timestamp of session expiration
 
 
+class InviteCode(Base):
+    """Single-use signup invite. Only the SHA-256 of the normalized code is stored.
+    `used_by_user_id` is SET NULL when that user is deleted, so account deletion never fails."""
+
+    __tablename__ = "invite_codes"
+    id = Column(Integer, primary_key=True)
+    code_hash = Column(String, unique=True, nullable=False)
+    note = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+    used_by_user_id = Column(
+        Integer,
+        ForeignKey("users.id", name="fk_invite_codes_used_by_user_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+
 class RateLimitEvent(Base):
     """One attempt for a limiter key (e.g. `login:ip:1.2.3.4`). Emails appear only as SHA-256."""
 
