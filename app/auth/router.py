@@ -41,13 +41,7 @@ SESSION_LIFETIME = timedelta(days=30)
 @router.post("/signup")
 def signup(user_data: UserCreate, request: Request, db: Session = Depends(get_db)):
     ip_key = "signup:ip:" + rate_limit.client_ip(request)
-    with rate_limit.fail_closed(db):
-        wait = rate_limit.check(db, ip_key, config.SIGNUP_IP_LIMIT, config.SIGNUP_IP_WINDOW_SECONDS)
-        if wait is None:
-            rate_limit.record(db, ip_key)
-        db.commit()  # keeps the prune, and the attempt counts even if the client disconnects
-    if wait is not None:
-        raise rate_limit.too_many(wait)
+    rate_limit.enforce(db, (ip_key, config.SIGNUP_IP_LIMIT, config.SIGNUP_IP_WINDOW_SECONDS))
 
     normalized_email = user_data.email  # stripped and lowercased by the schema validator
 
@@ -79,24 +73,14 @@ def login(
     ip_key = "login:ip:" + rate_limit.client_ip(request)
     em_key = rate_limit.email_key(normalized_email)
 
-    # Limits first. Blocked attempts are not recorded, so a lockout ends with its window.
-    # Both attempts are committed before bcrypt runs: concurrent guesses see each other
-    # (the race window is this short transaction, not a bcrypt run), and a dropped
-    # connection still counts. A success clears the email key below.
-    with rate_limit.fail_closed(db):
-        waits = [
-            rate_limit.check(db, ip_key, config.LOGIN_IP_LIMIT, config.LOGIN_IP_WINDOW_SECONDS),
-            rate_limit.check(
-                db, em_key, config.LOGIN_EMAIL_LIMIT, config.LOGIN_EMAIL_WINDOW_SECONDS
-            ),
-        ]
-        waits = [w for w in waits if w is not None]
-        if not waits:
-            rate_limit.record(db, ip_key)
-            rate_limit.record(db, em_key)
-        db.commit()
-    if waits:
-        raise rate_limit.too_many(max(waits))
+    # Limits first. Both attempts are committed before bcrypt runs: concurrent guesses see
+    # each other (the race window is this short transaction, not a bcrypt run), and a
+    # dropped connection still counts. A success clears the email key below.
+    rate_limit.enforce(
+        db,
+        (ip_key, config.LOGIN_IP_LIMIT, config.LOGIN_IP_WINDOW_SECONDS),
+        (em_key, config.LOGIN_EMAIL_LIMIT, config.LOGIN_EMAIL_WINDOW_SECONDS),
+    )
 
     # Look up the user by email
     user = db.query(UserModel).filter(UserModel.email == normalized_email).first()

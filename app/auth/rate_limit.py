@@ -96,6 +96,22 @@ def clear(db: Session, key: str) -> None:
     db.query(RateLimitEvent).filter(RateLimitEvent.key == key).delete(synchronize_session=False)
 
 
+def enforce(db: Session, *limits: tuple[str, int, int]) -> None:
+    """Check every (key, limit, window_seconds). If none is over, record one attempt per key.
+    Commits either way (keeps the prune, and the attempt counts even if the client then
+    disconnects), so call it before any slow work such as bcrypt. Over a limit: 429 with
+    the longest wait. Blocked attempts are not recorded, so a lockout ends with its window.
+    A DB error: 503."""
+    with fail_closed(db):
+        waits = [w for key, limit, window in limits if (w := check(db, key, limit, window)) is not None]
+        if not waits:
+            for key, _, _ in limits:
+                record(db, key)
+        db.commit()
+    if waits:
+        raise too_many(max(waits))
+
+
 def too_many(retry_after: int) -> HTTPException:
     """Same body for every limit, so a client cannot tell which one it hit."""
     return HTTPException(
