@@ -130,6 +130,7 @@ function DeleteAccountDialog({ email, open, onClose }: { email: string; open: bo
   const [busy, setBusy] = useState(false);
   const [passwordError, setPasswordError] = useState<string | undefined>();
   const [banner, setBanner] = useState<string | null>(null);
+  const [wrongPasswords, setWrongPasswords] = useState(0);
   const submitting = useRef(false);
   const heading = useRef<HTMLHeadingElement>(null);
   const passwordInput = useRef<HTMLInputElement>(null);
@@ -141,6 +142,12 @@ function DeleteAccountDialog({ email, open, onClose }: { email: string; open: bo
   useEffect(() => {
     if (step === 2) heading.current?.focus();
   }, [step]);
+
+  // After a wrong password, focus the field once the commit that re-enables it has run (same
+  // pattern as the login form's attempt counter; a timer has no ordering guarantee with React).
+  useEffect(() => {
+    if (wrongPasswords) passwordInput.current?.focus();
+  }, [wrongPasswords]);
 
   function close() {
     if (busy) return;
@@ -170,8 +177,7 @@ function DeleteAccountDialog({ email, open, onClose }: { email: string; open: bo
       if (wrongPassword) {
         setPasswordError("Incorrect password.");
         setPassword("");
-        // Wait for the re-enabled field to render before focusing it.
-        setTimeout(() => passwordInput.current?.focus(), 0);
+        setWrongPasswords((n) => n + 1);
       } else {
         setBanner(errorMessage(err) ?? "Something went wrong. Try again.");
       }

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AccountScreen } from "../src/app/(app)/account/account-screen";
@@ -183,6 +183,37 @@ describe("delete account dialog", () => {
     expect(dialogOpen()).toBe(true);
     expect(router.replace).not.toHaveBeenCalled();
     await waitFor(() => expect(document.activeElement).toBe(passwordBox()));
+  });
+
+  it("after a wrong password, focus lands on the field when it re-renders enabled, not on a later timer", async () => {
+    const d = deferred();
+    handlers[DELETE] = () => d.promise;
+    await openStep2();
+    await fillStep2();
+    await userEvent.click(del());
+    vi.useFakeTimers({ toFake: ["setTimeout"] }); // a timer-based focus would never run below
+    try {
+      await act(async () => d.resolve(json(403, { detail: "Incorrect password." })));
+      expect(within(dialog()).getByText("Incorrect password.")).toBeTruthy();
+      expect((passwordBox() as HTMLInputElement).disabled).toBe(false);
+      expect(document.activeElement).toBe(passwordBox());
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a second wrong password moves focus back to the field again", async () => {
+    handlers[DELETE] = () => json(403, { detail: "Incorrect password." });
+    await openStep2();
+    await fillStep2();
+    await userEvent.click(del());
+    await within(dialog()).findByText("Incorrect password.");
+    await userEvent.type(passwordBox(), "Other1!x");
+    (del() as HTMLButtonElement).focus();
+    await userEvent.click(del());
+    await waitFor(() => expect(calls(DELETE)).toHaveLength(2));
+    await within(dialog()).findByText("Incorrect password.");
+    expect(document.activeElement).toBe(passwordBox());
   });
 
   it("a 403 that is not a wrong password (Origin check) shows a banner and keeps the password", async () => {
