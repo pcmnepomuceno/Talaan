@@ -25,6 +25,8 @@ services:
     restart: unless-stopped
     # Limits, TRUST_PROXY and BCRYPT_ROUNDS come from .env (optional). `environment` wins
     # over env_file, so DATABASE_URL below (host `db`) replaces the .env one (`localhost`).
+    # COOKIE_SECURE defaults to true (production); for plain http on :8000 set
+    # COOKIE_SECURE=false in your local .env, or the browser never sends the cookie back.
     env_file:
       - path: .env
         required: false
