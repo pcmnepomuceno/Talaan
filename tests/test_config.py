@@ -59,3 +59,17 @@ def test_bcrypt_rounds_default_is_12():
 def test_hash_password_reads_rounds_at_call_time(monkeypatch):
     monkeypatch.setattr(config, "BCRYPT_ROUNDS", 5)
     assert hash_password("x").startswith("$2b$05$")
+
+
+@pytest.mark.parametrize(("value", "message"), [("3", ">= 4, got 3"), ("32", "<= 31, got 32")])
+def test_bcrypt_rounds_outside_4_to_31_fails_startup_naming_the_variable(value, message):
+    r = import_config(BCRYPT_ROUNDS=value)
+    assert r.returncode != 0
+    assert f"ValueError: BCRYPT_ROUNDS must be {message}" in r.stderr
+
+
+@pytest.mark.parametrize(("value", "warns"), [("4", True), ("11", True), ("12", False), ("31", False)])
+def test_bcrypt_rounds_below_12_warns_at_startup(value, warns):
+    r = import_config(BCRYPT_ROUNDS=value)
+    assert r.returncode == 0, r.stderr
+    assert ("BCRYPT_ROUNDS=" in r.stderr) is warns

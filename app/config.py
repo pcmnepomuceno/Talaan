@@ -4,6 +4,7 @@ Reads settings from environment variables (loaded from a local .env file if
 present). Keep real secrets in .env, never commit them — see .env.example.
 """
 
+import logging
 import os
 
 from dotenv import load_dotenv
@@ -18,7 +19,7 @@ DATABASE_URL = os.getenv(
 )
 
 
-def _int(name: str, default: int, minimum: int | None = None) -> int:
+def _int(name: str, default: int, minimum: int | None = None, maximum: int | None = None) -> int:
     raw = os.getenv(name) or default  # blank (`KEY=` in .env) means unset
     try:
         value = int(raw)
@@ -26,13 +27,22 @@ def _int(name: str, default: int, minimum: int | None = None) -> int:
         raise ValueError(f"{name} must be an integer, got {raw!r}") from None
     if minimum is not None and value < minimum:
         raise ValueError(f"{name} must be >= {minimum}, got {value}")
+    if maximum is not None and value > maximum:
+        raise ValueError(f"{name} must be <= {maximum}, got {value}")
     return value
 
 
 # bcrypt cost for new password hashes and the login dummy hash. Read at call time by
 # hash_password; the dummy hash is built once at startup with the same value.
 DEFAULT_BCRYPT_ROUNDS = 12
-BCRYPT_ROUNDS = _int("BCRYPT_ROUNDS", DEFAULT_BCRYPT_ROUNDS)
+# 4..31 is bcrypt's own range; below the default is only for tests.
+BCRYPT_ROUNDS = _int("BCRYPT_ROUNDS", DEFAULT_BCRYPT_ROUNDS, minimum=4, maximum=31)
+if BCRYPT_ROUNDS < DEFAULT_BCRYPT_ROUNDS:
+    logging.getLogger(__name__).warning(
+        "BCRYPT_ROUNDS=%d is below %d: weak password hashes. Use it only in tests.",
+        BCRYPT_ROUNDS,
+        DEFAULT_BCRYPT_ROUNDS,
+    )
 
 # Rate limiting (app/auth/rate_limit.py). Read at call time, so tests can patch these.
 # Each must be >= 1: a 0 limit would crash the limiter (500 on every login), not disable it.
