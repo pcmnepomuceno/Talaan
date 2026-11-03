@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { EditScreen } from "../src/app/(app)/applications/[id]/edit/edit-screen";
 import { ApplicationForm } from "../src/components/application-form";
@@ -400,6 +401,26 @@ it.each(["999", "abc", "01"])("edit of unknown id %s shows not-found", async (id
   mountEdit(id);
   expect(await screen.findByText("Application not found.")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Save application" })).toBeNull();
+});
+
+it("edit: the loading live region is mounted empty, then filled, and stays mounted through load, error and retry", async () => {
+  // First render (what the browser gets before effects run): the region exists, with no text yet.
+  // A region added together with its text is often not announced.
+  expect(renderToStaticMarkup(wrap(<EditScreen id="1" qs="" />))).toContain('<div role="status" class="sr-only"></div>');
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  fake.on("GET", /^\/applications\/1$/, async () => (await gate, json(500, { detail: "Server error" })));
+  mountEdit("1");
+  const region = await screen.findByText("Loading application");
+  release();
+  expect(region.getAttribute("role")).toBe("status");
+  const alert = (await screen.findByText("Couldn't load this application.")).closest<HTMLElement>('[role="alert"]')!;
+  expect(region.isConnected).toBe(true);
+  expect(region.textContent).toBe("");
+  await userEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+  await screen.findByDisplayValue("Pinagsama Tech");
+  expect(region.isConnected).toBe(true); // same node, now in front of the form
+  expect(region.textContent).toBe("");
 });
 
 it("edit load failure shows Retry, which recovers", async () => {
