@@ -21,11 +21,16 @@ os.environ["DATABASE_URL"] = _url.render_as_string(hide_password=False)
 # Minimum bcrypt cost keeps the suite fast; also read by app.config at import.
 os.environ["BCRYPT_ROUNDS"] = "4"
 # TestClient is plain http: a Secure cookie would never be sent back. Cookie tests patch it.
+# Every test connection (app, alembic, helpers) fails fast on a lock wait instead of hanging:
+# libpq reads PGOPTIONS at connect. A real-thread test stuck on a row or advisory lock errors
+# after 5 seconds.
+os.environ["PGOPTIONS"] = "-c lock_timeout=5000 -c statement_timeout=30000"
 os.environ["COOKIE_SECURE"] = "false"
 os.environ["ALLOWED_ORIGINS"] = "http://localhost:3000"  # the default; a dev .env must not change test results
 
 from alembic.config import Config
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from alembic import command
@@ -44,6 +49,35 @@ USER_PASSWORD = "Str0ng!pass"
 @pytest.fixture(scope="session", autouse=True)
 def _migrated():
     command.upgrade(Config("alembic.ini"), "head")
+
+
+_LEAK_TABLES = ("users", "sessions", "job_applications", "interviews", "invite_codes", "rate_limit_events")
+
+
+def _stray_rows() -> dict:
+    with engine.connect() as conn:
+        counts = {t: conn.execute(text(f"SELECT count(*) FROM {t}")).scalar() for t in _LEAK_TABLES}
+    return {t: n for t, n in counts.items() if n}
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _no_stray_rows(_migrated):
+    """Normal tests roll back; real-thread tests commit and clean up themselves. Rows left in
+    the test DB (a killed run, a leaking test) poison later runs: leftover rate_limit_events
+    once made unrelated tests answer 429. Fail before the run, and flag leaks after it.
+
+    To clear them (the test DB only, it holds nothing else):
+        docker compose exec db psql -U talaan talaan_test -c \\
+          "TRUNCATE users, invite_codes, rate_limit_events RESTART IDENTITY CASCADE"
+    """
+    fix = "clear with: TRUNCATE users, invite_codes, rate_limit_events RESTART IDENTITY CASCADE (see _no_stray_rows)"
+    before = _stray_rows()
+    if before:
+        pytest.exit(f"Refusing to run: stray rows in the test database {before}; {fix}", 2)
+    yield
+    after = _stray_rows()
+    if after:
+        raise RuntimeError(f"A test left committed rows behind {after}; {fix}")
 
 
 @pytest.fixture

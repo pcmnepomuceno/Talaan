@@ -15,6 +15,7 @@ from app.auth.security import hash_password, hash_session_token
 from app.database import SessionLocal
 from app.interviews.models import Interview
 from app.users.models import User
+from tests.concurrency import join_all, purge, spawn
 from tests.conftest import USER_EMAIL, USER_PASSWORD, as_user, create_invite
 
 URL = "/api/v1/account/delete"
@@ -277,35 +278,44 @@ def test_db_failure_mid_delete_rolls_back_everything_503(authed, db, user):
 
 
 # --- real concurrency: threads, own connections, committed rows ---
+# Helpers and rules (daemon threads, join_all, closing connections in finally, purge on a
+# fresh session) are in tests/concurrency.py. lock_timeout (conftest) makes a stuck lock raise.
 
 @pytest.fixture
 def real_user():
-    """A committed user with two sessions and data; removed (cascade) afterwards."""
-    db = SessionLocal()
-    email = f"race-{threading.get_ident()}-{uuid.uuid4().hex}@example.com"
-    u = User(email=email, password_hash=hash_password(USER_PASSWORD), account_name="Race")
-    db.add(u)
-    db.commit()
-    uid = u.id
-    now = datetime.now(timezone.utc)
-    for t in ("race-a", "race-b"):
-        db.add(SessionModel(token_hash=hash_session_token(t), user_id=uid, created_at=now, expires_at=now + timedelta(days=1)))
-    db.commit()
-    add_data(db, u, 5, 2)
-    db.close()
-    yield uid, email
-    email_row = rate_limit.email_key(email)
-    db = SessionLocal()
+    """A committed user with two sessions and data; removed (cascade) afterwards, even if the
+    test or the setup fails."""
+    uid = None
+    email = f"race-{uuid.uuid4().hex}@example.com"
     try:
-        db.execute(text("DELETE FROM users WHERE id = :i"), {"i": uid})
-        # requests through a real client commit their rate rows (TestClient's peer is "unknown")
-        db.execute(
-            text("DELETE FROM rate_limit_events WHERE key IN (:a, :b, :c, :d)"),
-            {"d": email_row, "a": f"account-delete:user:{uid}", "b": "account-delete:ip:unknown", "c": "login:ip:unknown"},
-        )
-        db.commit()
+        db = SessionLocal()
+        try:
+            u = User(email=email, password_hash=hash_password(USER_PASSWORD), account_name="Race")
+            db.add(u)
+            db.commit()
+            uid = u.id
+            now = datetime.now(timezone.utc)
+            for t in ("race-a", "race-b"):
+                db.add(SessionModel(token_hash=hash_session_token(t), user_id=uid, created_at=now, expires_at=now + timedelta(days=1)))
+            db.commit()
+            add_data(db, u, 5, 2)
+        finally:
+            db.close()
+        yield uid, email
     finally:
-        db.close()
+        # Requests through a real client commit their rate rows (TestClient's peer is "unknown").
+        purge(
+            ("DELETE FROM users WHERE id = :i", {"i": uid}),
+            (
+                "DELETE FROM rate_limit_events WHERE key IN (:a, :b, :c, :d)",
+                {
+                    "a": f"account-delete:user:{uid}",
+                    "b": "account-delete:ip:unknown",
+                    "c": "login:ip:unknown",
+                    "d": rate_limit.email_key(email),
+                },
+            ),
+        )
 
 
 def real_client():
@@ -330,9 +340,7 @@ def test_two_simultaneous_deletes_one_204_one_401(real_user):
         except Exception as e:  # noqa: BLE001 - a thread would swallow it
             errors.append(e)
 
-    ts = [threading.Thread(target=go, args=(t,)) for t in ("race-a", "race-b")]
-    [t.start() for t in ts]
-    [t.join(timeout=30) for t in ts]
+    join_all([spawn(go, t) for t in ("race-a", "race-b")])
     assert not errors, errors
     assert sorted(out) == [204, 401], out
     db = SessionLocal()
@@ -345,22 +353,21 @@ def test_two_simultaneous_deletes_one_204_one_401(real_user):
 def test_login_racing_a_delete_leaves_no_orphan_session(real_user):
     uid, email = real_user
     holder = SessionLocal()
-    holder.execute(text("DELETE FROM users WHERE id = :i"), {"i": uid})  # uncommitted: row locked
     result = []
 
     def login():
         with real_client() as c:
             result.append(c.post("/api/v1/login", json={"email": email, "password": USER_PASSWORD}))
 
-    t = threading.Thread(target=login)
-    t.start()
     try:
+        holder.execute(text("DELETE FROM users WHERE id = :i"), {"i": uid})  # uncommitted: row locked
+        t = spawn(login)
         t.join(timeout=1.5)  # login must be blocked on the row lock, not finished
         blocked = t.is_alive()
         holder.commit()
     finally:
-        holder.close()
-    t.join(timeout=30)
+        holder.close()  # releases the lock even if an assert fails
+    join_all([t])
     assert blocked
     assert [r.status_code for r in result] == [401]
     assert "set-cookie" not in result[0].headers
@@ -377,7 +384,6 @@ def test_delete_waiting_on_a_concurrent_delete_gets_401_not_204(real_user):
     DELETE, match 0 rows and answer 204 for an account it did not delete."""
     uid, _ = real_user
     winner = SessionLocal()
-    winner.execute(text("SELECT id FROM users WHERE id = :i FOR UPDATE"), {"i": uid})
     result = []
 
     def go():
@@ -385,15 +391,15 @@ def test_delete_waiting_on_a_concurrent_delete_gets_401_not_204(real_user):
             c.cookies.set("session_token", "race-a")
             result.append(c.post(URL, json={"password": USER_PASSWORD}).status_code)
 
-    t = threading.Thread(target=go)
-    t.start()
     try:
+        winner.execute(text("SELECT id FROM users WHERE id = :i FOR UPDATE"), {"i": uid})
+        t = spawn(go)
         t.join(timeout=1.5)
         blocked = t.is_alive()  # blocked on the lock
         winner.execute(text("DELETE FROM users WHERE id = :i"), {"i": uid})
         winner.commit()
     finally:
         winner.close()  # releases the lock even if an assert fails, so teardown cannot hang
-    t.join(timeout=30)
+    join_all([t])
     assert blocked
     assert result == [401]

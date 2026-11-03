@@ -14,6 +14,7 @@ from app.auth.models import InviteCode, RateLimitEvent
 from app.database import SessionLocal
 from app.main import app
 from app.users.models import User
+from tests.concurrency import join_all, spawn
 
 N = 10
 IP_KEY = "signup:ip:unknown"  # the TestClient peer has no parseable IP
@@ -46,11 +47,7 @@ def test_n_signups_race_for_one_code_exactly_one_wins(monkeypatch):
             errors.append(e)
 
     try:
-        threads = [threading.Thread(target=attempt, args=(e,)) for e in emails]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join(timeout=60)
+        join_all([spawn(attempt, e) for e in emails], timeout=60)
         assert not errors, errors
         codes = sorted(s for s, _ in statuses)
         assert codes == [200] + [400] * (N - 1), codes
@@ -114,11 +111,7 @@ def test_same_email_two_codes_race_one_user_one_code_used(monkeypatch):
             errors.append(e)
 
     try:
-        threads = [threading.Thread(target=attempt, args=(d,)) for d, _ in codes]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join(timeout=60)
+        join_all([spawn(attempt, d) for d, _ in codes], timeout=60)
         assert not errors, errors
         assert sorted(s for s, _ in statuses) == [200, 400], statuses
         assert [b for s, b in statuses if s == 400] == [{"detail": "Email already exists."}]
