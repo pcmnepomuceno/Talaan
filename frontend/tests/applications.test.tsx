@@ -8,14 +8,13 @@ import ApplicationDetailPage from "../src/app/(app)/applications/(ledger)/[id]/p
 import { ApplicationsScreen, panes } from "../src/app/(app)/applications/(ledger)/screen";
 import { ToastProvider } from "../src/components/toast";
 import { clearCaches } from "../src/lib/cache";
-import { type Fake, installFake } from "./helpers/fake-api";
+import { type Fake, installFake, json } from "./helpers/fake-api";
 
-const push = vi.fn();
 const replace = vi.fn();
 let params: { id?: string } = {};
 let search = "";
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push, replace }),
+  useRouter: () => ({ push: vi.fn(), replace }),
   useParams: () => params,
   useSearchParams: () => new URLSearchParams(search),
   usePathname: () => "/applications",
@@ -26,7 +25,6 @@ afterEach(() => vi.restoreAllMocks());
 beforeEach(() => {
   clearCaches();
   fake = installFake();
-  push.mockClear();
   replace.mockClear();
   params = {};
   search = "";
@@ -120,7 +118,7 @@ it("delete flow: confirm removes it, toasts, returns to the list", async () => {
   await userEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
   expect(await screen.findByText(/Pinagsama Tech, Frontend Engineer, and its interviews/)).toBeTruthy();
   await userEvent.click(screen.getByRole("button", { name: "Delete application" }));
-  await waitFor(() => expect(push).toHaveBeenCalledWith("/applications?status=interviewing"));
+  await waitFor(() => expect(replace).toHaveBeenCalledWith("/applications?status=interviewing"));
   expect(screen.getByText("Application deleted.")).toBeTruthy();
   await waitFor(() => expect(screen.queryByRole("list", { name: "Applications" })).toBeNull());
   expect(await screen.findByText("No applications with this status.")).toBeTruthy();
@@ -132,7 +130,7 @@ it("cancel keeps the application", async () => {
   await screen.findByRole("list", { name: "Interviews" });
   await userEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
   await userEvent.click(await screen.findByRole("button", { name: "Cancel" }));
-  expect(push).not.toHaveBeenCalled();
+  expect(replace).not.toHaveBeenCalled();
   expect((await rows()).length).toBe(5);
 });
 
@@ -155,7 +153,7 @@ it("one delete = one deleteApplication call and one toast, also under StrictMode
   await screen.findByRole("list", { name: "Interviews" });
   await userEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
   await userEvent.click(await screen.findByRole("button", { name: "Delete application" }));
-  await waitFor(() => expect(push).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
   expect(fake.callsTo("DELETE", /./)).toHaveLength(1);
   expect(screen.getAllByText("Application deleted.")).toHaveLength(1);
 });
@@ -169,7 +167,7 @@ it("failed delete: error toast, dialog stays open, Cancel and Escape still work"
   await userEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
   await userEvent.click(await screen.findByRole("button", { name: "Delete application" }));
   expect(await screen.findByText("Couldn't delete the application. Try again.")).toBeTruthy();
-  expect(push).not.toHaveBeenCalled();
+  expect(replace).not.toHaveBeenCalled();
   expect(dialog().hasAttribute("open")).toBe(true);
   expect((screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(false);
   expect((screen.getByRole("button", { name: "Delete application" }) as HTMLButtonElement).disabled).toBe(false);
@@ -205,11 +203,17 @@ it("detail fetch failure: alert with Retry, no endless loading; Retry recovers",
   expect(screen.queryByText(/Couldn't load/)).toBeNull();
 });
 
-it("interviews fetch failure is an error too, not a half-loaded detail", async () => {
+it("interviews fetch failure keeps the application visible with an inline Retry", async () => {
   params = { id: "1" };
   fake.failNext("GET", /interviews/);
   screenUnderTest();
-  await bannerWith("Couldn't load this application.");
+  const alert = await bannerWith("Couldn't load interviews.");
+  expect(screen.getByRole("heading", { name: "Details" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Frontend Engineer" })).toBeTruthy();
+  expect(screen.queryByText("Couldn't load this application.")).toBeNull();
+  await userEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+  expect(await screen.findByRole("list", { name: "Interviews" })).toBeTruthy();
+  expect(fake.callsTo("GET", /^\/applications\/1$/)).toHaveLength(1); // only interviews were refetched
 });
 
 it("Back to a deleted id shows loading then not-found, never the old content", async () => {
@@ -226,8 +230,8 @@ it("Back to a deleted id shows loading then not-found, never the old content", a
   await screen.findByRole("heading", { name: "Details" });
   await userEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
   await userEvent.click(await screen.findByRole("button", { name: "Delete application" }));
-  await waitFor(() => expect(push).toHaveBeenCalled());
-  params = {}; // router.push to the list
+  await waitFor(() => expect(replace).toHaveBeenCalled());
+  params = {}; // router.replace to the list
   rerender(tree());
   params = { id: "1" }; // browser Back
   rerender(tree());

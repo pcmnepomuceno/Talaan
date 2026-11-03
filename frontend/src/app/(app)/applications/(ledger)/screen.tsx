@@ -12,9 +12,8 @@ import { Icon } from "@/components/icon";
 import { LoadError } from "@/components/load-error";
 import { ApplicationRow, LedgerSheet, LedgerSkeleton } from "@/components/ledger";
 import { useToast } from "@/components/toast";
-import { ApiError } from "@/lib/http";
-import { deleteApplication, getApplication, getInterviews, parseId, parseStatus } from "@/lib/api";
-import type { Application, Interview } from "@/lib/types";
+import { deleteApplication, parseStatus } from "@/lib/api";
+import { type DetailState, useApplicationDetail } from "./use-detail";
 import { useApplicationList } from "./use-list";
 
 // Below 1280 the list and the detail are separate screens (one is hidden); from 1280 both show.
@@ -26,21 +25,10 @@ export function panes(hasDetail: boolean) {
   };
 }
 
-export type DetailState =
-  | { kind: "loading" }
-  | { kind: "missing" }
-  | { kind: "error"; retry: () => void }
-  | { kind: "ready"; application: Application; interviews: Interview[] };
-
 const DetailContext = createContext<DetailState>({ kind: "loading" });
 export const useDetail = () => useContext(DetailContext);
 
-// Interviews of a missing application answer 404; getApplication already reports that as null.
-const emptyIf404 = (e: unknown) => {
-  if (e instanceof ApiError && e.status === 404) return { items: [], total: 0 };
-  throw e;
-};
-type DetailData = { id: string; state: DetailState };
+const xlAction = "inline-flex min-h-11 min-w-11 items-center justify-center rounded-sm px-2 text-body-medium disabled:cursor-not-allowed";
 
 export function ApplicationsScreen({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -49,10 +37,8 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
   const status = parseStatus(useSearchParams().get("status"));
   const qs = status ? `?status=${status}` : "";
 
-  const [detail, setDetail] = useState<DetailData | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [detailTry, setDetailTry] = useState(0);
 
   const { view, retry, loadMore, announcement, focusId, clearFocus } = useApplicationList(status);
   const listRef = useRef<HTMLDivElement>(null);
@@ -64,36 +50,11 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
     clearFocus();
   }, [focusId, qs, clearFocus]);
 
-  useEffect(() => {
-    if (id === undefined) return;
-    let live = true;
-    (async () => {
-      let state: DetailState;
-      try {
-        const n = parseId(id);
-        // Independent requests: one round trip, not two. A null application means not found.
-        const [application, interviews] =
-          n === null ? [null, { items: [], total: 0 }] : await Promise.all([getApplication(n), getInterviews(n).catch(emptyIf404)]);
-        state = application ? { kind: "ready", application, interviews: interviews.items } : { kind: "missing" };
-      } catch {
-        state = {
-          kind: "error",
-          retry: () => {
-            setDetail(null);
-            setDetailTry((t) => t + 1);
-          },
-        };
-      }
-      if (live) setDetail({ id, state });
-    })();
-    return () => {
-      live = false;
-    };
-  }, [id, detailTry]);
-
   const hasDetail = id !== undefined;
-  const state: DetailState = hasDetail && detail?.id === id ? detail.state : { kind: "loading" };
+  const { state, reset } = useApplicationDetail(id);
   const ready = state.kind === "ready" ? state.application : null;
+  const refreshing = state.kind === "ready" && state.refreshing;
+  const detailBusy = state.kind === "loading" || (state.kind === "ready" && (state.refreshing || state.interviews.kind === "loading"));
   const cls = panes(hasDetail);
 
   const base = hasDetail ? `/applications/${id}` : "/applications";
@@ -111,17 +72,22 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
     } finally {
       setBusy(false);
     }
-    setDetail(null); // Back to the deleted id must refetch (loading, then not found), never show old content.
+    reset(); // Back to the deleted id must refetch (loading, then not found), never show old content.
     setConfirming(false);
     toast.success("Application deleted.");
-    router.push(`/applications${qs}`);
+    // replace, not push: Back would otherwise land on the id that no longer exists.
+    router.replace(`/applications${qs}`);
   }
 
   const editHref = `/applications/${id}/edit${qs}`;
   const actions = ready && (
     <>
-      <BarAction href={editHref}>Edit</BarAction>
-      <BarAction onClick={() => setConfirming(true)}>Delete</BarAction>
+      <BarAction href={editHref} disabled={refreshing}>
+        Edit
+      </BarAction>
+      <BarAction onClick={() => setConfirming(true)} disabled={refreshing}>
+        Delete
+      </BarAction>
     </>
   );
 
@@ -134,7 +100,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
       )}
       {/* Always mounted, so changes are announced (a region added together with its text often is not). */}
       <div role="status" className="sr-only">
-        {view.kind === "loading" ? "Loading applications" : hasDetail && state.kind === "loading" ? "Loading application" : announcement}
+        {hasDetail && state.kind === "loading" ? "Loading application" : view.kind === "loading" ? "Loading applications" : announcement}
       </div>
       <main
         id="content"
@@ -213,6 +179,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
         </section>
         <section
           aria-label="Application detail"
+          aria-busy={detailBusy || undefined}
           className={`px-4 pt-4 pb-28 md:pb-8 xl:border-l xl:border-border-subtle xl:px-6 xl:pt-8 xl:pb-8 ${cls.detail}`}
         >
           {hasDetail && (
@@ -221,13 +188,20 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
               <div className="flex items-center text-primary">
                 {ready && (
                   <>
-                    <Link href={editHref} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-sm px-2 text-body-medium">
-                      Edit
-                    </Link>
+                    {refreshing ? (
+                      <button type="button" disabled className={`${xlAction} text-text-muted`}>
+                        Edit
+                      </button>
+                    ) : (
+                      <Link href={editHref} className={xlAction}>
+                        Edit
+                      </Link>
+                    )}
                     <button
                       type="button"
                       onClick={() => setConfirming(true)}
-                      className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-sm px-2 text-body-medium text-error-text"
+                      disabled={refreshing}
+                      className={`${xlAction} ${refreshing ? "text-text-muted" : "text-error-text"}`}
                     >
                       Delete
                     </button>
@@ -249,7 +223,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
         </Link>
       )}
       <DeleteConfirm
-        open={confirming && ready !== null}
+        open={confirming && ready !== null && !refreshing}
         busy={busy}
         onCancel={() => setConfirming(false)}
         onConfirm={confirmDelete}
