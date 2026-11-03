@@ -21,6 +21,7 @@ beforeEach(() => {
   vi.stubGlobal("location", { pathname: "/applications/1/edit", search: "", replace: locationReplace });
 });
 afterEach(() => {
+  window.dispatchEvent(new Event("pageshow")); // a page shown again is no longer leaving (http.ts)
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -222,6 +223,19 @@ it("401 mid-form goes to the login page with next pointing back at the edit page
   await userEvent.click(save());
   await waitFor(() => expect(locationReplace).toHaveBeenCalledWith("/login?expired=1&next=%2Fapplications%2F1%2Fedit"));
   expect(screen.queryByText(/Couldn't save/)).toBeNull();
+});
+
+it("401 on a dirty form: the beforeunload prompt stays out of the login redirect", async () => {
+  fake.on("PATCH", /./, () => json(401, { detail: "Not authenticated" }));
+  mountEdit("1");
+  await screen.findByDisplayValue("Frontend Engineer");
+  await userEvent.type(field("Company"), " Ltd");
+  expect(unloadPrevented()).toBe(true); // dirty: reload and tab close are guarded
+  await userEvent.click(save());
+  await waitFor(() => expect(locationReplace).toHaveBeenCalled());
+  // The redirect's unload must not prompt: a "Stay" would leave the form saving forever, with
+  // Cancel and Back disabled. With no prompt the page always leaves, so nothing can be stuck.
+  expect(unloadPrevented()).toBe(false);
 });
 
 // ---- dirty guard ----

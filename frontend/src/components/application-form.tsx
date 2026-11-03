@@ -14,7 +14,7 @@ import {
   mapServerErrors,
   validate,
 } from "../lib/application-form";
-import { ApiError, errorMessage } from "../lib/http";
+import { ApiError, errorMessage, isLeavingForLogin } from "../lib/http";
 import {
   EMPTY_FORM,
   type FormValues,
@@ -71,6 +71,7 @@ export function ApplicationForm({ application, qs }: { application?: Application
   useEffect(() => {
     if (!dirty || done) return;
     const warn = (e: BeforeUnloadEvent) => {
+      if (isLeavingForLogin()) return; // a 401 redirect: prompting could strand the form on "Saving…"
       e.preventDefault();
       e.returnValue = "";
     };
