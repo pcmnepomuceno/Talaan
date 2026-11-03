@@ -6,6 +6,7 @@ than `window`. Keys never hold a raw email: see `email_key`.
 
 import hashlib
 import ipaddress
+import logging
 import math
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -18,6 +19,7 @@ from sqlalchemy.orm import Session
 from app import config
 from app.auth.models import RateLimitEvent
 
+logger = logging.getLogger(__name__)
 
 def utcnow() -> datetime:
     """The limiter's clock. Tests patch this instead of sleeping."""
@@ -37,13 +39,28 @@ def _normalize_ip(value: str | None) -> str:
     return str(ip)
 
 
+def _strip_port(value: str) -> str:
+    """`1.2.3.4:5678` and `[2001:db8::1]:5678` lose the port; bare IPv6 is left alone."""
+    value = value.strip()
+    if value.startswith("[") and "]" in value:
+        return value[1 : value.index("]")]
+    if value.count(":") == 1:
+        return value.split(":")[0]
+    return value
+
+
 def client_ip(request: Request) -> str:
     """Socket peer by default. With TRUST_PROXY, the right-most X-Forwarded-For value
     (the one our own proxy appended; anything left of it is client-controlled).
     Missing or unparsable addresses share the bucket "unknown", so they are still limited."""
     if config.TRUST_PROXY:
-        hops = ",".join(request.headers.getlist("x-forwarded-for")).split(",")
-        return _normalize_ip(hops[-1])
+        hop = ",".join(request.headers.getlist("x-forwarded-for")).split(",")[-1]
+        ip = _normalize_ip(_strip_port(hop))
+        if ip == "unknown":
+            # Every such request shares one bucket, so a misconfigured proxy locks out
+            # everyone: make it visible. Short repr only (no full header, no newlines).
+            logger.warning("TRUST_PROXY: no usable X-Forwarded-For address (right-most hop %r)", hop.strip()[:40])
+        return ip
     return _normalize_ip(request.client.host if request.client else None)
 
 

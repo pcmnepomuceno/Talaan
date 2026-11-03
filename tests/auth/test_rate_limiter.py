@@ -40,6 +40,25 @@ def test_missing_or_junk_address_is_unknown(monkeypatch, trust):
         assert rate_limit.client_ip(_request()) == "unknown"
 
 
+def test_trusted_xff_strips_ports_and_keeps_rightmost(monkeypatch):
+    monkeypatch.setattr(config, "TRUST_PROXY", True)
+    assert rate_limit.client_ip(_request(xff=["9.9.9.9:1, 198.51.100.7:4711"])) == "198.51.100.7"
+    assert rate_limit.client_ip(_request(xff=["9.9.9.9, [2001:db8:0:1::5]:4711"])) == "2001:db8:0:1::/64"
+    assert rate_limit.client_ip(_request(xff=["2001:db8:0:1::5"])) == "2001:db8:0:1::/64"  # bare v6 kept
+
+
+def test_trusted_xff_unusable_logs_short_sample(monkeypatch, caplog):
+    monkeypatch.setattr(config, "TRUST_PROXY", True)
+    # alembic's fileConfig (the in-process test migration) disables existing loggers.
+    monkeypatch.setattr(rate_limit.logger, "disabled", False)
+    with caplog.at_level("WARNING", logger="app.auth.rate_limit"):
+        assert rate_limit.client_ip(_request(xff=["1.1.1.1, " + "x" * 500 + "\nforged"])) == "unknown"
+        assert rate_limit.client_ip(_request()) == "unknown"
+    assert len(caplog.records) == 2
+    msg = caplog.records[0].getMessage()
+    assert "x" * 40 in msg and "x" * 41 not in msg and "\n" not in msg and "1.1.1.1" not in msg
+
+
 def test_ipv6_bucketed_to_slash_64_and_mapped_ipv4_unwrapped(monkeypatch):
     monkeypatch.setattr(config, "TRUST_PROXY", False)
     a = rate_limit.client_ip(_request(client=("2001:db8:0:1:aaaa::1", 1)))
