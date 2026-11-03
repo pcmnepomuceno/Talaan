@@ -22,7 +22,16 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, hashed: str) -> bool:
-    return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+    raw = password.encode("utf-8")
+    # bcrypt 5 raises above 72 bytes. Hash the first 72 anyway (same cost), then reject:
+    # signup refuses such passwords, so none can be valid.
+    matched = bcrypt.checkpw(raw[:72], hashed.encode("utf-8"))
+    return matched and len(raw) <= 72
+
+
+# Same algorithm and cost as real hashes, built once. Login verifies against it when the
+# email is unknown, so unknown email and wrong password do the same work.
+DUMMY_PASSWORD_HASH = hash_password(secrets.token_urlsafe(16))
 
 
 def generate_session_token() -> str:

@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.models import Session as SessionModel
 from app.auth.security import (
+    DUMMY_PASSWORD_HASH,
     generate_session_token,
     hash_password,
     hash_session_token,
@@ -65,11 +66,13 @@ def login(user_data: UserLogin, response: Response, db: Session = Depends(get_db
 
     # Look up the user by email
     user = db.query(UserModel).filter(UserModel.email == normalized_email).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid email or password.")
 
-    # Verify the password
-    if not verify_password(user_data.password, user.password_hash):
+    # Verify exactly once, with no early return: an unknown email checks the dummy hash,
+    # so it costs the same as a wrong password and the two are indistinguishable.
+    password_ok = verify_password(
+        user_data.password, user.password_hash if user else DUMMY_PASSWORD_HASH
+    )
+    if not user or not password_ok:
         raise HTTPException(status_code=401, detail="Invalid email or password.")
 
     # Generate a session token
