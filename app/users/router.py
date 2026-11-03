@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -62,7 +63,10 @@ def delete_account(
 			db.query(User).filter(User.id == user_id).delete(synchronize_session=False)
 		db.commit()
 	if locked is None:
-		raise HTTPException(status_code=401, detail="Not authenticated")
+		# Lost a race with another delete: the account is gone, so drop the dead cookie too.
+		response = JSONResponse({"detail": "Not authenticated"}, status_code=401)
+		clear_session_cookie(response)
+		return response
 
 	response = Response(status_code=204)
 	clear_session_cookie(response)

@@ -389,7 +389,7 @@ def test_delete_waiting_on_a_concurrent_delete_gets_401_not_204(real_user):
     def go():
         with real_client() as c:
             c.cookies.set("session_token", "race-a")
-            result.append(c.post(URL, json={"password": USER_PASSWORD}).status_code)
+            result.append(c.post(URL, json={"password": USER_PASSWORD}))
 
     try:
         winner.execute(text("SELECT id FROM users WHERE id = :i FOR UPDATE"), {"i": uid})
@@ -402,4 +402,7 @@ def test_delete_waiting_on_a_concurrent_delete_gets_401_not_204(real_user):
         winner.close()  # releases the lock even if an assert fails, so teardown cannot hang
     join_all([t])
     assert blocked
-    assert result == [401]
+    assert [r.status_code for r in result] == [401]
+    assert result[0].json() == {"detail": "Not authenticated"}
+    set_cookie = result[0].headers["set-cookie"].lower()  # the loser's cookie is cleared too
+    assert set_cookie.startswith("session_token=") and "max-age=0" in set_cookie
