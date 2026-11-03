@@ -15,7 +15,17 @@ npm run lint && npm run typecheck && npm test && npm run build
 
 ## Routes
 
-`/` redirects to `/applications`. `/login` (not wired), `/applications` (`?status=` filter), `/applications/[id]`, `/account`, plus placeholders at `/applications/new` and `/applications/[id]/edit`. All data comes from the in-memory mock in `src/lib/api.ts` (resets on reload). From 1280 the list and detail show side by side. `/design` is the component gallery.
+`/` redirects to `/applications`. `/login` (log in and create account; `?expired=1`, `?deleted=1`, `?next=`), `/applications` (`?status=` filter), `/applications/[id]`, `/account` (real user, theme, log out, delete account), plus placeholders at `/applications/new` and `/applications/[id]/edit`. Auth is real (below); application and interview data still come from the in-memory mock in `src/lib/api.ts` (resets on reload) until F5. From 1280 the list and detail show side by side. `/design` is the component gallery.
+
+## Auth and the API
+
+The browser only calls `/api/...` on the Next origin; `next.config.ts` rewrites it to `BACKEND_URL` (see `.env.example`; default `http://localhost:8000`, set it in Vercel at deploy, it is read at build time). The session cookie is HttpOnly and first-party, so there is no CORS and nothing auth-related is stored in `localStorage`.
+
+- `src/lib/http.ts`: `request()`, `ApiError`, `errorMessage()`, `safeNext()`. A 401 goes to `/login?expired=1&next=...` unless `redirectOn401: false`.
+- `src/lib/auth.ts`: `login`, `signup`, `logout`, `getMe`, `deleteAccount`.
+- `src/proxy.ts`: private paths need a `session_token` or `__Host-session_token` cookie (presence only), else `/login?next=...`. Never redirects `/login` or `/api`.
+- Local API: `COOKIE_SECURE=false` in the API's `.env` (plain http), `ALLOWED_ORIGINS` default `http://localhost:3000`, and raised `LOGIN_*`/`SIGNUP_*` limits (all browsers share one IP behind the rewrite). Invite: `python -m app.admin create-invite` in the repo root.
+- `scripts/e2e-auth.cjs` and `scripts/screens-auth.cjs` (not in CI, no dependency): run by hand with Playwright on `NODE_PATH`, the API on the `_test` database; the file headers list the steps.
 
 ## Components (`src/components/`)
 
