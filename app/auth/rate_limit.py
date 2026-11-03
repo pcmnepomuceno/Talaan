@@ -64,8 +64,9 @@ def client_ip(request: Request) -> str:
 
 
 def email_key(email: str) -> str:
-    """Fixed-length key from the normalized email; the raw email is never stored."""
-    return "login:email:" + hashlib.sha256(email.strip().lower().encode("utf-8")).hexdigest()
+    """Fixed-length key from an email already normalized by UserLogin; the raw email is
+    never stored."""
+    return "login:email:" + hashlib.sha256(email.encode("utf-8")).hexdigest()
 
 
 def check(db: Session, key: str, limit: int, window_seconds: int) -> int | None:

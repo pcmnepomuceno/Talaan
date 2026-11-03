@@ -49,7 +49,7 @@ def signup(user_data: UserCreate, request: Request, db: Session = Depends(get_db
     if wait is not None:
         raise rate_limit.too_many(wait)
 
-    normalized_email = user_data.email.lower()
+    normalized_email = user_data.email  # stripped and lowercased by the schema validator
 
     #Check if email already exists
     existing_user = db.query(UserModel).filter(UserModel.email == normalized_email).first()
@@ -75,7 +75,7 @@ def signup(user_data: UserCreate, request: Request, db: Session = Depends(get_db
 def login(
     user_data: UserLogin, request: Request, response: Response, db: Session = Depends(get_db)
 ):
-    normalized_email = user_data.email.lower()
+    normalized_email = user_data.email  # stripped and lowercased by the schema validator
     ip_key = "login:ip:" + rate_limit.client_ip(request)
     em_key = rate_limit.email_key(normalized_email)
 

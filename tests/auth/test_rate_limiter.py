@@ -67,9 +67,10 @@ def test_ipv6_bucketed_to_slash_64_and_mapped_ipv4_unwrapped(monkeypatch):
     assert rate_limit.client_ip(_request(client=("::ffff:198.51.100.7", 1))) == "198.51.100.7"
 
 
-def test_email_key_normalizes_hides_and_has_fixed_length():
-    k = rate_limit.email_key("  MiXed@Example.COM ")
-    assert k == rate_limit.email_key("mixed@example.com")
+def test_email_key_hides_and_has_fixed_length():
+    # Normalization is the schema's job; the route-level test_table_never_holds_a_raw_email
+    # checks that case and padding still map to one key.
+    k = rate_limit.email_key("mixed@example.com")
     assert "@" not in k and "mixed" not in k
     assert len(rate_limit.email_key("a" * 100_000)) == len(k)
 
