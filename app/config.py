@@ -55,3 +55,20 @@ SIGNUP_IP_WINDOW_SECONDS = _int("SIGNUP_IP_WINDOW_SECONDS", 3600, minimum=1)
 
 # True only behind a proxy you control: then the right-most X-Forwarded-For value is the client.
 TRUST_PROXY = os.getenv("TRUST_PROXY", "false").strip().lower() in ("1", "true", "yes")
+
+
+def _bool(name: str, default: bool) -> bool:
+    raw = (os.getenv(name) or "").strip().lower()  # blank means unset
+    if not raw:
+        return default
+    if raw in ("1", "true", "yes", "on"):
+        return True
+    if raw in ("0", "false", "no", "off"):
+        return False
+    raise ValueError(f"{name} must be true or false, got {raw!r}")
+
+
+# Session cookie Secure flag and `__Host-` name prefix (app/auth/cookies.py). Read at call
+# time. Default true: a plain-http client (curl, Safari on localhost) will not send it back,
+# so local work sets COOKIE_SECURE=false in .env.
+COOKIE_SECURE = _bool("COOKIE_SECURE", True)

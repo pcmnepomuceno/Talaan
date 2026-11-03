@@ -73,3 +73,22 @@ def test_bcrypt_rounds_below_12_warns_at_startup(value, warns):
     r = import_config(BCRYPT_ROUNDS=value)
     assert r.returncode == 0, r.stderr
     assert ("BCRYPT_ROUNDS=" in r.stderr) is warns
+
+
+@pytest.mark.parametrize("value", ["maybe", "2"])
+def test_cookie_secure_rejects_garbage(value):
+    r = import_config(COOKIE_SECURE=value)
+    assert r.returncode != 0
+    assert "COOKIE_SECURE must be true or false" in r.stderr
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"), [("", "True"), ("true", "True"), (" FALSE ", "False"), ("0", "False")]
+)
+def test_cookie_secure_parsing(value, expected):
+    r = subprocess.run(
+        [sys.executable, "-c", "from app import config; print(config.COOKIE_SECURE)"],
+        env={**os.environ, "COOKIE_SECURE": value}, capture_output=True, text=True, check=False,
+    )
+    assert r.stdout.strip() == expected
+
