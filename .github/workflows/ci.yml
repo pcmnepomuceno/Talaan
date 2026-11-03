@@ -51,6 +51,8 @@ jobs:
         run: python -m alembic upgrade head
       - name: Migration check (alembic check)
         run: python -m alembic check
+      - name: Migration round trip (downgrade -1, upgrade head, check)
+        run: python -m alembic downgrade -1 && python -m alembic upgrade head && python -m alembic check
       - name: Tests (pytest)
         run: python -m pytest -q
 
