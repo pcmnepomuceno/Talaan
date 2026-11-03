@@ -191,7 +191,7 @@ it("delete: a server failure keeps the dialog open and the application", async (
   await userEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
   await userEvent.click(await screen.findByRole("button", { name: "Delete application" }));
   expect(await screen.findByText("Couldn't delete the application. Try again.")).toBeTruthy();
-  expect(document.querySelector("dialog")!.hasAttribute("open")).toBe(true);
+  expect([...document.querySelectorAll("dialog")].find((d) => d.textContent?.includes("Delete this application?"))!.hasAttribute("open")).toBe(true);
   expect(replace).not.toHaveBeenCalled();
   expect(fake.db.apps.some((a) => a.id === 1)).toBe(true);
 });

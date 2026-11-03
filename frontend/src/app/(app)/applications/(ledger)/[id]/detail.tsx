@@ -1,10 +1,16 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
+import { useState } from "react";
+import { Button, TextAction } from "@/components/button";
+import { DeleteConfirm } from "@/components/dialog";
+import { useToast } from "@/components/toast";
 import { LoadError } from "@/components/load-error";
 import { DetailRows, InterviewRow, LedgerSheet, LedgerSkeleton } from "@/components/ledger";
 import { NotFoundState } from "@/components/not-found-state";
-import { parseStatus } from "@/lib/api";
+import { deleteInterview, parseStatus } from "@/lib/api";
+import { formatDateTimePHT } from "@/lib/format";
+import { type Interview, interviewMode } from "@/lib/types";
 import { StatusStamp } from "@/components/status-stamp";
 import { sortInterviewsByDate } from "@/lib/interviews";
 import { useDetail } from "../screen";
@@ -12,14 +18,41 @@ import { useDetail } from "../screen";
 const heading = "mb-2 text-section-title text-text-secondary";
 
 export function ApplicationDetail() {
-  const state = useDetail();
+  const { state, holdForInterviewDelete, dropInterview, releaseHold } = useDetail();
+  const toast = useToast();
   const status = parseStatus(useSearchParams().get("status"));
+  const qs = status ? `?status=${status}` : "";
+  const [deleting, setDeleting] = useState<Interview | null>(null);
+  const [busy, setBusy] = useState(false);
+
   // The screen's persistent live region announces "Loading application"; the skeleton is visual only.
   if (state.kind === "removed") return null;
   if (state.kind === "loading") return <LedgerSkeleton rows={2} silent />;
   if (state.kind === "error") return <LoadError title="Couldn't load this application." onRetry={state.retry} />;
-  if (state.kind === "missing") return <NotFoundState qs={status ? `?status=${status}` : ""} />;
+  if (state.kind === "missing") return <NotFoundState qs={qs} />;
   const { application: a, interviews: iv } = state;
+  const when = (i: Interview) => formatDateTimePHT(i.scheduled_at) ?? "date unavailable";
+  const addHref = `/applications/${a.id}/interviews/new${qs}`;
+
+  async function confirmDelete() {
+    if (!deleting) return;
+    const target = deleting;
+    setBusy(true);
+    holdForInterviewDelete(); // the cache clear inside deleteInterview must not blank the page
+    try {
+      await deleteInterview(target.id); // 404 resolves too: already gone is what we wanted
+    } catch {
+      releaseHold();
+      toast.error("Couldn't delete the interview. Try again."); // the dialog stays open
+      return;
+    } finally {
+      setBusy(false);
+    }
+    dropInterview(target.id);
+    setDeleting(null);
+    toast.success("Interview deleted.");
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-3 rounded-sm border border-border-subtle bg-surface-card p-4">
@@ -46,20 +79,54 @@ export function ApplicationDetail() {
         </section>
       )}
       <section aria-labelledby="d-interviews">
-        <h3 id="d-interviews" className={heading}>
-          Interviews
-        </h3>
+        <div className="mb-2 flex min-h-11 items-center justify-between gap-3">
+          <h3 id="d-interviews" className="text-section-title text-text-secondary">
+            Interviews
+          </h3>
+          {iv.kind === "ready" && iv.items.length > 0 && (
+            <Button variant="secondary" href={addHref}>
+              Add interview
+            </Button>
+          )}
+        </div>
         {iv.kind === "loading" ? (
           <p className="text-caption text-text-muted">Loading interviews…</p>
         ) : iv.kind === "error" ? (
           <LoadError title="Couldn't load interviews." onRetry={iv.retry} />
         ) : iv.items.length === 0 ? (
-          <p className="text-caption text-text-muted">No interviews yet.</p>
+          <div className="flex flex-col items-start gap-3">
+            <p className="text-caption text-text-muted">No interviews yet.</p>
+            <Button variant="secondary" href={addHref}>
+              Add interview
+            </Button>
+          </div>
         ) : (
           <>
             <LedgerSheet label="Interviews">
               {sortInterviewsByDate(iv.items).map((i) => (
-                <InterviewRow key={i.id} interview={i} />
+                <InterviewRow
+                  key={i.id}
+                  interview={i}
+                  actions={
+                    <>
+                      <TextAction
+                        href={`/applications/${a.id}/interviews/${i.id}/edit${qs}`}
+                        disabled={state.refreshing}
+                        aria-label={`Edit interview, ${when(i)}`}
+                      >
+                        Edit
+                      </TextAction>
+                      <TextAction
+                        tone="danger"
+                        onClick={() => setDeleting(i)}
+                        disabled={state.refreshing}
+                        aria-label={`Delete interview, ${when(i)}`}
+                      >
+                        Delete
+                      </TextAction>
+                    </>
+                  }
+                />
               ))}
             </LedgerSheet>
             {iv.total > iv.items.length && (
@@ -70,6 +137,15 @@ export function ApplicationDetail() {
           </>
         )}
       </section>
+      <DeleteConfirm
+        open={deleting !== null && !state.refreshing}
+        busy={busy}
+        onCancel={() => setDeleting(null)}
+        onConfirm={confirmDelete}
+        title="Delete this interview?"
+        message={deleting ? `The ${interviewMode(deleting.mode)?.label ?? ""} interview on ${when(deleting)} will be removed. This cannot be undone.` : ""}
+        confirmLabel="Delete interview"
+      />
     </div>
   );
 }

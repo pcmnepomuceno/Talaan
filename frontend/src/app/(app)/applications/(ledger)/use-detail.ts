@@ -23,6 +23,11 @@ export type DetailState =
   | { kind: "error"; retry: () => void }
   | { kind: "ready"; application: Application; refreshing: boolean; interviews: InterviewsState };
 
+// Kept data (F6): the one exception to "a clear means skeleton, then fresh data". An interview deleted
+// in place keeps the page on screen, minus that row, while the refetch runs. It lives in this hook's
+// state only: dropped on an id change and on unmount, so a form route (a remount) never shows pre-edit data.
+type Kept = { id: number; application: Application; interviews: { items: Interview[]; total: number } };
+
 type AppRes = { a: Application | null } | "error";
 type IvRes = Page<Interview> | "gone" | "error";
 
@@ -36,6 +41,11 @@ export function useApplicationDetail(id: string | undefined) {
   // success, so this id is never fetched or rendered again ("Application not found." included).
   const removing = useRef(false);
   const [removed, setRemoved] = useState<number | null>(null);
+  const [kept, setKept] = useState<Kept | null>(null);
+  // holding: a kept copy exists; sawClear: the delete's cache clear has happened (results were nulled).
+  const holding = useRef(false);
+  const sawClear = useRef(false);
+  const latest = useRef<DetailState>({ kind: "loading" }); // what is on screen now, for holdForInterviewDelete
 
   // New id (or none): drop the results of the previous one during render, so old content can never
   // show for a moment under a different id.
@@ -45,6 +55,7 @@ export function useApplicationDetail(id: string | undefined) {
     setAppRes(null);
     setIvRes(null);
     setRemoved(null); // Back to a deleted id is a fresh visit: fetch it (and show not-found)
+    setKept(null);
   }
 
   const n = id === undefined ? null : parseId(id);
@@ -53,6 +64,7 @@ export function useApplicationDetail(id: string | undefined) {
   // is neither applied nor cached. `live` alone misses one that lands before React re-renders.
   useEffect(() => {
     removing.current = false;
+    holding.current = sawClear.current = false;
   }, [n]);
 
   useEffect(() => {
@@ -97,6 +109,14 @@ export function useApplicationDetail(id: string | undefined) {
     setDetail(n, { application: appRes.a, interviews: ivRes === "error" ? null : ivRes });
   }, [n, appRes, ivRes]);
 
+  // After the delete's clear, once both refetches have answered (any way) the kept copy has done its job.
+  useEffect(() => {
+    if (kept && sawClear.current && appRes !== null && ivRes !== null) {
+      holding.current = sawClear.current = false;
+      setKept(null);
+    }
+  }, [kept, appRes, ivRes]);
+
   const retryApp = useCallback(() => {
     setAppRes(null);
     setAppTry((t) => t + 1);
@@ -111,6 +131,7 @@ export function useApplicationDetail(id: string | undefined) {
     () =>
       onCachesCleared(() => {
         if (removing.current) return; // our own delete: this id must not be fetched again
+        if (holding.current) sawClear.current = true;
         retryApp();
         retryInterviews();
       }),
@@ -127,6 +148,30 @@ export function useApplicationDetail(id: string | undefined) {
     setIvRes(null);
   }, []);
 
+  /** Call before the DELETE request: keeps what is on screen so the clear it triggers does not blank the page. */
+  const holdForInterviewDelete = useCallback(() => {
+    const s = latest.current;
+    if (s.kind === "ready" && s.interviews.kind === "ready" && n !== null) {
+      holding.current = true;
+      sawClear.current = false;
+      setKept({ id: n, application: s.application, interviews: { items: s.interviews.items, total: s.interviews.total } });
+    }
+  }, [n]);
+  /** After a confirmed delete (204 or 404): the row goes at once; the background refetch brings the rest. */
+  const dropInterview = useCallback((interviewId: number) => {
+    setKept((k) =>
+      k && {
+        ...k,
+        interviews: { items: k.interviews.items.filter((i) => i.id !== interviewId), total: Math.max(0, k.interviews.total - 1) },
+      },
+    );
+  }, []);
+  /** The DELETE failed: nothing was removed, so forget the held copy. */
+  const releaseHold = useCallback(() => {
+    holding.current = sawClear.current = false;
+    setKept(null);
+  }, []);
+
   let state: DetailState;
   if (id === undefined) state = { kind: "loading" };
   else if (n === null) state = { kind: "missing" };
@@ -135,11 +180,12 @@ export function useApplicationDetail(id: string | undefined) {
   else if (ivRes === "gone" || (appRes && appRes.a === null)) state = { kind: "missing" };
   else {
     const cached = getDetail(n);
+    const hold = kept?.id === n ? kept : null;
     const fresh = appRes?.a ?? null;
-    const application = fresh ?? cached?.application ?? null;
+    const application = fresh ?? cached?.application ?? hold?.application ?? null;
     if (!application) state = { kind: "loading" };
     else {
-      const page = ivRes === null ? (cached?.interviews ?? null) : ivRes === "error" ? null : ivRes; // "gone" was handled above
+      const page = ivRes === null ? (hold?.interviews ?? cached?.interviews ?? null) : ivRes === "error" ? null : ivRes; // "gone" was handled above
       const interviews: InterviewsState =
         ivRes === "error"
           ? { kind: "error", retry: retryInterviews }
@@ -149,5 +195,8 @@ export function useApplicationDetail(id: string | undefined) {
       state = { kind: "ready", application, refreshing: fresh === null, interviews };
     }
   }
-  return { state, setRemoving, markRemoved };
+  useEffect(() => {
+    latest.current = state;
+  });
+  return { state, setRemoving, markRemoved, holdForInterviewDelete, dropInterview, releaseHold };
 }
