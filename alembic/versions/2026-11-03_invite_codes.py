@@ -1,7 +1,8 @@
 """invite_codes
 
 Single-use, expiring signup invites. Only the SHA-256 of a code is stored.
-used_by_user_id is ON DELETE SET NULL so deleting an account never fails.
+used_by_user_id is ON DELETE SET NULL so deleting an account never fails, and indexed
+so that delete does not scan invite_codes.
 
 Revision ID: b7d4a1e93c52
 Revises: 8c2e5d1f7a90
@@ -37,7 +38,10 @@ def upgrade() -> None:
             nullable=True,
         ),
     )
+    # The FK side of ON DELETE SET NULL: without it, every user delete scans the table.
+    op.create_index("ix_invite_codes_used_by_user_id", "invite_codes", ["used_by_user_id"])
 
 
 def downgrade() -> None:
+    op.drop_index("ix_invite_codes_used_by_user_id", table_name="invite_codes")
     op.drop_table("invite_codes")

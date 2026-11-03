@@ -33,6 +33,7 @@ class InviteCode(Base):
     `used_by_user_id` is SET NULL when that user is deleted, so account deletion never fails."""
 
     __tablename__ = "invite_codes"
+    __table_args__ = (Index("ix_invite_codes_used_by_user_id", "used_by_user_id"),)
     id = Column(Integer, primary_key=True)
     code_hash = Column(String, unique=True, nullable=False)
     note = Column(Text, nullable=True)

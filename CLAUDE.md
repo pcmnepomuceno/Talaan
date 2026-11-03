@@ -37,7 +37,7 @@ HttpOnly cookie value; raw token never stored), user_id → Users.id, created_at
 (both `DateTime(timezone=True)`)
 
 **InviteCodes** (matches model): id, code_hash (UNIQUE, SHA-256 hex of the normalized 12-char code; plaintext never stored),
-note?, created_at, expires_at, used_at?, used_by_user_id? → Users.id (`ON DELETE SET NULL`)
+note?, created_at, expires_at, used_at?, used_by_user_id? → Users.id (`ON DELETE SET NULL`, indexed `ix_invite_codes_used_by_user_id`)
 
 **Job Applications** (matches model)
 id, company, job_name, contact_website?, contact_email?, status (ENUM),
