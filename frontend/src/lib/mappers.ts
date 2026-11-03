@@ -44,6 +44,9 @@ const oneOf = <T extends string>(r: Raw, k: string, allowed: readonly T[]): T =>
   return hit;
 };
 
+/** Only the id of a row (a write response): every other field may be one this client cannot map yet. */
+export const idOf = (v: unknown): number => int(obj(v, "application"), "id");
+
 export function fromApiApplication(v: unknown): Application {
   const r = obj(v, "application");
   const date = strOrNull(r, "date_applied");

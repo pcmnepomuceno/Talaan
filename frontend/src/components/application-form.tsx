@@ -128,12 +128,12 @@ export function ApplicationForm({ application, qs }: { application?: Application
     setErrors({});
     setBanner([]);
     try {
-      const row = edit
+      const savedId = edit
         ? await updateApplication(application.id, toApplicationInput(application), input)
         : await createApplication(input);
       setDone(true); // stays busy: the page is about to be replaced, so no second submit is possible
       toast.success("Application saved.");
-      router.replace(`/applications/${row.id}${qs}`);
+      router.replace(`/applications/${savedId}${qs}`);
       return;
     } catch (err) {
       if (err instanceof ApiError && err.status === 404 && edit) {

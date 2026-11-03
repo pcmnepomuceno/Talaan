@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { EditScreen } from "../src/app/(app)/applications/[id]/edit/edit-screen";
 import { ApplicationForm } from "../src/components/application-form";
 import { ToastProvider } from "../src/components/toast";
-import { clearCaches } from "../src/lib/cache";
+import { clearCaches, getList, setList } from "../src/lib/cache";
 import { type Fake, installFake, json } from "./helpers/fake-api";
 
 const replace = vi.fn();
@@ -205,6 +205,18 @@ it.each([
   const alert = (await screen.findByText(text)).closest('[role="alert"]');
   expect(alert).toBeTruthy();
   expect(field("Job title").value).toBe("Dev");
+});
+
+it("a create the server accepted but the client cannot map still lands on the saved record, with no retry offered", async () => {
+  fake.on("POST", /^\/applications$/, () => json(201, { ...fake.db.apps[0], id: 88, status: "hired" }));
+  setList(undefined, { items: [], total: 0 });
+  mountNew("?status=saved");
+  await fillMinimum();
+  await userEvent.click(save());
+  await waitFor(() => expect(replace).toHaveBeenCalledWith("/applications/88?status=saved"));
+  expect(screen.queryByText(/Try again/)).toBeNull(); // no retry that would POST a duplicate
+  expect(fake.callsTo("POST", /./)).toHaveLength(1);
+  expect(getList()).toBeUndefined(); // caches cleared, so the list shows the new row
 });
 
 it("network failure shows the retry message", async () => {

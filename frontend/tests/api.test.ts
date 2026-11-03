@@ -65,13 +65,13 @@ it("getInterviews asks for 100 and is isolated from the application", async () =
   await expect(getInterviews(999)).rejects.toMatchObject({ status: 404 });
 });
 
-it("createApplication: POST with exactly the editable fields, returns the row", async () => {
+it("createApplication: POST with exactly the editable fields, returns the new id", async () => {
   const input = { ...toApplicationInput(makeApp(0)), job_name: "New", salary: null, date_applied: null };
-  const row = await createApplication(input);
+  const id = await createApplication(input);
   const call = fake.calls.at(-1)!;
   expect([call.method, call.path]).toEqual(["POST", "/applications"]);
   expect(call.body).toEqual(input);
-  expect(row.job_name).toBe("New");
+  expect(fake.db.apps.find((a) => a.id === id)?.job_name).toBe("New");
 });
 
 it("updateApplication: PATCH sends only changed fields", async () => {
@@ -103,6 +103,19 @@ it("writes clear the caches; a failed write does not", async () => {
   expect(getList()).toBeUndefined();
   setList(undefined, entry);
   await deleteApplication(3);
+  expect(getList()).toBeUndefined();
+});
+
+it("a write the server accepted clears the caches even when the response does not map", async () => {
+  const entry = { items: [], total: 0 };
+  const initial = toApplicationInput(makeApp(1));
+  fake.on("POST", /^\/applications$/, () => json(201, { ...makeApp(77), status: "hired" }));
+  setList(undefined, entry);
+  expect(await createApplication(initial)).toBe(77);
+  expect(getList()).toBeUndefined();
+  fake.on("PATCH", /^\/applications\/1$/, () => json(200, { ...makeApp(1), status: "hired" }));
+  setList(undefined, entry);
+  expect(await updateApplication(1, initial, { ...initial, company: "X" })).toBe(1);
   expect(getList()).toBeUndefined();
 });
 

@@ -8,6 +8,7 @@ import {
   fromApiApplication,
   fromApiInterview,
   fromApiPage,
+  idOf,
   type Page,
   toCreateBody,
   toPatchBody,
@@ -53,22 +54,27 @@ export async function getInterviews(applicationId: number): Promise<Page<Intervi
   );
 }
 
-export async function createApplication(input: ApplicationInput): Promise<Application> {
-  const row = fromApiApplication(await request<unknown>(BASE, { method: "POST", body: toCreateBody(input) }));
+// The writes resolve to the row's id only. Once the server has the row the caches are stale, so they
+// are cleared first; and a response the client cannot fully map (say a new status) must not turn a
+// saved row into an error, whose "Try again" would create a duplicate. The detail refetches anyway.
+
+/** Resolves to the new row's id. */
+export async function createApplication(input: ApplicationInput): Promise<number> {
+  const raw = await request<unknown>(BASE, { method: "POST", body: toCreateBody(input) });
   clearCaches();
-  return row;
+  return idOf(raw);
 }
 
-/** Sends only the fields that differ from `initial`. */
-export async function updateApplication(id: number, initial: ApplicationInput, next: ApplicationInput): Promise<Application> {
+/** Sends only the fields that differ from `initial`. Resolves to `id`. */
+export async function updateApplication(id: number, initial: ApplicationInput, next: ApplicationInput): Promise<number> {
   try {
-    const row = fromApiApplication(await request<unknown>(`${BASE}/${id}`, { method: "PATCH", body: toPatchBody(initial, next) }));
-    clearCaches();
-    return row;
+    await request<unknown>(`${BASE}/${id}`, { method: "PATCH", body: toPatchBody(initial, next) });
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) clearCaches();
     throw e;
   }
+  clearCaches();
+  return id;
 }
 
 /** 404 means it is already gone, which is what the caller wanted: resolves either way. */
