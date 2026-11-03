@@ -72,3 +72,17 @@ def _bool(name: str, default: bool) -> bool:
 # time. Default true: a plain-http client (curl, Safari on localhost) will not send it back,
 # so local work sets COOKIE_SECURE=false in .env.
 COOKIE_SECURE = _bool("COOKIE_SECURE", True)
+
+
+def parse_origins(raw: str | None) -> frozenset[str]:
+    """Comma-separated browser origins for the CSRF check (app/security.py). Entries are
+    stripped, lowercased and lose a trailing slash; blanks are dropped; nothing left means
+    the default. A wildcard is a startup error, never a fallback."""
+    items = {part.strip().rstrip("/").lower() for part in (raw or "").split(",")}
+    items.discard("")
+    if any("*" in item for item in items):
+        raise ValueError("ALLOWED_ORIGINS must list exact origins, not a wildcard")
+    return frozenset(items or {"http://localhost:3000"})
+
+
+ALLOWED_ORIGINS = parse_origins(os.getenv("ALLOWED_ORIGINS"))

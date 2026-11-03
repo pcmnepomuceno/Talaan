@@ -22,6 +22,7 @@ os.environ["DATABASE_URL"] = _url.render_as_string(hide_password=False)
 os.environ["BCRYPT_ROUNDS"] = "4"
 # TestClient is plain http: a Secure cookie would never be sent back. Cookie tests patch it.
 os.environ["COOKIE_SECURE"] = "false"
+os.environ["ALLOWED_ORIGINS"] = "http://localhost:3000"  # the default; a dev .env must not change test results
 
 from alembic.config import Config
 from fastapi.testclient import TestClient
