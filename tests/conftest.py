@@ -18,6 +18,8 @@ if not (_url.database or "").endswith("_test"):
 # Must be set before any `app` import: app.config reads it at import time, and
 # app.database.engine / alembic/env.py both use it.
 os.environ["DATABASE_URL"] = _url.render_as_string(hide_password=False)
+# Minimum bcrypt cost keeps the suite fast; also read by app.config at import.
+os.environ["BCRYPT_ROUNDS"] = "4"
 
 from alembic.config import Config
 from fastapi.testclient import TestClient

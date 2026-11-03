@@ -22,6 +22,11 @@ def _int(name: str, default: int) -> int:
     return int(os.getenv(name, default))
 
 
+# bcrypt cost for new password hashes and the login dummy hash. Read at call time by
+# hash_password; the dummy hash is built once at startup with the same value.
+DEFAULT_BCRYPT_ROUNDS = 12
+BCRYPT_ROUNDS = _int("BCRYPT_ROUNDS", DEFAULT_BCRYPT_ROUNDS)
+
 # Rate limiting (app/auth/rate_limit.py). Read at call time, so tests can patch these.
 LOGIN_IP_LIMIT = _int("LOGIN_IP_LIMIT", 10)
 LOGIN_IP_WINDOW_SECONDS = _int("LOGIN_IP_WINDOW_SECONDS", 900)

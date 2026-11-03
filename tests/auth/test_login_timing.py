@@ -44,7 +44,7 @@ def test_one_verification_per_path(client, user, verify_calls):
 
 
 def test_dummy_hash_matches_real_hash_format():
-    assert DUMMY_PASSWORD_HASH.startswith("$2b$12$")
+    assert DUMMY_PASSWORD_HASH[:7] == hash_password("x")[:7]  # algorithm and cost
 
 
 @pytest.mark.parametrize("email", [USER_EMAIL, "no@example.com"])

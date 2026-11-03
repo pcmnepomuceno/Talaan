@@ -15,9 +15,11 @@ import secrets
 
 import bcrypt
 
+from app import config
+
 
 def hash_password(password: str) -> str:
-    hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
+    hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=config.BCRYPT_ROUNDS))
     return hashed.decode("utf-8")
 
 
