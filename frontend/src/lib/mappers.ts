@@ -5,10 +5,13 @@
 //  - date-only strings ("2026-10-14") are passed through untouched, never via Date;
 //  - request bodies list their fields by name, so contact_email and server-managed fields
 //    (id, created_at, updated_at) can never be sent by accident.
+import { fromPhtInput, toPhtInput } from "./pht";
 import {
   type Application,
   type Interview,
+  type InterviewMode,
   INTERVIEW_MODES,
+  type Outcome,
   OUTCOMES,
   STATUSES,
   WORK_MODES,
@@ -187,4 +190,61 @@ export function fromFormValues(v: FormValues): ApplicationInput {
     contact_website: orNull(v.contact_website),
     remarks: orNull(v.remarks),
   };
+}
+
+/** What the interview form edits, in API types. scheduled_at is always an ISO string with +08:00. */
+export type InterviewInput = {
+  scheduled_at: string;
+  mode: InterviewMode;
+  outcome: Outcome;
+  interviewer: string | null;
+  remarks: string | null;
+};
+
+const INTERVIEW_FIELDS = ["scheduled_at", "mode", "outcome", "interviewer", "remarks"] as const satisfies readonly (keyof InterviewInput)[];
+
+export const toInterviewCreateBody = (i: InterviewInput): InterviewInput => {
+  const body: Record<string, unknown> = {};
+  for (const k of INTERVIEW_FIELDS) body[k] = i[k];
+  return body as InterviewInput;
+};
+
+/** Only the fields that differ from `initial`; `{}` means nothing to save. null clears interviewer/remarks. */
+export function toInterviewPatchBody(initial: InterviewInput, next: InterviewInput): Partial<InterviewInput> {
+  const body: Record<string, unknown> = {};
+  for (const k of INTERVIEW_FIELDS) if (initial[k] !== next[k]) body[k] = next[k];
+  return body as Partial<InterviewInput>;
+}
+
+/** Strings only. scheduled_at is the datetime-local value (PHT); mode is "" until the user chooses one. */
+export type InterviewFormValues = {
+  scheduled_at: string;
+  mode: InterviewMode | "";
+  interviewer: string;
+  outcome: Outcome;
+  remarks: string;
+};
+
+export const EMPTY_INTERVIEW_FORM: InterviewFormValues = {
+  scheduled_at: "",
+  mode: "",
+  interviewer: "",
+  outcome: "pending",
+  remarks: "",
+};
+
+export const toInterviewFormValues = (i: Interview): InterviewFormValues => ({
+  scheduled_at: toPhtInput(i.scheduled_at) ?? "",
+  mode: i.mode,
+  interviewer: i.interviewer ?? "",
+  outcome: i.outcome,
+  remarks: i.remarks ?? "",
+});
+
+/** Call only on values that passed validate(): trims, "" becomes null, the time gets +08:00. */
+export function fromInterviewFormValues(v: InterviewFormValues): InterviewInput {
+  const at = fromPhtInput(v.scheduled_at);
+  if (v.mode === "" || at === null) throw new MappingError(v.mode === "" ? "mode" : "scheduled_at");
+  const orNull = (s: string) => (s.trim() === "" ? null : s.trim());
+  return { scheduled_at: at, mode: v.mode, outcome: v.outcome, interviewer: orNull(v.interviewer), remarks: orNull(v.remarks) };
 }

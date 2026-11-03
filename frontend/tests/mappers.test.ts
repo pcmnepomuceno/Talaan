@@ -1,6 +1,11 @@
 import { expect, it } from "vitest";
 import {
   EMPTY_FORM,
+  EMPTY_INTERVIEW_FORM,
+  fromInterviewFormValues,
+  toInterviewCreateBody,
+  toInterviewFormValues,
+  toInterviewPatchBody,
   fromApiApplication,
   fromApiInterview,
   fromApiPage,
@@ -99,4 +104,51 @@ it("fromFormValues trims, turns blanks into null and needs a work mode", () => {
   const v = { ...EMPTY_FORM, job_name: "  Dev  ", company: " Acme ", remarks: "   ", contact_website: " https://a.ph ", mode_of_work: "remote" as const, salary: "007" };
   expect(fromFormValues(v)).toMatchObject({ job_name: "Dev", company: "Acme", remarks: null, contact_website: "https://a.ph", salary: 7 });
   expect(() => fromFormValues(EMPTY_FORM)).toThrow(MappingError);
+});
+
+// ---- interviews (F6) ----
+const rawIv = {
+  id: 7,
+  job_application_id: 1,
+  interviewer: "Ana",
+  scheduled_at: "2026-11-20T15:30:45.123456Z",
+  mode: "online",
+  outcome: "good",
+  remarks: null,
+  created_at: "2026-11-01T00:00:00Z",
+  updated_at: "2026-11-01T00:00:00Z",
+};
+
+it("interview mapping is strict: unknown, null or missing enums fail", () => {
+  expect(fromApiInterview(rawIv).outcome).toBe("good");
+  for (const bad of [{ outcome: null }, { outcome: undefined }, { outcome: "great" }, { mode: null }, { mode: "phone" }, { mode: "hybrid" }])
+    expect(() => fromApiInterview({ ...rawIv, ...bad }), JSON.stringify(bad)).toThrow(MappingError);
+});
+
+it("interview form values: UTC API time shows as PHT, and back to +08:00", () => {
+  const v = toInterviewFormValues(fromApiInterview(rawIv));
+  expect(v).toMatchObject({ scheduled_at: "2026-11-20T23:30", mode: "online", outcome: "good", interviewer: "Ana", remarks: "" });
+  expect(fromInterviewFormValues(v).scheduled_at).toBe("2026-11-20T23:30:00+08:00");
+});
+
+it("new interview form: nothing chosen for mode, outcome pending; mode is required to map", () => {
+  expect(EMPTY_INTERVIEW_FORM.mode).toBe("");
+  expect(EMPTY_INTERVIEW_FORM.outcome).toBe("pending");
+  expect(() => fromInterviewFormValues({ ...EMPTY_INTERVIEW_FORM, scheduled_at: "2026-11-20T10:00" })).toThrow(MappingError);
+  expect(() => fromInterviewFormValues({ ...EMPTY_INTERVIEW_FORM, mode: "online" })).toThrow(MappingError);
+});
+
+it("interview form values trim and turn blanks into null", () => {
+  const v = { ...EMPTY_INTERVIEW_FORM, scheduled_at: "2026-11-20T10:00", mode: "async" as const, interviewer: "  ", remarks: " hi " };
+  expect(fromInterviewFormValues(v)).toEqual({ scheduled_at: "2026-11-20T10:00:00+08:00", mode: "async", outcome: "pending", interviewer: null, remarks: "hi" });
+});
+
+it("interview bodies: create lists its five fields; patch only the changed ones", () => {
+  const init = fromInterviewFormValues(toInterviewFormValues(fromApiInterview(rawIv)));
+  expect(Object.keys(toInterviewCreateBody({ ...init, job_application_id: 1 } as never)).sort()).toEqual(
+    ["interviewer", "mode", "outcome", "remarks", "scheduled_at"],
+  );
+  expect(toInterviewPatchBody(init, { ...init })).toEqual({});
+  expect(toInterviewPatchBody(init, { ...init, outcome: "bad" })).toEqual({ outcome: "bad" });
+  expect(toInterviewPatchBody(init, { ...init, interviewer: null, remarks: "x" })).toEqual({ interviewer: null, remarks: "x" });
 });

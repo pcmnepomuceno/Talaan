@@ -96,9 +96,26 @@ export function installFake(initial = seed()) {
     if ((m = p.match(/^\/applications\/(\d+)\/interviews$/))) {
       const id = Number(m[1]);
       if (!db.apps.some((a) => a.id === id)) return json(404, { detail: "Application not found." });
-      const rows = db.interviews.filter((i) => i.job_application_id === id).sort((a, b) => (a.scheduled_at < b.scheduled_at ? -1 : 1));
+      if (c.method === "POST") {
+        const row = { ...makeInterview(db.nextId++, id), outcome: "pending", interviewer: null, remarks: null, ...(c.body as object) } as Interview;
+        db.interviews.push(row);
+        return json(201, row);
+      }
+      const rows = db.interviews
+        .filter((i) => i.job_application_id === id)
+        .sort((a, b) => Date.parse(a.scheduled_at) - Date.parse(b.scheduled_at) || a.id - b.id);
       const limit = Number(url.searchParams.get("limit") ?? 20);
       return json(200, { items: rows.slice(0, limit), total: rows.length, limit, offset: 0 });
+    }
+    if ((m = p.match(/^\/interviews\/(\d+)$/))) {
+      const row = db.interviews.find((i) => i.id === Number(m![1]));
+      if (!row) return json(404, { detail: "Interview not found" });
+      if (c.method === "GET") return json(200, row);
+      if (c.method === "PATCH") return json(200, Object.assign(row, c.body));
+      if (c.method === "DELETE") {
+        db.interviews = db.interviews.filter((i) => i !== row);
+        return json(204);
+      }
     }
     return json(404, { detail: "Not Found" });
   }
