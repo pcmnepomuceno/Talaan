@@ -158,9 +158,9 @@ export function ApplicationForm({ application, qs }: { application?: Application
   if (gone) {
     return (
       <>
-        <AppBar title={title} backHref="/applications" />
+        <AppBar title={title} backHref={backHref} />
         <main id="content" tabIndex={-1} className="mx-auto max-w-[640px] px-4 pt-6 pb-24 outline-none md:pb-6">
-          <NotFoundState />
+          <NotFoundState qs={qs} />
         </main>
       </>
     );

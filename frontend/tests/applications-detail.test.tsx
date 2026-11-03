@@ -86,6 +86,14 @@ it("a 404 on the application shows not-found even though interviews also 404", a
   expect(screen.queryByText("Couldn't load interviews.")).toBeNull();
 });
 
+it("the detail's not-found view goes back to the list keeping ?status=", async () => {
+  search = "status=interviewing";
+  fake.db.apps = [];
+  mount();
+  await screen.findByText("Application not found.");
+  expect(screen.getByRole("link", { name: "Back to applications" }).getAttribute("href")).toBe("/applications?status=interviewing");
+});
+
 it("shows 'Showing the first 100 of N' when there are more interviews than fit", async () => {
   fake.db.interviews = Array.from({ length: 130 }, (_, i) => makeInterview(i + 1, 1, { scheduled_at: `2026-10-${String((i % 28) + 1).padStart(2, "0")}T10:00:00+08:00` }));
   mount();

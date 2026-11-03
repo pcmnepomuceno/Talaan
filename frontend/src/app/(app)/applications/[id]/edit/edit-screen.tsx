@@ -48,10 +48,10 @@ export function EditScreen({ id, qs }: { id: string; qs: string }) {
         <ApplicationForm application={result.application} qs={qs} />
       ) : (
         <>
-          <AppBar title="Edit application" backHref={`/applications${qs}`} />
+          <AppBar title="Edit application" backHref={`/applications/${id}${qs}`} />
           <main id="content" tabIndex={-1} className="mx-auto max-w-[640px] px-4 pt-6 pb-24 outline-none md:pb-6">
             {result.kind === "loading" && <LedgerSkeleton rows={2} silent />}
-            {result.kind === "missing" && <NotFoundState />}
+            {result.kind === "missing" && <NotFoundState qs={qs} />}
             {result.kind === "error" && <LoadError title="Couldn't load this application." onRetry={() => setTries((t) => t + 1)} />}
           </main>
         </>

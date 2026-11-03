@@ -1,8 +1,10 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { LoadError } from "@/components/load-error";
 import { DetailRows, InterviewRow, LedgerSheet, LedgerSkeleton } from "@/components/ledger";
 import { NotFoundState } from "@/components/not-found-state";
+import { parseStatus } from "@/lib/api";
 import { StatusStamp } from "@/components/status-stamp";
 import { sortInterviewsByDate } from "@/lib/interviews";
 import { useDetail } from "../screen";
@@ -11,10 +13,11 @@ const heading = "mb-2 text-section-title text-text-secondary";
 
 export function ApplicationDetail() {
   const state = useDetail();
+  const status = parseStatus(useSearchParams().get("status"));
   // The screen's persistent live region announces "Loading application"; the skeleton is visual only.
   if (state.kind === "loading") return <LedgerSkeleton rows={2} silent />;
   if (state.kind === "error") return <LoadError title="Couldn't load this application." onRetry={state.retry} />;
-  if (state.kind === "missing") return <NotFoundState />;
+  if (state.kind === "missing") return <NotFoundState qs={status ? `?status=${status}` : ""} />;
   const { application: a, interviews: iv } = state;
   return (
     <div className="flex flex-col gap-6">

@@ -423,6 +423,39 @@ it("edit: the loading live region is mounted empty, then filled, and stays mount
   expect(region.textContent).toBe("");
 });
 
+// ---- the way back keeps the record and the filter ----
+const backLink = () => screen.getByRole("link", { name: "Back" }).getAttribute("href");
+const listLink = () => screen.getByRole("link", { name: "Back to applications" }).getAttribute("href");
+
+it("edit while loading and after a load error: Back goes to the detail, keeping ?status=", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  fake.on("GET", /^\/applications\/1$/, async () => (await gate, json(500, { detail: "Server error" })));
+  mountEdit("1", "?status=applied");
+  expect(backLink()).toBe("/applications/1?status=applied");
+  release();
+  await screen.findByText("Couldn't load this application.");
+  expect(backLink()).toBe("/applications/1?status=applied");
+});
+
+it("edit of a missing id: Back goes to that detail, Back to applications keeps ?status=", async () => {
+  mountEdit("999", "?status=applied");
+  await screen.findByText("Application not found.");
+  expect(backLink()).toBe("/applications/999?status=applied");
+  expect(listLink()).toBe("/applications?status=applied");
+});
+
+it("the gone view (deleted while editing) keeps ?status=", async () => {
+  mountEdit("1", "?status=applied");
+  await screen.findByDisplayValue("Pinagsama Tech");
+  fake.db.apps = fake.db.apps.filter((a) => a.id !== 1);
+  await userEvent.type(field("Company"), " Ltd");
+  await userEvent.click(save());
+  await screen.findByText("Application not found.");
+  expect(backLink()).toBe("/applications/1?status=applied");
+  expect(listLink()).toBe("/applications?status=applied");
+});
+
 it("edit load failure shows Retry, which recovers", async () => {
   fake.failNext("GET", /^\/applications\/1$/);
   mountEdit("1");
