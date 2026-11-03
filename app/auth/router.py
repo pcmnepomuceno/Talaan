@@ -39,6 +39,8 @@ from app.database import get_db
 from app.users.models import User as UserModel
 from app.users.schemas import UserCreate, UserLogin, UserRead
 
+FOREIGN_KEY_VIOLATION = "23503"  # Postgres SQLSTATE
+
 router = APIRouter(tags=["auth"])
 
 SESSION_LIFETIME = timedelta(days=30)
@@ -139,10 +141,13 @@ def login(
     db.add(session)
     try:
         db.commit()
-    except IntegrityError:
-        # The account was deleted between the password check and this insert (the FK
-        # insert waited for the delete to commit). No session row exists; same 401.
+    except IntegrityError as e:
+        # Only a foreign key violation (23503) means the account was deleted between the
+        # password check and this insert (the FK insert waited for the delete to commit).
+        # No session row exists; same 401. Any other integrity error is a real bug: re-raise.
         db.rollback()
+        if getattr(e.orig, "pgcode", None) != FOREIGN_KEY_VIOLATION:
+            raise
         raise HTTPException(status_code=401, detail="Invalid email or password.") from None
     db.refresh(session)
 
