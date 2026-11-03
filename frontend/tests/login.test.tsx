@@ -302,6 +302,16 @@ describe("create account", () => {
     expect(screen.getByLabelText("Invite code").getAttribute("aria-invalid")).toBeNull();
   });
 
+  it("any other 400 is a generic banner, never an invite-code error", async () => {
+    handlers[SIGNUP] = () => json(400, { detail: "Something new the backend says." });
+    await openSignup();
+    await fillSignup();
+    await submitSignup();
+    expect((await screen.findByRole("alert")).textContent).toContain("Something went wrong. Try again.");
+    expect(screen.queryByText("Invalid or expired invite code.")).toBeNull();
+    expect(document.querySelector('[aria-invalid="true"]')).toBeNull();
+  });
+
   it("422 maps each message to its field, including the 72-byte password rule", async () => {
     handlers[SIGNUP] = () =>
       json(422, {

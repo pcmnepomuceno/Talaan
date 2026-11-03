@@ -99,8 +99,9 @@ export function LoginForm({
     }
     if (m === "login" && err.status === 401) return fail({}, "Invalid email or password.");
     if (m === "signup" && err.status === 400) {
-      if (err.detail === "Email already exists.") return fail({ email: "Email already exists." }, null);
-      return fail({ invite_code: "Invalid or expired invite code." }, null);
+      // Exact details only: a reworded or new 400 must not blame a valid invite code.
+      if (err.detail === "Invalid or expired invite code.") return fail({ invite_code: err.detail }, null);
+      if (err.detail === "Email already exists.") return fail({ email: err.detail }, null);
     }
     return fail({}, "Something went wrong. Try again.");
   }
