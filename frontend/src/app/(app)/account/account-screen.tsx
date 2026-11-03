@@ -59,7 +59,7 @@ export function AccountScreen() {
   return (
     <>
       <AppBar />
-      <main id="content" tabIndex={-1} className="mx-auto max-w-[640px] px-4 pt-6 pb-24 outline-none md:pb-8 xl:max-w-[1120px] xl:pt-8">
+      <main id="content" tabIndex={-1} className="max-w-2xl px-4 pt-6 pb-24 outline-none md:pb-8 xl:pt-8">
         <h1 className="text-section-title text-text-primary">Account</h1>
 
         <section aria-labelledby="profile" className="mt-6 flex flex-col gap-3">
