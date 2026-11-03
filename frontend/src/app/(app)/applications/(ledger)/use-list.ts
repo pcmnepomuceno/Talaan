@@ -29,12 +29,30 @@ export function appendUnique(existing: Application[], incoming: Application[]): 
   return [...existing, ...incoming.filter((a) => !seen.has(a.id))];
 }
 
+/** How long "N more applications loaded" stays in the live region before it is cleared. */
+export const ANNOUNCE_MS = 5000;
+
 export function useApplicationList(status: Status | undefined) {
   const [tick, setTick] = useState(0);
   const [fetched, setFetched] = useState<Fetched | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [focusId, setFocusId] = useState<number | null>(null);
   const key = `${status ?? "all"}:${tick}`;
+
+  // The screen's live region falls back to this text after every loading message, so it must not
+  // outlive the moment it describes: cleared on a tab switch or refetch (new key), after
+  // ANNOUNCE_MS, and by the screen when a detail loads (clearAnnouncement). The timer dies on unmount.
+  const [announcedKey, setAnnouncedKey] = useState(key);
+  if (announcedKey !== key) {
+    setAnnouncedKey(key);
+    setAnnouncement("");
+  }
+  useEffect(() => {
+    if (!announcement) return;
+    const t = setTimeout(() => setAnnouncement(""), ANNOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [announcement]);
+  const clearAnnouncement = useCallback(() => setAnnouncement(""), []);
   const keyRef = useRef(key);
   useEffect(() => {
     keyRef.current = key;
@@ -101,5 +119,5 @@ export function useApplicationList(status: Status | undefined) {
     const cached = getList(status);
     view = cached ? { kind: "ready", ...cached, refreshing: true, refreshFailed: false, more: "idle" } : { kind: "loading" };
   }
-  return { view, retry, loadMore, announcement, focusId, clearFocus: () => setFocusId(null) };
+  return { view, retry, loadMore, announcement, clearAnnouncement, focusId, clearFocus: () => setFocusId(null) };
 }

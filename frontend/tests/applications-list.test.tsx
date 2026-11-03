@@ -3,16 +3,18 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ApplicationsScreen } from "../src/app/(app)/applications/(ledger)/screen";
+import { ANNOUNCE_MS } from "../src/app/(app)/applications/(ledger)/use-list";
 import { ToastProvider } from "../src/components/toast";
 import { clearCaches } from "../src/lib/cache";
 import { STATUSES } from "../src/lib/types";
 import { type Fake, installFake, json, makeApp } from "./helpers/fake-api";
 
 let search = "";
+let params: { id?: string } = {};
 const replace = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace }),
-  useParams: () => ({}),
+  useParams: () => params,
   useSearchParams: () => new URLSearchParams(search),
   usePathname: () => "/applications",
 }));
@@ -21,19 +23,23 @@ let fake: Fake;
 beforeEach(() => {
   clearCaches();
   search = "";
+  params = {};
   replace.mockClear();
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 const setup = (count: number, make: (id: number) => Partial<ReturnType<typeof makeApp>> = () => ({})) => {
   fake = installFake({ apps: Array.from({ length: count }, (_, i) => makeApp(i + 1, make(i + 1))), interviews: [] });
 };
-const mount = () =>
-  render(
-    <ToastProvider>
-      <ApplicationsScreen>{null}</ApplicationsScreen>
-    </ToastProvider>,
-  );
+const ui = () => (
+  <ToastProvider>
+    <ApplicationsScreen>{null}</ApplicationsScreen>
+  </ToastProvider>
+);
+const mount = () => render(ui());
 const rowLinks = () => within(screen.getByRole("list", { name: "Applications" })).getAllByRole("link");
 const status = () => screen.getAllByRole("status")[0];
 
@@ -212,5 +218,46 @@ it("the persistent status region says Loading applications while loading", async
   mount();
   expect(status().textContent).toBe("Loading applications");
   await screen.findByRole("list", { name: "Applications" });
+  expect(status().textContent).toBe("");
+});
+
+// ---- the "N more applications loaded" message is said once ----
+async function loadMoreOnce() {
+  setup(120);
+  const view = mount();
+  await screen.findByRole("list", { name: "Applications" });
+  await userEvent.click(screen.getByRole("button", { name: "Load more" }));
+  await waitFor(() => expect(status().textContent).toBe("50 more applications loaded"));
+  return view;
+}
+
+it("opening a row after Load more never re-announces the old message", async () => {
+  const { rerender } = await loadMoreOnce();
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  fake.on("GET", /^\/applications\/70$/, async () => (await gate, json(200, fake.db.apps.find((a) => a.id === 70))));
+  params = { id: "70" };
+  rerender(ui());
+  expect(status().textContent).toBe("Loading application");
+  release();
+  await waitFor(() => expect(fake.callsTo("GET", /interviews/)).toHaveLength(1));
+  await act(async () => {}); // let the detail land
+  expect(status().textContent).toBe("");
+});
+
+it("switching tab after Load more never re-announces the old message", async () => {
+  const { rerender } = await loadMoreOnce();
+  search = "status=applied";
+  rerender(ui());
+  expect(status().textContent).toBe("Loading applications");
+  await waitFor(() => expect(fake.callsTo("GET", /status=applied/)).toHaveLength(1));
+  await screen.findByRole("list", { name: "Applications" });
+  expect(status().textContent).toBe("");
+});
+
+it("the message clears itself after it has been read out", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  await loadMoreOnce();
+  act(() => vi.advanceTimersByTime(ANNOUNCE_MS));
   expect(status().textContent).toBe("");
 });

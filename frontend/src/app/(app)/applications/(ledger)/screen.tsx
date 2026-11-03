@@ -40,7 +40,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const { view, retry, loadMore, announcement, focusId, clearFocus } = useApplicationList(status);
+  const { view, retry, loadMore, announcement, clearAnnouncement, focusId, clearFocus } = useApplicationList(status);
   const listRef = useRef<HTMLDivElement>(null);
 
   // After "Load more" the button may disappear (end of list): focus the first new row instead.
@@ -52,6 +52,8 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
 
   const hasDetail = id !== undefined;
   const { state, reset } = useApplicationDetail(id);
+  // Opening another detail makes "N more applications loaded" old news: never fall back to it.
+  useEffect(() => clearAnnouncement(), [id, clearAnnouncement]);
   const ready = state.kind === "ready" ? state.application : null;
   const refreshing = state.kind === "ready" && state.refreshing;
   const detailBusy = state.kind === "loading" || (state.kind === "ready" && (state.refreshing || state.interviews.kind === "loading"));
