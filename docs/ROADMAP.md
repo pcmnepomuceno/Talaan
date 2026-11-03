@@ -31,6 +31,7 @@ Next.js app in `frontend/`, built from `docs/DESIGN.md`. Each milestone is merge
   - Note for copy and tests: the account stays deleted even if the user later gets a new invite code; signing up again creates a fresh, empty account.
 - F5 (done, in review on `feature/f5-applications`): application list (server-side status filter, Load more), detail (stale-while-revalidate, isolated interviews error), create and edit form, delete. Interviews are read-only on the detail.
 - F6 (next): interviews create, edit and delete (DESIGN 8.5 and 8.6 patterns; the detail gets its "Add interview" action).
+  - Deferred from the F5 review: the xl detail header's `xlAction` class and its disabled-button-or-Link branch for Edit and Delete (`(ledger)/screen.tsx`) repeat what `BarAction` (`app-bar.tsx`) does. Give `BarAction` a tone or className prop and reuse it there, so sizing and focus fixes land once. F6 adds interview actions, so do it then.
 - F7: Vercel deploy.
 
 ## Clients
