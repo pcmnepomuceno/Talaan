@@ -37,6 +37,20 @@ FastAPI default: `{"detail": "message"}`. Validation errors (422) use FastAPI's 
 
 The client IP is the socket peer. `TRUST_PROXY=true` (only behind a proxy you control) uses the right-most `X-Forwarded-For` value instead; with `false` that header is ignored. Authenticated endpoints are not rate limited yet. `/login` returns the same 401 for an unknown email and a wrong password, including passwords over 72 bytes.
 
+Limits are exact under concurrency (one advisory lock per key; DECISIONS.md). To check by hand, send 20 parallel logins for a fresh email. The result must be exactly 5x 401 and 15x 429:
+
+```bash
+EMAIL="burst-$(date +%s)@example.com"
+seq 20 | xargs -P20 -I{} curl -s -o /dev/null -w '%{http_code}\n' \
+  -X POST http://localhost:8000/api/v1/login \
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$EMAIL\",\"password\":\"Wr0ng!pass\"}" | sort | uniq -c
+#       5 401
+#      15 429
+```
+
+Your IP must also have fewer than 5 login attempts in the last 15 minutes, or the per-IP limit (10) answers first (for example 20x 429). For a fresh IP every run, start the server with `TRUST_PROXY=true` and add `-H "X-Forwarded-For: 198.51.100.$((RANDOM % 250 + 1))"`. The same burst with 20 different emails from one IP must give exactly 10x 401 and 10x 429. Restart the server after pulling, because without `--reload` it keeps running the old code.
+
 ## Ownership
 Another user's application or interview returns **404, never 403**, so IDs cannot be probed. Ownership checks live in shared dependencies.
 
