@@ -81,6 +81,16 @@ describe("profile", () => {
     expect(await screen.findByText("ana@example.ph")).toBeTruthy();
   });
 
+  it("a 200 that is not JSON (wrong BACKEND_URL, proxy page) shows the load error, not an endless skeleton", async () => {
+    handlers[ME] = () => new Response("<html>not the API</html>", { status: 200, headers: { "Content-Type": "text/html" } });
+    render(<AccountScreen />);
+    expect(await screen.findByText("Couldn't load your account.")).toBeTruthy();
+    expect(screen.queryByText("Loading your account")).toBeNull();
+    handlers[ME] = () => json(200, user);
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByText("ana@example.ph")).toBeTruthy();
+  });
+
   it("a 401 on load sends the user to login with expired and next", async () => {
     handlers[ME] = () => json(401, { detail: "Session expired" });
     render(<AccountScreen />);

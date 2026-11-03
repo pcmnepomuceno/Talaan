@@ -6,7 +6,7 @@ export type FieldErrors = Record<string, string>;
 
 export class ApiError extends Error {
   constructor(
-    readonly status: number, // 0 = network failure (no response)
+    readonly status: number, // 0 = no usable response (network failure, or a 2xx that is not JSON)
     readonly detail: string,
     readonly fieldErrors: FieldErrors = {},
     readonly retryAfterSeconds: number | null = null,
@@ -71,7 +71,13 @@ export async function request<T = void>(path: string, opts: Options = {}): Promi
 
   if (res.ok) {
     if (res.status === 204) return undefined as T;
-    return (await res.json().catch(() => undefined)) as T;
+    // A 2xx that is not JSON is not our API (wrong BACKEND_URL, a proxy page): never hand callers
+    // `undefined` as data. Status 0 gives the retryable "isn't responding" message.
+    try {
+      return (await res.json()) as T;
+    } catch {
+      throw new ApiError(0, "Unexpected response");
+    }
   }
 
   const data: unknown = await res.json().catch(() => null);

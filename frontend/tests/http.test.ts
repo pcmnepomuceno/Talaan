@@ -41,6 +41,19 @@ describe("request", () => {
     expect(await request("/api/v1/logout", { method: "POST" })).toBeUndefined();
   });
 
+  it("a 2xx that is not JSON throws a status 0 error (retryable message), not undefined", async () => {
+    reply(200, "<html>proxy error page</html>", { "Content-Type": "text/html" });
+    const e = await request("/api/v1/me").catch((err) => err);
+    expect(e).toBeInstanceOf(ApiError);
+    expect(e.status).toBe(0);
+    expect(errorMessage(e)).toBe("Talaan isn't responding right now. Try again in a moment.");
+  });
+
+  it("an empty 200 body also throws", async () => {
+    reply(200);
+    expect(await request("/api/v1/me").catch((err) => err)).toBeInstanceOf(ApiError);
+  });
+
   it("throws status and detail on 4xx", async () => {
     reply(403, { detail: "Incorrect password." });
     const e = await request("/x", { method: "POST" }).catch((err) => err);

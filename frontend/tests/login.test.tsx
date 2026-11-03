@@ -121,6 +121,15 @@ describe("notices and the /me probe", () => {
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/applications"));
   });
 
+  it("/me 200 with a non-JSON body is not treated as logged in", async () => {
+    handlers[ME] = () => new Response("<html>not the API</html>", { status: 200, headers: { "Content-Type": "text/html" } });
+    render(<LoginForm />);
+    await waitFor(() => expect(calls(ME)).toHaveLength(1));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Email")).toBeTruthy();
+  });
+
   it("/me 401 shows the form and navigates nowhere (no loop)", async () => {
     render(<LoginForm expired />);
     await waitFor(() => expect(calls(ME)).toHaveLength(1));
