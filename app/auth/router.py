@@ -16,9 +16,11 @@ app/schemas/session.py for the pieces these will need.
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
+from app import config
+from app.auth import rate_limit
 from app.auth.models import Session as SessionModel
 from app.auth.security import (
     DUMMY_PASSWORD_HASH,
@@ -37,7 +39,16 @@ SESSION_LIFETIME = timedelta(days=30)
 
 
 @router.post("/signup")
-def signup(user_data: UserCreate, db: Session = Depends(get_db)):
+def signup(user_data: UserCreate, request: Request, db: Session = Depends(get_db)):
+    ip_key = "signup:ip:" + rate_limit.client_ip(request)
+    with rate_limit.fail_closed(db):
+        wait = rate_limit.check(db, ip_key, config.SIGNUP_IP_LIMIT, config.SIGNUP_IP_WINDOW_SECONDS)
+        if wait is None:
+            rate_limit.record(db, ip_key)
+        db.commit()  # keeps the prune, and the attempt counts even if the client disconnects
+    if wait is not None:
+        raise rate_limit.too_many(wait)
+
     normalized_email = user_data.email.lower()
 
     #Check if email already exists
@@ -61,8 +72,28 @@ def signup(user_data: UserCreate, db: Session = Depends(get_db)):
     return UserRead.model_validate(user)
 
 @router.post("/login")
-def login(user_data: UserLogin, response: Response, db: Session = Depends(get_db)):
+def login(
+    user_data: UserLogin, request: Request, response: Response, db: Session = Depends(get_db)
+):
     normalized_email = user_data.email.lower()
+    ip_key = "login:ip:" + rate_limit.client_ip(request)
+    em_key = rate_limit.email_key(normalized_email)
+
+    # Limits first. Blocked attempts are not recorded, so a lockout ends with its window.
+    # The IP attempt is committed before bcrypt runs: a dropped connection still counts.
+    with rate_limit.fail_closed(db):
+        waits = [
+            rate_limit.check(db, ip_key, config.LOGIN_IP_LIMIT, config.LOGIN_IP_WINDOW_SECONDS),
+            rate_limit.check(
+                db, em_key, config.LOGIN_EMAIL_LIMIT, config.LOGIN_EMAIL_WINDOW_SECONDS
+            ),
+        ]
+        waits = [w for w in waits if w is not None]
+        if not waits:
+            rate_limit.record(db, ip_key)
+        db.commit()
+    if waits:
+        raise rate_limit.too_many(max(waits))
 
     # Look up the user by email
     user = db.query(UserModel).filter(UserModel.email == normalized_email).first()
@@ -73,7 +104,14 @@ def login(user_data: UserLogin, response: Response, db: Session = Depends(get_db
         user_data.password, user.password_hash if user else DUMMY_PASSWORD_HASH
     )
     if not user or not password_ok:
+        # Unknown emails count too, or only real accounts could ever be locked (a leak).
+        with rate_limit.fail_closed(db):
+            rate_limit.record(db, em_key)
+            db.commit()
         raise HTTPException(status_code=401, detail="Invalid email or password.")
+
+    with rate_limit.fail_closed(db):
+        rate_limit.clear(db, em_key)  # committed together with the session below
 
     # Generate a session token
     session_token = generate_session_token()

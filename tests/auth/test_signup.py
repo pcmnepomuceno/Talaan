@@ -27,6 +27,7 @@ def test_signup_duplicate_email(client, user):
         "Strong!pass",  # no digit
         "Str0ngpass1",  # no special
         "Aa1!" + "a" * 70,  # 74 bytes
+        "Aa1!" + "é" * 35,  # 39 characters but 74 UTF-8 bytes: bytes count, not characters
     ],
 )
 def test_signup_weak_password(client, password):
