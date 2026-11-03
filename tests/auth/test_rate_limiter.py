@@ -95,3 +95,13 @@ def test_fail_closed_maps_db_error_to_503(db):
     with pytest.raises(HTTPException) as passthrough, rate_limit.fail_closed(db):  # 429 is not swallowed
         raise rate_limit.too_many(5)
     assert passthrough.value.status_code == 429
+
+
+def test_fail_closed_still_503_when_rollback_fails(db, monkeypatch):
+    def dead(*a, **k):
+        raise OperationalError("rollback", {}, Exception("connection lost"))
+
+    monkeypatch.setattr(db, "rollback", dead)
+    with pytest.raises(HTTPException) as exc, rate_limit.fail_closed(db):
+        raise OperationalError("select", {}, Exception("db down"))
+    assert exc.value.status_code == 503

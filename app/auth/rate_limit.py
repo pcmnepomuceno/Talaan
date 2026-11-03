@@ -93,5 +93,8 @@ def fail_closed(db: Session):
     try:
         yield
     except SQLAlchemyError:
-        db.rollback()
+        try:
+            db.rollback()
+        except SQLAlchemyError:
+            pass  # dead connection: rollback fails too, but the answer is still 503
         raise HTTPException(status_code=503, detail="Service temporarily unavailable.") from None
