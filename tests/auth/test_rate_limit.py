@@ -160,16 +160,37 @@ def test_limiter_db_error_fails_closed_with_503(client, db, user, monkeypatch):
     assert signup(client, 1).status_code == 503
 
 
-def test_ip_attempt_is_committed_before_bcrypt_runs(client, db, user, monkeypatch):
+def test_ip_and_email_attempts_are_committed_before_bcrypt_runs(client, db, user, monkeypatch):
     from app.auth import router
 
     seen = {}
 
     def spy(password, hashed):
-        seen["pending"] = bool(db.new or db.dirty)
-        seen["rows"] = db.query(RateLimitEvent).filter_by(key="login:ip:unknown").count()
+        seen["pending"] = bool(db.new or db.dirty or db.deleted)
+        seen["ip"] = db.query(RateLimitEvent).filter_by(key="login:ip:unknown").count()
+        seen["email"] = db.query(RateLimitEvent).filter_by(key=rate_limit.email_key(USER_EMAIL)).count()
         return False
 
     monkeypatch.setattr(router, "verify_password", spy)
     login(client)
-    assert seen == {"pending": False, "rows": 1}
+    assert seen == {"pending": False, "ip": 1, "email": 1}
+
+
+def test_concurrent_guesses_all_recorded_before_verify_hit_429_at_the_limit(client, db, user, monkeypatch):
+    """Each verify starts the next attempt before returning, so every attempt has passed the
+    limiter before any bcrypt finishes: the worst case for concurrent guesses."""
+    from app.auth import router
+
+    statuses, verifies = [], []
+
+    def nested(password, hashed):
+        verifies.append(1)
+        statuses.append(login(client).status_code)  # stops at the first 429 (no verify there)
+        return False
+
+    monkeypatch.setattr(router, "verify_password", nested)
+    statuses.append(login(client).status_code)
+    # 5 attempts reach verify; the 6th, sent while all 5 are still "in bcrypt", gets 429.
+    assert len(verifies) == config.LOGIN_EMAIL_LIMIT
+    assert sorted(statuses) == [401] * config.LOGIN_EMAIL_LIMIT + [429]
+    assert db.query(RateLimitEvent).filter_by(key=rate_limit.email_key(USER_EMAIL)).count() == 5

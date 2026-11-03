@@ -80,7 +80,9 @@ def login(
     em_key = rate_limit.email_key(normalized_email)
 
     # Limits first. Blocked attempts are not recorded, so a lockout ends with its window.
-    # The IP attempt is committed before bcrypt runs: a dropped connection still counts.
+    # Both attempts are committed before bcrypt runs: concurrent guesses see each other
+    # (the race window is this short transaction, not a bcrypt run), and a dropped
+    # connection still counts. A success clears the email key below.
     with rate_limit.fail_closed(db):
         waits = [
             rate_limit.check(db, ip_key, config.LOGIN_IP_LIMIT, config.LOGIN_IP_WINDOW_SECONDS),
@@ -91,6 +93,7 @@ def login(
         waits = [w for w in waits if w is not None]
         if not waits:
             rate_limit.record(db, ip_key)
+            rate_limit.record(db, em_key)
         db.commit()
     if waits:
         raise rate_limit.too_many(max(waits))
@@ -104,10 +107,8 @@ def login(
         user_data.password, user.password_hash if user else DUMMY_PASSWORD_HASH
     )
     if not user or not password_ok:
-        # Unknown emails count too, or only real accounts could ever be locked (a leak).
-        with rate_limit.fail_closed(db):
-            rate_limit.record(db, em_key)
-            db.commit()
+        # Recorded above. Unknown emails count too, or only real accounts could ever be
+        # locked (a leak).
         raise HTTPException(status_code=401, detail="Invalid email or password.")
 
     with rate_limit.fail_closed(db):
