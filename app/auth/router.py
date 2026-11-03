@@ -17,6 +17,7 @@ app/schemas/session.py for the pieces these will need.
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import config
@@ -70,11 +71,17 @@ def signup(user_data: UserCreate, request: Request, db: Session = Depends(get_db
         account_name=user_data.account_name
     )
     db.add(user)
-    db.flush()
-    if not invites.consume(db, code_hash, user.id):
+    try:
+        db.flush()
+        if not invites.consume(db, code_hash, user.id):
+            db.rollback()
+            raise invites.invalid()
+        db.commit()
+    except IntegrityError:
+        # A concurrent signup with the same email passed the check above and committed
+        # first; our INSERT hit the unique index. The rollback keeps the code unused.
         db.rollback()
-        raise invites.invalid()
-    db.commit()
+        raise HTTPException(status_code=400, detail="Email already exists.") from None
     db.refresh(user)
 
     return UserRead.model_validate(user)
