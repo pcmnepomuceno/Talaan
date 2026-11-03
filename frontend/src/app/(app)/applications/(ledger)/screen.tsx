@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { AppBar, BarAction } from "@/components/app-bar";
-import { Button } from "@/components/button";
+import { Button, TextAction } from "@/components/button";
 import { DeleteConfirm } from "@/components/dialog";
 import { EmptyState } from "@/components/empty-state";
 import { FilterTabs, type Filter } from "@/components/filter-tabs";
@@ -27,8 +27,6 @@ export function panes(hasDetail: boolean) {
 
 const DetailContext = createContext<DetailState>({ kind: "loading" });
 export const useDetail = () => useContext(DetailContext);
-
-const xlAction = "inline-flex min-h-11 min-w-11 items-center justify-center rounded-sm px-2 text-body-medium disabled:cursor-not-allowed";
 
 export function ApplicationsScreen({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -191,26 +189,15 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
           {hasDetail && (
             <div className="mb-4 hidden min-h-11 items-center justify-between gap-3 xl:flex">
               <h2 className="text-body text-text-secondary">Application detail</h2>
-              <div className="flex items-center text-primary">
+              <div className="flex items-center">
                 {ready && (
                   <>
-                    {refreshing ? (
-                      <button type="button" disabled className={`${xlAction} text-text-muted`}>
-                        Edit
-                      </button>
-                    ) : (
-                      <Link href={editHref} className={xlAction}>
-                        Edit
-                      </Link>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setConfirming(true)}
-                      disabled={refreshing}
-                      className={`${xlAction} ${refreshing ? "text-text-muted" : "text-error-text"}`}
-                    >
+                    <TextAction href={editHref} disabled={refreshing}>
+                      Edit
+                    </TextAction>
+                    <TextAction tone="danger" onClick={() => setConfirming(true)} disabled={refreshing}>
                       Delete
-                    </button>
+                    </TextAction>
                   </>
                 )}
               </div>
