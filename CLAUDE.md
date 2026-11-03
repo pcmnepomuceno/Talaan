@@ -54,7 +54,7 @@ created_at, updated_at
 ENUM value lists and column choices are logged in DECISIONS.md (2026-10-20).
 
 ## Auth design decisions
-- **`BCRYPT_ROUNDS`** (`app/config.py`, default 12): cost for `hash_password` (read at call time) and for the login dummy hash (built once at startup), so they always match. `tests/conftest.py` sets 4; never lower it outside tests.
+- **`BCRYPT_ROUNDS`** (`app/config.py`, default 12): cost for `hash_password` (read at call time) and for the login dummy hash (built once at startup), so they always match. `tests/conftest.py` sets 4; never lower it outside tests. **Must stay fixed after launch**: old hashes keep their cost, so a change reintroduces a timing gap between known and unknown emails (rehash-on-login is a possible future change; DECISIONS.md 2026-11-03).
 - **Rate limits** (`app/auth/rate_limit.py`, Postgres): login per IP and per email, signup per IP; limits from env (`.env.example`). Client IP is the socket peer; `TRUST_PROXY=true` uses the right-most `X-Forwarded-For`. `TRUST_PROXY` is the only trust switch (run uvicorn with `--no-proxy-headers`). Limiter DB error returns 503.
 - **Sessions over JWT**: instant revocation (delete the row); no horizontal-scaling need.
 - **Session lifetime 30 days**: `SESSION_LIFETIME` in `app/routes/auth.py`, used
