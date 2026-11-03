@@ -181,6 +181,16 @@ describe("log in", () => {
     expect((screen.getByRole("button", { name: "Log in" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it("403 (Origin check) is a blocked-request banner, never wrong credentials", async () => {
+    handlers[LOGIN] = () => json(403, { detail: "Cross-site request blocked." });
+    render(<LoginForm />);
+    await fillLogin();
+    await submitLogin();
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("This request was blocked. Reload the page and try again.");
+    expect(alert.textContent).not.toContain("Invalid email or password.");
+  });
+
   it("422 maps to the field", async () => {
     handlers[LOGIN] = () => json(422, { detail: [{ loc: ["body", "email"], msg: "value is not a valid email address" }] });
     render(<LoginForm />);
@@ -312,6 +322,15 @@ describe("create account", () => {
     await userEvent.type(screen.getByLabelText("Password"), "Secret1!");
     await submitSignup();
     await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Talaan isn't responding"));
+  });
+
+  it("403 (Origin check) is a blocked-request banner, not a field error", async () => {
+    handlers[SIGNUP] = () => json(403, { detail: "Cross-site request blocked." });
+    await openSignup();
+    await fillSignup();
+    await submitSignup();
+    expect((await screen.findByRole("alert")).textContent).toContain("This request was blocked. Reload the page and try again.");
+    expect(document.querySelector('[aria-invalid="true"]')).toBeNull();
   });
 
   it("busy state and a double click send one signup", async () => {

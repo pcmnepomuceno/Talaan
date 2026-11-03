@@ -128,6 +128,9 @@ describe("errorMessage", () => {
     expect(errorMessage(err(503))).toBe(text);
     expect(errorMessage(err(502))).toBe(text);
   });
+  it("403 is a blocked request (the Origin check), never a credentials error", () => {
+    expect(errorMessage(err(403))).toBe("This request was blocked. Reload the page and try again.");
+  });
   it("other statuses are left to the caller", () => {
     expect(errorMessage(err(401))).toBeNull();
     expect(errorMessage(err(422))).toBeNull();

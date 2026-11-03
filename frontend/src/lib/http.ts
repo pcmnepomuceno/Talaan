@@ -94,9 +94,12 @@ export async function request<T = void>(path: string, opts: Options = {}): Promi
 }
 
 // User-facing text for the errors every form handles the same way. Returns null for statuses the
-// caller maps itself (400/401/403/422).
+// caller maps itself (400/401/422).
 export function errorMessage(e: unknown): string | null {
   if (!(e instanceof ApiError)) return "Something went wrong. Try again.";
+  // The Origin/Sec-Fetch-Site check (app/security.py) answers 403 on any write. Account deletion
+  // checks for its own "Incorrect password." 403 before calling this.
+  if (e.status === 403) return "This request was blocked. Reload the page and try again.";
   if (e.status === 429) {
     if (e.retryAfterSeconds === null) return "Too many attempts. Try again later.";
     const minutes = Math.max(1, Math.ceil(e.retryAfterSeconds / 60));

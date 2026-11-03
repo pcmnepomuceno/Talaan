@@ -17,6 +17,6 @@ export const logout = () => request("/api/v1/logout", { method: "POST", redirect
 
 export const getMe = (opts: { redirectOn401?: boolean } = {}) => request<User>("/api/v1/me", opts);
 
-// 403 = wrong password (never 401), so the default 401 redirect stays on for a truly dead session.
+// 403 = wrong password or the Origin check (never 401), so the default 401 redirect stays on for a truly dead session.
 export const deleteAccount = (password: string) =>
   request("/api/v1/account/delete", { method: "POST", body: { password } });

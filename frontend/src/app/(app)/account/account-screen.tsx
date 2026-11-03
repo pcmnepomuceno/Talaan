@@ -121,7 +121,7 @@ function Row({ label, children }: { label: string; children: string }) {
 }
 
 // Two steps in one dialog. The destructive call is only reachable on step 2, and only with the
-// typed email matching and a password present. 403 (wrong password) keeps the dialog open.
+// typed email matching and a password present. Every error keeps the dialog open.
 function DeleteAccountDialog({ email, open, onClose }: { email: string; open: boolean; onClose: () => void }) {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2>(1);
@@ -164,7 +164,10 @@ function DeleteAccountDialog({ email, open, onClose }: { email: string; open: bo
     } catch (err) {
       submitting.current = false;
       setBusy(false);
-      if (err instanceof ApiError && (err.status === 403 || err.status === 422)) {
+      // Only the exact detail means a wrong password; any other 403 is the Origin check (banner).
+      const wrongPassword =
+        err instanceof ApiError && (err.status === 422 || (err.status === 403 && err.detail === "Incorrect password."));
+      if (wrongPassword) {
         setPasswordError("Incorrect password.");
         setPassword("");
         // Wait for the re-enabled field to render before focusing it.

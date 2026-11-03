@@ -175,6 +175,20 @@ describe("delete account dialog", () => {
     await waitFor(() => expect(document.activeElement).toBe(passwordBox()));
   });
 
+  it("a 403 that is not a wrong password (Origin check) shows a banner and keeps the password", async () => {
+    handlers[DELETE] = () => json(403, { detail: "Cross-site request blocked." });
+    await openStep2();
+    await fillStep2();
+    await userEvent.click(del());
+    expect((await within(dialog()).findByRole("alert")).textContent).toContain(
+      "This request was blocked. Reload the page and try again.",
+    );
+    expect(within(dialog()).queryByText("Incorrect password.")).toBeNull();
+    expect(passwordBox().getAttribute("aria-invalid")).toBeNull();
+    expect((passwordBox() as HTMLInputElement).value).toBe("Secret1!");
+    expect(dialogOpen()).toBe(true);
+  });
+
   it("429 shows the wait time in the dialog", async () => {
     handlers[DELETE] = () => json(429, { detail: "Too many attempts. Try again later." }, { "Retry-After": "120" });
     await openStep2();
