@@ -1,5 +1,5 @@
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -53,12 +53,24 @@ def test_signup_without_invite_code_is_422(client):
     assert client.post("/api/v1/signup", json=GOOD).status_code == 422
 
 
+def add_code(db, body):
+    """Insert a valid, unused code with a chosen body (create_invite picks a random one)."""
+    now = datetime.now(timezone.utc)
+    db.add(InviteCode(code_hash=invites.hash_code(body), created_at=now, expires_at=now + timedelta(days=1)))
+    db.commit()
+
+
 def bad_codes(db, user):
+    # Valid codes the non-ASCII lookalikes below would match if they were accepted.
+    add_code(db, "ABCD2345EFGS")
+    add_code(db, "ABCD2345EFGK")
     return {
         "unknown": "TLN-0000-0000-0000",
         "expired": create_invite(db, expires_in=timedelta(seconds=-1)),
         "used": create_invite(db, used_by=user),
-        "malformed_chars": "TLN-IIII-LLLL-OOOO",
+        "unknown_aliases": "TLN-IIII-LLLL-OOOO",  # well-formed: 1111 1111 0000
+        "non_ascii_long_s": "TLN-ABCD-2345-EFG\u017f",  # uppercases to S
+        "non_ascii_kelvin": "TLN-ABCD-2345-EFG\u212a",
         "right_length_bad_char": "TLN-ABCD-2345-EFGU",
         "too_short": "TLN-ABCD",
         "over_length": "TLN-" + "A" * 200,

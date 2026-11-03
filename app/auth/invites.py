@@ -17,8 +17,12 @@ from app.auth.models import InviteCode
 
 # Crockford base32: no I, L, O, U. 12 characters = 60 bits.
 ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+# Crockford decoding: letters easily misread for digits map to them.
+ALIASES = str.maketrans("OIL", "011")
 CODE_LENGTH = 12
 PREFIX = "TLN"
+# The prefix after alias mapping (L -> 1). Only stripped from prefix + body input.
+MAPPED_PREFIX = PREFIX.translate(ALIASES)
 # Longer input is rejected before any work. Same answer as every other bad code.
 MAX_INPUT_LEN = 64
 
@@ -29,13 +33,17 @@ def utcnow() -> datetime:
 
 
 def normalize(raw: str) -> str | None:
-    """Strip, uppercase, drop whitespace and dashes, drop an optional leading TLN.
-    Return the 12-character body, or None if malformed (wrong length or characters).
-    The prefix is unambiguous: L is not in the alphabet, so a body never starts with TLN."""
-    if not isinstance(raw, str) or len(raw) > MAX_INPUT_LEN:
+    """ASCII only, uppercase, drop whitespace and dashes, map O to 0 and I/L to 1, then drop
+    a leading TLN only when exactly prefix + body long (a body can start with T1N, which is
+    also what TLN maps to). Return the 12-character body, or None if malformed.
+    Non-ASCII is rejected before uppercasing: some characters uppercase into the alphabet
+    (U+017F long s becomes S), which would accept a non-canonical code."""
+    if not isinstance(raw, str) or len(raw) > MAX_INPUT_LEN or not raw.isascii():
         return None
     body = "".join(ch for ch in raw.upper() if not ch.isspace() and ch != "-")
-    body = body.removeprefix(PREFIX)
+    body = body.translate(ALIASES)
+    if len(body) == len(PREFIX) + CODE_LENGTH and body.startswith(MAPPED_PREFIX):
+        body = body[len(PREFIX):]
     if len(body) != CODE_LENGTH or any(ch not in ALPHABET for ch in body):
         return None
     return body

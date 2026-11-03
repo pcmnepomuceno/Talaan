@@ -313,3 +313,14 @@
 - **`used_by_user_id` is `ON DELETE SET NULL`:** deleting an account (M10) never fails on a used code, and the code stays used.
 - **Accepted trade-off:** codes have 60 bits of entropy and are stored as plain SHA-256 (no salt, no slow hash). Someone holding a leaked database could in theory brute-force unused, unexpired codes offline, at very high cost. Expiry and single use bound the damage, so 12 characters is accepted.
 - **Alternative:** a single invite code in an env var (no per-person revocation or expiry, reusable once leaked); an admin endpoint (needs admin auth); longer codes or a slow hash (worse to type, slower, and not worth it for this threat).
+
+---
+
+# Decision: Invite codes accept Crockford aliases and reject non-ASCII
+
+- **Date:** 2026-11-03
+- **Decision:** This changes "Input is normalized" and "malformed (including I, L, O, U)" in "Invite-code signup". `normalize()` now rejects any non-ASCII input first, then uppercases, drops dashes and whitespace, maps O to 0 and I/L to 1 (Crockford decoding), and strips the `TLN` prefix only when the cleaned input is exactly 15 characters. U is still malformed.
+- **Why aliases:** codes are read off a screen or a note and retyped. Rejecting O for 0 gives the user the generic 400 with no hint, and each retry counts against the 5/hour signup limit, so a valid code could lock its holder out. Accepting the aliases costs no entropy: each maps to one canonical character and the same hash.
+- **Why the length rule for the prefix:** L now maps to 1, so `TLN` and `T1N` look the same after mapping, and a body can start with `T1N`. Stripping a `T1N` start only from 15-character input keeps a 12-character body that starts with it intact.
+- **Why ASCII only:** `str.upper()` maps some non-ASCII characters into the alphabet (U+017F long s becomes S), so a non-canonical string was accepted as a valid code. No security impact (same hash), but the format rule was not enforced. Non-ASCII whitespace (no-break space) is now rejected too; codes come from the CLI as plain ASCII.
+- **Alternative:** keep strict decoding (simpler, hostile to typos); NFKC-normalize instead of rejecting (accepts more lookalikes, which is the opposite of the goal).

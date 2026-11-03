@@ -33,10 +33,12 @@ def test_normalize_equivalent_inputs_give_one_hash(raw):
         "",
         "TLN-ABCD-2345-EFG",  # too short
         "TLN-ABCD-2345-EFGHJ",  # too long
-        "TLN-ABCD-2345-EFGI",  # I
-        "TLN-ABCD-2345-EFGL",  # L
-        "TLN-ABCD-2345-EFGO",  # O
-        "TLN-ABCD-2345-EFGU",  # U
+        "TLN-ABCD-2345-EFGU",  # U has no alias
+        "TLN-ABCD-2345-EFG\u017f",  # long s: uppercases to S
+        "TLN-ABCD-2345-EFG\u212a",  # Kelvin sign, looks like K
+        "TLN-ABCD-2345-EFGH\u00a0",  # non-ASCII whitespace
+        "TLNTLN-ABCD-2345-EFGH",  # prefix stripped once only
+        "ABC-2345-EFGH",  # 11 chars: no prefix to strip
         "TLN-ABCD-2345-EF!H",
         "A" * 65,
         "TLN-" + "A" * 10_000,
@@ -55,3 +57,30 @@ def test_generate_format_and_hash():
 
 def test_generate_codes_are_distinct():
     assert len({invites.generate()[0] for _ in range(1000)}) == 1000
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "TLN-01AB-01CD-0110",  # canonical
+        "TLN-OIAB-OLCD-OILO",
+        "tln-oiab-olcd-oilo",
+        "OIAB-0lCD-0Il0",  # no prefix
+    ],
+)
+def test_crockford_aliases_give_the_canonical_hash(raw):
+    assert invites.normalize(raw) == "01AB01CD0110"
+    assert invites.hash_code(invites.normalize(raw)) == invites.hash_code("01AB01CD0110")
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "TLN-T1NA-BCD2-3456",  # prefix + body
+        "T1NA-BCD2-3456",  # body only
+        "TLNA-BCD2-3456",  # body only, L alias: 12 chars, so not taken as the prefix
+        "tlnt1nabcd23456",
+    ],
+)
+def test_body_starting_with_t1n_works_with_and_without_prefix(raw):
+    assert invites.normalize(raw) == "T1NABCD23456"
