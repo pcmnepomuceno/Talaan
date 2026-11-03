@@ -17,7 +17,7 @@ export class ApiError extends Error {
 }
 
 type Options = {
-  method?: "GET" | "POST";
+  method?: "GET" | "POST" | "PATCH" | "DELETE";
   body?: unknown;
   // A 401 means the session is dead: send the user to /login?expired=1&next=<here>. Login, signup,
   // logout and the login page's own /me probe turn this off (a 401 there is an answer, not expiry).
