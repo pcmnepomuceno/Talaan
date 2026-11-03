@@ -63,13 +63,19 @@ def test_unknown_email_is_limited_too(client, trust_proxy):
     assert login(client, "ghost@example.com", xff="10.0.0.50").status_code == 429
 
 
-def test_success_clears_email_counter(client, user, trust_proxy):
+def test_success_does_not_reset_the_attacker_budget(client, user, trust_proxy):
     for i in range(4):
         assert login(client, xff=f"10.0.0.{i}").status_code == 401
     assert login(client, password=USER_PASSWORD, xff="10.0.0.10").status_code == 200
-    for i in range(5):  # a fresh budget of 5
-        assert login(client, xff=f"10.0.1.{i}").status_code == 401
-    assert login(client, xff="10.0.1.99").status_code == 429
+    assert login(client, xff="10.0.0.11").status_code == 401  # the 5th failure
+    assert login(client, xff="10.0.0.12").status_code == 429
+
+
+def test_success_does_not_consume_the_email_budget(client, db, user):
+    for _ in range(6):  # more than LOGIN_EMAIL_LIMIT, fewer than LOGIN_IP_LIMIT
+        assert login(client, password=USER_PASSWORD).status_code == 200
+    assert db.query(RateLimitEvent).filter_by(key=rate_limit.email_key(USER_EMAIL)).count() == 0
+    assert db.query(RateLimitEvent).filter_by(key="login:ip:unknown").count() == 6  # IP rows stay
 
 
 def test_successful_logins_count_against_ip_limit(client, user):

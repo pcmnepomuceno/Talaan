@@ -90,16 +90,22 @@ def check(db: Session, key: str, limit: int, window_seconds: int) -> int | None:
     return max(1, math.ceil((freeing + window - now).total_seconds()))
 
 
-def record(db: Session, key: str) -> None:
-    db.add(RateLimitEvent(key=key, created_at=utcnow()))
+def record(db: Session, key: str) -> int:
+    """Add one attempt and return its row id (flushed, not committed)."""
+    event = RateLimitEvent(key=key, created_at=utcnow())
+    db.add(event)
+    db.flush()
+    return event.id
 
 
-def clear(db: Session, key: str) -> None:
-    db.query(RateLimitEvent).filter(RateLimitEvent.key == key).delete(synchronize_session=False)
+def delete_event(db: Session, event_id: int) -> None:
+    """Remove one recorded attempt by id. Needs no lock: removing a row only frees budget."""
+    db.query(RateLimitEvent).filter(RateLimitEvent.id == event_id).delete(synchronize_session=False)
 
 
-def enforce(db: Session, *limits: tuple[str, int, int]) -> None:
-    """Check every (key, limit, window_seconds). If none is over, record one attempt per key.
+def enforce(db: Session, *limits: tuple[str, int, int]) -> dict[str, int]:
+    """Check every (key, limit, window_seconds). If none is over, record one attempt per key
+    and return {key: event id}, so a caller can later delete its own attempt.
     Commits either way (keeps the prune, and the attempt counts even if the client then
     disconnects), so call it before any slow work such as bcrypt. Over a limit: 429 with
     the longest wait. Blocked attempts are not recorded, so a lockout ends with its window.
@@ -114,12 +120,11 @@ def enforce(db: Session, *limits: tuple[str, int, int]) -> None:
             # hashtext collisions only make two keys share a lock (extra waiting, no error).
             db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": key})
         waits = [w for key, limit, window in limits if (w := check(db, key, limit, window)) is not None]
-        if not waits:
-            for key, _, _ in limits:
-                record(db, key)
+        ids = {} if waits else {key: record(db, key) for key, _, _ in limits}
         db.commit()
     if waits:
         raise too_many(max(waits))
+    return ids
 
 
 def too_many(retry_after: int) -> HTTPException:

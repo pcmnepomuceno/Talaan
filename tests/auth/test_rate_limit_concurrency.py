@@ -112,3 +112,48 @@ def test_login_releases_the_locks_before_bcrypt(monkeypatch):
         assert seen == {ip_key: True, em_key: True, "rows": (1, 1)}
     finally:
         cleanup(ip_key, em_key)
+
+
+def test_success_keeps_another_connections_failure(monkeypatch):
+    """While a correct password is being verified, another connection records a failure on
+    the same email and commits. The success deletes only its own email row, so that
+    failure survives (a clear of the whole key would delete it)."""
+    from fastapi.testclient import TestClient
+
+    from app import config
+    from app.auth import router
+    from app.auth.models import Session as SessionModel
+    from app.auth.security import hash_password
+    from app.main import app
+    from app.users.models import User
+
+    email, password = f"keep-{uuid.uuid4()}@example.com", "Str0ng!pass"
+    ip_key, em_key = "login:ip:unknown", rate_limit.email_key(email)
+    db = SessionLocal()
+    user = User(email=email, password_hash=hash_password(password), account_name="K")
+    db.add(user)
+    db.commit()
+    real_verify = router.verify_password
+
+    def spy(password, hashed):
+        other = SessionLocal()
+        try:
+            rate_limit.enforce(other, (em_key, config.LOGIN_EMAIL_LIMIT, config.LOGIN_EMAIL_WINDOW_SECONDS))
+        finally:
+            other.close()
+        return real_verify(password, hashed)
+
+    monkeypatch.setattr(router, "verify_password", spy)
+    cleanup(ip_key)
+    try:
+        with TestClient(app) as c:
+            r = c.post("/api/v1/login", json={"email": email, "password": password})
+        assert r.status_code == 200
+        assert count(em_key) == 1  # the other connection's failure
+        assert count(ip_key) == 1  # this attempt's IP row stays
+    finally:
+        cleanup(ip_key, em_key)
+        db.query(SessionModel).filter_by(user_id=user.id).delete()
+        db.delete(user)
+        db.commit()
+        db.close()

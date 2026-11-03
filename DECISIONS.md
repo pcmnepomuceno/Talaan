@@ -274,3 +274,15 @@
 - **Lock scope:** transaction-scoped, released by the commit that happens before bcrypt runs, so slow password checks never hold it. A rollback (fail-closed 503) also releases it. Because nothing outlives the transaction, this works with Neon's pooled (PgBouncer, transaction mode) connections. A session-level `pg_advisory_lock` would not: the pooler can give the next transaction a different server connection.
 - **Cost:** requests on the same key are serialized for the length of a short transaction (a few milliseconds). A `hashtext` collision makes two unrelated keys share a lock, which only adds waiting.
 - **Alternative:** `SERIALIZABLE` isolation with retries (more code, retries on every conflict), or a per-key counter row updated with `SELECT ... FOR UPDATE` (needs an upsert first, and a different table shape).
+
+---
+
+# Decision: A successful login deletes only its own email attempt
+
+- **Date:** 2026-11-03
+- **Decision:** This replaces "a successful login clears the email key" (the login route deleted every row on the email key). `rate_limit.record()` now returns the new row id and `enforce()` returns `{key: id}`. On a successful login the route deletes only this attempt's email-key row, in the same transaction that creates the session. The IP row stays counted, and every other row on the email key stays. Attempts are still recorded and committed before bcrypt runs.
+- **Why:** clearing the whole key let the account owner reset an attacker's budget. An attacker spreading guesses for one email across many IPs got a fresh 5 guesses every time the owner logged in (several devices, an app re-login). It also deleted failures that other connections recorded between this request's `enforce()` commit and its success, so the per-email count was not exact.
+- **Effect:** the per-email limit now counts failed attempts only. A success does not use up the budget (six successes in a row all work), and it does not refund failures either: after 4 failures and 1 success, the next failure is the 5th.
+- **No lock for the delete:** removing one row can only free budget. A concurrent caller that counted the row before it was deleted is at worst stricter for that one check.
+- **Cost:** the owner can still be locked out for the window by someone who knows the email (the accepted trade-off in "Auth rate limiting in Postgres"). `record()` flushes each row to get its id, so login sends two INSERTs instead of one batched INSERT: one extra round trip inside the locked transaction.
+- **Alternative:** keep clearing the key (resets attacker budgets); record attempts only after a failed verify (drops the record-before-verify order, so concurrent guesses would not see each other during bcrypt).

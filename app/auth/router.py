@@ -75,8 +75,8 @@ def login(
 
     # Limits first. Both attempts are committed before bcrypt runs: concurrent guesses see
     # each other (the race window is this short transaction, not a bcrypt run), and a
-    # dropped connection still counts. A success clears the email key below.
-    rate_limit.enforce(
+    # dropped connection still counts. A success deletes only its own email row below.
+    event_ids = rate_limit.enforce(
         db,
         (ip_key, config.LOGIN_IP_LIMIT, config.LOGIN_IP_WINDOW_SECONDS),
         (em_key, config.LOGIN_EMAIL_LIMIT, config.LOGIN_EMAIL_WINDOW_SECONDS),
@@ -95,8 +95,10 @@ def login(
         # locked (a leak).
         raise HTTPException(status_code=401, detail="Invalid email or password.")
 
+    # Only this attempt's email row: other failures (another client's guesses) stay counted,
+    # and the IP row stays. Committed together with the session below.
     with rate_limit.fail_closed(db):
-        rate_limit.clear(db, em_key)  # committed together with the session below
+        rate_limit.delete_event(db, event_ids[em_key])
 
     # Generate a session token
     session_token = generate_session_token()

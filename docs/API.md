@@ -33,7 +33,7 @@ Contract first. Applications (milestone 3) and interviews (milestone 4) CRUD are
 FastAPI default: `{"detail": "message"}`. Validation errors (422) use FastAPI's `detail` list. Clients branch on status code, not on message text.
 
 ## Rate limits
-`POST /login`: 10 attempts per IP and 5 failed attempts per email, per 15 minutes (a successful login clears that email's count). `POST /signup`: 5 attempts per IP per hour. Over a limit: `429 {"detail": "Too many attempts. Try again later."}` with a `Retry-After` header in seconds. The body is the same for every limit. Blocked attempts are not counted. Defaults come from env (`LOGIN_IP_LIMIT`, `LOGIN_EMAIL_LIMIT`, `SIGNUP_IP_LIMIT` and the `*_WINDOW_SECONDS` pair for each).
+`POST /login`: 10 attempts per IP and 5 failed attempts per email, per 15 minutes (a successful login removes only its own attempt from the email count; earlier failures stay counted). `POST /signup`: 5 attempts per IP per hour. Over a limit: `429 {"detail": "Too many attempts. Try again later."}` with a `Retry-After` header in seconds. The body is the same for every limit. Blocked attempts are not counted. Defaults come from env (`LOGIN_IP_LIMIT`, `LOGIN_EMAIL_LIMIT`, `SIGNUP_IP_LIMIT` and the `*_WINDOW_SECONDS` pair for each).
 
 The client IP is the socket peer. `TRUST_PROXY=true` (only behind a proxy you control) uses the right-most `X-Forwarded-For` value instead; with `false` that header is ignored. Authenticated endpoints are not rate limited yet. `/login` returns the same 401 for an unknown email and a wrong password, including passwords over 72 bytes.
 

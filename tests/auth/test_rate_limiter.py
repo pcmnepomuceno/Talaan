@@ -111,11 +111,12 @@ def test_retry_after_over_the_limit_by_more_than_one_frees_a_slot(db, monkeypatc
     assert rate_limit.check(db, "k", 3, 60) is None
 
 
-def test_clear_only_touches_its_key(db):
-    rate_limit.record(db, "a")
-    rate_limit.record(db, "b")
-    rate_limit.clear(db, "a")
-    assert [e.key for e in db.query(RateLimitEvent)] == ["b"]
+def test_delete_event_removes_only_that_row(db):
+    first = rate_limit.record(db, "a")
+    second = rate_limit.record(db, "a")
+    third = rate_limit.record(db, "b")
+    rate_limit.delete_event(db, first)
+    assert sorted((e.id, e.key) for e in db.query(RateLimitEvent)) == [(second, "a"), (third, "b")]
 
 
 def test_too_many_shape():
