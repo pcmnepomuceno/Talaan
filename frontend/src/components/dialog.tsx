@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useId, useRef } from "react";
+import { type ReactNode, type Ref, useEffect, useId, useRef } from "react";
 import { Button } from "./button";
 import { Icon } from "./icon";
 
@@ -19,11 +19,14 @@ export function Dialog({
   description,
   badge,
   busy = false,
+  headingRef,
   children,
 }: {
   open: boolean;
   onClose: () => void;
   busy?: boolean;
+  // Lets a multi-step dialog move focus to the new title (the heading takes programmatic focus only).
+  headingRef?: Ref<HTMLHeadingElement>;
   title: string;
   description?: string;
   badge?: ReactNode;
@@ -70,7 +73,7 @@ export function Dialog({
       className="m-0 mt-auto max-h-[calc(100%-2rem)] w-full max-w-none overflow-y-auto rounded-t-sheet bg-surface-card px-5 pt-6 pb-[calc(2rem+env(safe-area-inset-bottom))] text-text-primary shadow-float backdrop:bg-overlay md:m-auto md:max-w-[440px] md:rounded-sheet md:pb-8"
     >
       {badge}
-      <h2 id={`${id}-title`} className="text-section-title">
+      <h2 ref={headingRef} id={`${id}-title`} tabIndex={-1} className="text-section-title outline-none">
         {title}
       </h2>
       {description && (
