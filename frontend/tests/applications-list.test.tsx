@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ApplicationsScreen } from "../src/app/(app)/applications/(ledger)/screen";
-import { ANNOUNCE_MS } from "../src/app/(app)/applications/(ledger)/use-list";
+import { ANNOUNCE_MS, useApplicationList } from "../src/app/(app)/applications/(ledger)/use-list";
 import { ToastProvider } from "../src/components/toast";
 import { clearCaches, getList } from "../src/lib/cache";
 import { STATUSES } from "../src/lib/types";
@@ -287,6 +287,25 @@ it("the persistent status region says Loading applications while loading", async
   expect(status().textContent).toBe("Loading applications");
   await screen.findByRole("list", { name: "Applications" });
   expect(status().textContent).toBe("");
+});
+
+it("the focus setter is stable, so the screen's focus effect runs once per focus request", async () => {
+  setup(120);
+  const { result, rerender } = renderHook(() => useApplicationList(undefined));
+  const first = result.current.clearFocus;
+  rerender();
+  expect(result.current.clearFocus).toBe(first);
+  // In the screen: one focus() for one Load more, none on later renders.
+  const view = mount();
+  await screen.findByRole("list", { name: "Applications" });
+  const focus = vi.spyOn(HTMLElement.prototype, "focus");
+  await userEvent.click(screen.getByRole("button", { name: "Load more" }));
+  await waitFor(() => expect(document.activeElement).toBe(rowLinks()[50]));
+  const rowFocus = () => focus.mock.instances.filter((el) => el === rowLinks()[50]).length;
+  expect(rowFocus()).toBe(1);
+  view.rerender(ui());
+  view.rerender(ui());
+  expect(rowFocus()).toBe(1);
 });
 
 // ---- the "N more applications loaded" message is said once ----

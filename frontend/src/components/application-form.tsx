@@ -152,8 +152,8 @@ export function ApplicationForm({ application, qs }: { application?: Application
   }
 
   const title = edit ? "Edit application" : "Add application";
-  const saved = values.status !== "saved";
-  const dateHelper = saved ? "Leave blank to use today's date." : "Leave blank if you haven't applied.";
+  const notSavedStatus = values.status !== "saved"; // applied or later: the server fills in today
+  const dateHelper = notSavedStatus ? "Leave blank to use today's date." : "Leave blank if you haven't applied.";
 
   if (gone) {
     return (

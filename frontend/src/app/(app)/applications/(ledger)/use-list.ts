@@ -95,6 +95,9 @@ export function useApplicationList(status: Status | undefined) {
     };
   }, [status, key]);
 
+  // Stable: the screen's focus effect lists it as a dependency and must run once per focus request.
+  const clearFocus = useCallback(() => setFocusId(null), []);
+
   const retry = useCallback(() => {
     setFetched(null);
     setTick((n) => n + 1);
@@ -141,5 +144,5 @@ export function useApplicationList(status: Status | undefined) {
     const cached = getList(status);
     view = cached ? { kind: "ready", ...cached, refreshing: true, refreshFailed: false, more: "idle" } : { kind: "loading" };
   }
-  return { view, retry, loadMore, announcement, clearAnnouncement, focusId, clearFocus: () => setFocusId(null) };
+  return { view, retry, loadMore, announcement, clearAnnouncement, focusId, clearFocus };
 }
