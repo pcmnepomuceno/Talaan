@@ -91,12 +91,15 @@ export function isDirty(initial: FormValues, current: FormValues): boolean {
  * 422 field errors (http.ts keeps the last `loc` segment, so keys are API field names, which equal
  * the form field names) onto fields. Anything else (contact_email, extra fields) goes to a banner.
  */
-export function mapServerErrors(fieldErrors: Record<string, string>): { errors: Errors; other: string[] } {
-  const errors: Errors = {};
+export function mapServerErrors<K extends string = FieldName>(
+  fieldErrors: Record<string, string>,
+  fields: readonly K[] = FIELD_ORDER as readonly string[] as readonly K[],
+): { errors: Partial<Record<K, string>>; other: string[] } {
+  const errors: Partial<Record<K, string>> = {};
   const other: string[] = [];
   const tidy = (m: string) => (/[.!?]$/.test(m) ? m : `${m}.`).replace(/^./, (c) => c.toUpperCase());
   for (const [k, msg] of Object.entries(fieldErrors)) {
-    if ((FIELD_ORDER as readonly string[]).includes(k)) errors[k as FieldName] = tidy(msg);
+    if ((fields as readonly string[]).includes(k)) errors[k as K] = tidy(msg);
     else other.push(tidy(msg));
   }
   return { errors, other };

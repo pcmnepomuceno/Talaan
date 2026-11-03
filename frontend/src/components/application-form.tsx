@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 import { createApplication, updateApplication } from "../lib/api";
 import {
   type Errors,
@@ -14,7 +14,7 @@ import {
   mapServerErrors,
   validate,
 } from "../lib/application-form";
-import { ApiError, errorMessage, isLeavingForLogin } from "../lib/http";
+import { ApiError, errorMessage } from "../lib/http";
 import {
   EMPTY_FORM,
   type FormValues,
@@ -24,6 +24,7 @@ import {
   toPatchBody,
 } from "../lib/mappers";
 import { type Application, STATUSES, WORK_MODES } from "../lib/types";
+import { useLeaveGuard } from "../lib/use-leave-guard";
 import { AppBar } from "./app-bar";
 import { Banner } from "./banner";
 import { Button } from "./button";
@@ -67,17 +68,7 @@ export function ApplicationForm({ application, qs }: { application?: Application
   const backHref = edit ? `/applications/${application.id}${qs}` : `/applications${qs}`;
   const dirty = isDirty(initial, values);
 
-  // Reload and tab close only; registered while there is something to lose, removed on save and unmount.
-  useEffect(() => {
-    if (!dirty || done) return;
-    const warn = (e: BeforeUnloadEvent) => {
-      if (isLeavingForLogin()) return; // a 401 redirect: prompting could strand the form on "Saving…"
-      e.preventDefault();
-      e.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty, done]);
+  useLeaveGuard(dirty && !done);
 
   const set = <K extends FieldName>(key: K, value: FormValues[K]) => {
     setValues((v) => ({ ...v, [key]: value }));
