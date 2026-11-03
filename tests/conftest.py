@@ -26,6 +26,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from alembic import command
+from app.auth import invites
+from app.auth.models import InviteCode
 from app.auth.models import Session as SessionModel
 from app.auth.security import hash_password, hash_session_token
 from app.database import engine, get_db
@@ -99,6 +101,25 @@ def _user_with_token(db, email, token):
 @pytest.fixture
 def users(db):
     return _user_with_token(db, "a@example.com", "tok-a"), _user_with_token(db, "b@example.com", "tok-b")
+
+
+def create_invite(db, expires_in=timedelta(days=1), note=None, used_by=None):
+    """Insert an invite straight into the DB (there is no bypass flag) and return its
+    display code. `used_by` is a user: the code is created already used."""
+    display, code_hash = invites.generate()
+    now = datetime.now(timezone.utc)
+    db.add(
+        InviteCode(
+            code_hash=code_hash,
+            note=note,
+            created_at=now,
+            expires_at=now + expires_in,
+            used_at=now if used_by else None,
+            used_by_user_id=used_by.id if used_by else None,
+        )
+    )
+    db.commit()
+    return display
 
 
 def as_user(client, token):
