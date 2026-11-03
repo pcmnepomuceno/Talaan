@@ -49,6 +49,22 @@ def test_other_fetch_metadata_values_pass(client, user, site):
     assert client.post("/api/v1/login", json=LOGIN, headers={"Sec-Fetch-Site": site}).status_code == 200
 
 
+def test_same_origin_skips_allow_list(client, user):
+    # Swagger UI at http://localhost:8000/docs: its Origin is the API's own, not listed.
+    headers = {"Origin": "http://localhost:8000", "Sec-Fetch-Site": "same-origin"}
+    assert client.post("/api/v1/login", json=LOGIN, headers=headers).status_code == 200
+
+
+def test_cross_site_with_unlisted_origin_blocked(client, user):
+    headers = {"Origin": "http://localhost:8000", "Sec-Fetch-Site": "cross-site"}
+    assert client.post("/api/v1/login", json=LOGIN, headers=headers).status_code == 403
+
+
+def test_same_site_still_checks_allow_list(client, user):
+    headers = {"Origin": EVIL, "Sec-Fetch-Site": "same-site"}
+    assert client.post("/api/v1/login", json=LOGIN, headers=headers).status_code == 403
+
+
 def test_signup_is_covered(client, db):
     body = {
         "email": "new@example.com", "password": USER_PASSWORD, "account_name": "N",

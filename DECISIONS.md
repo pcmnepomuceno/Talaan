@@ -343,3 +343,10 @@
 - **Origin rule (all of POST/PUT/PATCH/DELETE, login and signup included):** `Sec-Fetch-Site: cross-site` is 403; an `Origin` header not in `ALLOWED_ORIGINS` is 403 (including the literal `null`); safe methods are never checked. `ALLOWED_ORIGINS` is a comma list (default `http://localhost:3000`); entries are trimmed, lowercased, lose a trailing slash, blanks are dropped; a wildcard fails startup. No CORS middleware exists or is added.
 - **Missing Origin is allowed:** browsers always send Origin on a cross-origin POST, so a request without it is curl, a script or a server-to-server call. Those do not carry a victim's ambient cookie, so there is nothing to forge. Requiring Origin would break tests and tooling and add no protection. SameSite=Lax on the cookie is the second layer.
 - **Alternative:** a CSRF token (needs state and frontend work, more than a personal tracker warrants); soft delete with a purge job (keeps data longer, needs a scheduler); explicit `DELETE FROM sessions` instead of the cascade (an orphan or FK error is possible under a concurrent login).
+
+---
+
+# Decision: PR #17 review fixes (Origin check, config parsing)
+
+- **Date:** 2026-11-03
+- **Sec-Fetch-Site: same-origin skips the allow-list:** this changes the M10 "Origin rule". The Swagger UI at `/docs` is served by the API, so its POSTs carry the API's own Origin (`http://localhost:8000`), which is not in `ALLOWED_ORIGINS`; every write from `/docs` got 403. `same-origin` is set by the browser (a page cannot forge it), and it means the request came from the API's own origin, which is trusted by definition. `cross-site` is still 403; `same-site`, `none` or no header still go through the Origin allow-list. Alternative: add the API's own origin to `ALLOWED_ORIGINS` (has to be kept in sync per environment, and the API does not know its public origin behind a proxy).
