@@ -10,7 +10,7 @@ Contract first. Applications (milestone 3) and interviews (milestone 4) CRUD are
 ## Routes
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/signup` | 201; invite code from v1b |
+| POST | `/signup` | requires `invite_code` (M9); currently answers 200, see Signup |
 | POST | `/login` | 200; sets cookie |
 | POST | `/logout` | 204 |
 | GET | `/me` | current user |
@@ -27,10 +27,15 @@ Contract first. Applications (milestone 3) and interviews (milestone 4) CRUD are
 `/health` and `/ping` are unauthenticated and unversioned so pingers and Render checks survive version bumps (DECISIONS.md, 2026-10-20).
 
 ## Status codes
-200 OK, 201 Created, 204 No Content (delete, logout), 401 not logged in or bad credentials, 404 not found **or not yours**, 409 duplicate email, 422 validation, 429 rate limited, 503 `/health` when the database is unreachable, or `/login` and `/signup` when the rate limiter cannot reach it (fail closed).
+200 OK, 201 Created, 204 No Content (delete, logout), 401 not logged in or bad credentials, 404 not found **or not yours**, 409 duplicate email, 422 validation, 429 rate limited, 400 invalid invite code on `/signup`, 503 `/health` when the database is unreachable, or `/login` and `/signup` when the rate limiter cannot reach it (fail closed).
 
 ## Errors
 FastAPI default: `{"detail": "message"}`. Validation errors (422) use FastAPI's `detail` list. Clients branch on status code, not on message text.
+
+## Signup
+`POST /signup` body: `{"email", "password", "account_name", "invite_code"}`. `invite_code` is required (missing is 422). Codes look like `TLN-XXXX-XXXX-XXXX`; case, dashes, spaces and a pasted line ending are ignored. Admins create codes with `python -m app.admin create-invite` (no HTTP endpoint). A code works once and expires (default 14 days).
+
+Unknown, expired, already used, malformed and over-length codes all return the same `400 {"detail": "Invalid or expired invite code."}`. The code is checked before the email, so `400 {"detail": "Email already exists."}` is only seen with a valid code. Any failed signup (duplicate email, 422, 429) leaves the code unused. Failed attempts count against the signup per-IP limit.
 
 ## Rate limits
 `POST /login`: 10 attempts per IP and 5 failed attempts per email, per 15 minutes (a successful login removes only its own attempt from the email count; earlier failures stay counted). `POST /signup`: 5 attempts per IP per hour. Over a limit: `429 {"detail": "Too many attempts. Try again later."}` with a `Retry-After` header in seconds. The body is the same for every limit. Blocked attempts are not counted. Defaults come from env (`LOGIN_IP_LIMIT`, `LOGIN_EMAIL_LIMIT`, `SIGNUP_IP_LIMIT` and the `*_WINDOW_SECONDS` pair for each).
