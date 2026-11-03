@@ -178,6 +178,7 @@ describe("log in", () => {
     await fillLogin();
     await submitLogin();
     expect((await screen.findByRole("alert")).textContent).toContain("Too many attempts. Try again in about 11 minutes.");
+    expect((screen.getByLabelText("Password") as HTMLInputElement).value).toBe("Secret1!");
   });
 
   it("503 and a network error give a retryable message, and the form can be resubmitted", async () => {
@@ -296,7 +297,8 @@ describe("create account", () => {
     expect(await screen.findByText("Invalid or expired invite code.")).toBeTruthy();
     expect(screen.getByLabelText("Invite code").getAttribute("aria-invalid")).toBe("true");
     expect(document.activeElement).toBe(screen.getByLabelText("Invite code"));
-    expect((screen.getByLabelText("Password") as HTMLInputElement).value).toBe("");
+    // The password is not what was wrong: keep it so a code typo does not mean retyping it.
+    expect((screen.getByLabelText("Password") as HTMLInputElement).value).toBe("Secret1!");
     expect((screen.getByLabelText("Account name") as HTMLInputElement).value).toBe("Ana");
     expect(calls(LOGIN)).toHaveLength(0);
   });
@@ -309,6 +311,7 @@ describe("create account", () => {
     expect(await screen.findByText("Email already exists.")).toBeTruthy();
     expect(screen.getByLabelText("Email").getAttribute("aria-invalid")).toBe("true");
     expect(screen.getByLabelText("Invite code").getAttribute("aria-invalid")).toBeNull();
+    expect((screen.getByLabelText("Password") as HTMLInputElement).value).toBe("Secret1!");
   });
 
   it("any other 400 is a generic banner, never an invite-code error", async () => {
@@ -336,6 +339,16 @@ describe("create account", () => {
     expect(screen.getByText("value is not a valid email address")).toBeTruthy();
     expect(screen.getByLabelText("Password").getAttribute("aria-invalid")).toBe("true");
     expect(screen.getByLabelText("Email").getAttribute("aria-invalid")).toBe("true");
+    expect((screen.getByLabelText("Password") as HTMLInputElement).value).toBe("");
+  });
+
+  it("a 422 on another field keeps the password", async () => {
+    handlers[SIGNUP] = () => json(422, { detail: [{ loc: ["body", "account_name"], msg: "Account name is too long." }] });
+    await openSignup();
+    await fillSignup();
+    await submitSignup();
+    expect(await screen.findByText("Account name is too long.")).toBeTruthy();
+    expect((screen.getByLabelText("Password") as HTMLInputElement).value).toBe("Secret1!");
   });
 
   it("429 and 503 are form-level messages", async () => {

@@ -206,6 +206,16 @@ describe("delete account dialog", () => {
     await userEvent.click(del());
     expect((await within(dialog()).findByRole("alert")).textContent).toContain("Try again in about 2 minutes.");
     expect(dialogOpen()).toBe(true);
+    expect((passwordBox() as HTMLInputElement).value).toBe("Secret1!");
+  });
+
+  it("422 on the password is a password error and clears the field", async () => {
+    handlers[DELETE] = () => json(422, { detail: [{ loc: ["body", "password"], msg: "Field required" }] });
+    await openStep2();
+    await fillStep2();
+    await userEvent.click(del());
+    expect(await within(dialog()).findByText("Incorrect password.")).toBeTruthy();
+    expect((passwordBox() as HTMLInputElement).value).toBe("");
   });
 
   it("401 sends the user to the session-expired flow", async () => {

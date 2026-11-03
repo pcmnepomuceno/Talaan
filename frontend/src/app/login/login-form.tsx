@@ -81,10 +81,12 @@ export function LoginForm({
     el?.focus();
   }, [attempt, formError]);
 
-  function fail(nextErrors: Record<string, string>, nextForm: string | null) {
+  // Clear the password only when it is what was wrong (a login 401 or a password field error);
+  // an invite typo or a 429 must not make the user retype it.
+  function fail(nextErrors: Record<string, string>, nextForm: string | null, clearPassword = "password" in nextErrors) {
     setErrors(nextErrors);
     setFormError(nextForm);
-    setPassword("");
+    if (clearPassword) setPassword("");
     setAttempt((n) => n + 1);
   }
 
@@ -97,7 +99,7 @@ export function LoginForm({
       for (const [k, v] of Object.entries(err.fieldErrors)) if (known.includes(k)) mapped[k] = v;
       if (Object.keys(mapped).length) return fail(mapped, null);
     }
-    if (m === "login" && err.status === 401) return fail({}, "Invalid email or password.");
+    if (m === "login" && err.status === 401) return fail({}, "Invalid email or password.", true);
     if (m === "signup" && err.status === 400) {
       // Exact details only: a reworded or new 400 must not blame a valid invite code.
       if (err.detail === "Invalid or expired invite code.") return fail({ invite_code: err.detail }, null);
