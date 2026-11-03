@@ -16,11 +16,14 @@ app/schemas/session.py for the pieces these will need.
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
+from app import config
+from app.auth import rate_limit
 from app.auth.models import Session as SessionModel
 from app.auth.security import (
+    DUMMY_PASSWORD_HASH,
     generate_session_token,
     hash_password,
     hash_session_token,
@@ -36,8 +39,11 @@ SESSION_LIFETIME = timedelta(days=30)
 
 
 @router.post("/signup")
-def signup(user_data: UserCreate, db: Session = Depends(get_db)):
-    normalized_email = user_data.email.lower()
+def signup(user_data: UserCreate, request: Request, db: Session = Depends(get_db)):
+    ip_key = "signup:ip:" + rate_limit.client_ip(request)
+    rate_limit.enforce(db, (ip_key, config.SIGNUP_IP_LIMIT, config.SIGNUP_IP_WINDOW_SECONDS))
+
+    normalized_email = user_data.email  # stripped and lowercased by the schema validator
 
     #Check if email already exists
     existing_user = db.query(UserModel).filter(UserModel.email == normalized_email).first()
@@ -60,17 +66,39 @@ def signup(user_data: UserCreate, db: Session = Depends(get_db)):
     return UserRead.model_validate(user)
 
 @router.post("/login")
-def login(user_data: UserLogin, response: Response, db: Session = Depends(get_db)):
-    normalized_email = user_data.email.lower()
+def login(
+    user_data: UserLogin, request: Request, response: Response, db: Session = Depends(get_db)
+):
+    normalized_email = user_data.email  # stripped and lowercased by the schema validator
+    ip_key = "login:ip:" + rate_limit.client_ip(request)
+    em_key = rate_limit.email_key(normalized_email)
+
+    # Limits first. Both attempts are committed before bcrypt runs: concurrent guesses see
+    # each other (the race window is this short transaction, not a bcrypt run), and a
+    # dropped connection still counts. A success deletes only its own email row below.
+    event_ids = rate_limit.enforce(
+        db,
+        (ip_key, config.LOGIN_IP_LIMIT, config.LOGIN_IP_WINDOW_SECONDS),
+        (em_key, config.LOGIN_EMAIL_LIMIT, config.LOGIN_EMAIL_WINDOW_SECONDS),
+    )
 
     # Look up the user by email
     user = db.query(UserModel).filter(UserModel.email == normalized_email).first()
-    if not user:
+
+    # Verify exactly once, with no early return: an unknown email checks the dummy hash,
+    # so it costs the same as a wrong password and the two are indistinguishable.
+    password_ok = verify_password(
+        user_data.password, user.password_hash if user else DUMMY_PASSWORD_HASH
+    )
+    if not user or not password_ok:
+        # Recorded above. Unknown emails count too, or only real accounts could ever be
+        # locked (a leak).
         raise HTTPException(status_code=401, detail="Invalid email or password.")
 
-    # Verify the password
-    if not verify_password(user_data.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Invalid email or password.")
+    # Only this attempt's email row: other failures (another client's guesses) stay counted,
+    # and the IP row stays. Committed together with the session below.
+    with rate_limit.fail_closed(db):
+        rate_limit.delete_event(db, event_ids[em_key])
 
     # Generate a session token
     session_token = generate_session_token()

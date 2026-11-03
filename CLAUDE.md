@@ -14,8 +14,11 @@ the **Current milestone** in `docs/ROADMAP.md`. Other docs: `docs/PROJECT_BRIEF.
 - FastAPI (Python), SQLAlchemy, PostgreSQL 16 (Docker)
 - Password hashing: `bcrypt` directly (`passlib` dropped: unmaintained, broken on bcrypt 5.x)
 - Docker: `docker compose up -d` (db + api on :8000), then `docker compose run --rm api python -m alembic upgrade head` (never auto-run).
+  The `api` service reads `.env` via `env_file` (`required: false`); its own `DATABASE_URL` wins. Inside Compose every host request comes from the bridge gateway IP, so all local clients share one rate-limit bucket: raise the `LOGIN_*`/`SIGNUP_*` limits in `.env` for local work.
 - Run: `cp .env.example .env`, `docker compose up -d db`, `pip install -r requirements-dev.txt`,
-  `alembic upgrade head`, `uvicorn app.main:app --reload`
+  `alembic upgrade head`, `uvicorn app.main:app --reload --no-proxy-headers`
+  (`--no-proxy-headers` keeps uvicorn from rewriting the client address from `X-Forwarded-For`;
+  `TRUST_PROXY` in `.env` is the only trust switch, default false)
 - Migrations: `alembic revision --autogenerate -m slug` (review the output), `alembic upgrade head`,
   `alembic check` (models match migrations)
 - Tests: one-time `docker compose exec db createdb -U talaan talaan_test`, then `pytest`
@@ -52,6 +55,8 @@ created_at, updated_at
 ENUM value lists and column choices are logged in DECISIONS.md (2026-10-20).
 
 ## Auth design decisions
+- **`BCRYPT_ROUNDS`** (`app/config.py`, default 12): cost for `hash_password` (read at call time) and for the login dummy hash (built once at startup), so they always match. `tests/conftest.py` sets 4; never lower it outside tests. **Must stay fixed after launch**: old hashes keep their cost, so a change reintroduces a timing gap between known and unknown emails (rehash-on-login is a possible future change; DECISIONS.md 2026-11-03).
+- **Rate limits** (`app/auth/rate_limit.py`, Postgres): login per IP and per email, signup per IP; limits from env (`.env.example`). Client IP is the socket peer; `TRUST_PROXY=true` uses the right-most `X-Forwarded-For`. `TRUST_PROXY` is the only trust switch (run uvicorn with `--no-proxy-headers`). Limiter DB error returns 503.
 - **Sessions over JWT**: instant revocation (delete the row); no horizontal-scaling need.
 - **Session lifetime 30 days**: `SESSION_LIFETIME` in `app/routes/auth.py`, used
   for both `expires_at` and cookie `max_age` (must stay in sync). Rationale in DECISIONS.md.
@@ -96,7 +101,7 @@ Decision changes get a new dated entry in DECISIONS.md (append; never rewrite ol
 Domain packages (`app/`). Applications and interviews have CRUD. A middleware in `main.py` sets `Cache-Control: no-store` on every `/api/v1` response.
 
     app/main.py, config.py, database.py, health.py
-    app/auth/          router, schemas, models [Session], dependencies, security
+    app/auth/          router, schemas, models [Session, RateLimitEvent], dependencies, security, rate_limit
     app/users/         router, schemas, models
     app/applications/  models, schemas, router, dependencies (service planned)
     app/interviews/    models, schemas, router, dependencies (service planned)
@@ -114,6 +119,7 @@ Routers mount under `/api/v1` (`/api/v1/signup`, `/login`, `/logout`, `/me`).
 - [x] `JobApplication`/`Interview` models match schema
 - [x] Login 401, no token in login body, idempotent logout 204
 - [x] Auth + health tests (pytest + httpx; 23 tests, `_test` database)
+- [x] M8: login/signup rate limiting in Postgres (`rate_limit_events`; per IP and per email; 429 + `Retry-After`; 503 fail closed), constant-work login (dummy hash), 72-byte login guard; tests: see CI. See DECISIONS.md 2026-11-03
 - [ ] Manually exercise the app end-to-end (`/docs`, curl cookie jar, psql)
 - [x] Domain layout move; routers under `/api/v1`
 - [x] Applications CRUD (ownership 404, pagination, status filter, `saved` migration; 64 tests)
@@ -151,13 +157,10 @@ Next.js (App Router, TypeScript, Tailwind v4, npm) in `frontend/`; deploys to Ve
 - Stale stub docstrings in `app/` reference the old learning-mode rules and passlib; clean up.
 - Google OAuth signup: needs nullable `password_hash` + `auth_provider`/`google_id`
   (or an `oauth_identities` table) and a rule for email collisions with local accounts
-- Login timing oracle: unknown email skips bcrypt, so response time reveals which emails
-  exist; fix with a dummy-hash check
-- `/login` with a password over 72 bytes may raise in bcrypt 5.x (500 for a real email, 401 for
-  unknown); unverified, reject or handle before hashing
 - `/signup` returns 400/200 where API.md says 409/201; tests in `tests/auth/test_signup.py`
   assert the current behavior and must change when aligned
 - `/signup` check-then-insert race: concurrent duplicate hits the unique constraint (500); catch `IntegrityError`
-- No rate limiting on `/login` and `/signup` (v1b)
-- Expired sessions are deleted only when presented; add a purge or clean up at login
+- **M11 blocker:** purge `rate_limit_events` (pruned per key only) and expired `sessions` (deleted only when presented)
+- Rate limits cover `/login` and `/signup` only, not authenticated routes
+- Successful logins count against the per-IP limit; a shared IP (campus, office) can hit it (accepted, DECISIONS.md 2026-11-03)
 - Tests: starlette warns `httpx` is deprecated for `TestClient` (suggests `httpx2`); revisit

@@ -1,6 +1,6 @@
 # Talaan Roadmap
 
-**Current milestone:** Frontend F3 (app shell, responsive layout, mock screens) in review; F2a and F2b merged. Backend: Milestone 4 done (interviews CRUD, `no-store` middleware for `/api/v1`, `Interview.updated_at` clock fix). CI added (GitHub Actions). Docker done (Dockerfile, `api` compose service). v1b: hashed session tokens done. Next: v1b rate limiting on signup and login, plus the login-timing and duplicate-email leaks.
+**Current milestone:** Frontend F3 (app shell, responsive layout, mock screens) in review; F2a and F2b merged. Backend: Milestone 4 done (interviews CRUD, `no-store` middleware for `/api/v1`, `Interview.updated_at` clock fix). CI added (GitHub Actions). Docker done (Dockerfile, `api` compose service). v1b: hashed session tokens done; M8 (login/signup rate limiting in Postgres, login timing fix) built on `feature/auth-rate-limit`, in review. Next: M9 invite-code signup, M10 account deletion and cookie flags, M11 deploy. **M11 blocker:** purge `rate_limit_events` and expired `sessions` (pruning is per key only, so rows for keys that never return stay). The duplicate-email leak is only limited (rate limit now, invite code in M9); email verification is the full fix, planned later.
 
 ## Roadmap
 
@@ -44,7 +44,9 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - F5 requirement (2026-11-03, code review): double list fetch. A filter with no matches makes a second, sequential full-list request just to learn the overall total, which costs an extra round trip against the real API. Take the total from the API response or a cached count. A failure getting the total must never turn an already loaded list into "Couldn't load applications."
 - Detail has no "Add interview" action until F6. The 88px rail fits the bold 14px label "Applications" only with `tracking-tight` (77px label in a 79px pill, 4px from the rail edges). A longer label or a third item needs a wider rail or a smaller label token.
 - Add a formatter (Prettier) and a CI format check. Reason (2026-11-03): no formatter config exists, so JSX indentation drifted by hand in the F3 layouts (code review finding 9). Not added in F3 to keep the PR scoped; needs a dependency decision.
+- Backend: `ruff format --check` fails on many pre-existing files. Add a formatter run (one `ruff format` commit) and a CI format check, same as the frontend formatter item. Found 2026-11-03 (PR #14); nothing reformatted yet.
 - 2026-11-03: `npm audit` shows 16 moderate findings, all one minimatch advisory (GHSA-g3hv-75wg-m249) through the ESLint toolchain, dev-only (`npm audit --omit=dev` = 0). No non-breaking fix; do NOT run `npm audit fix --force` (it downgrades to eslint 4.0.0). Recheck when eslint-config-next or typescript-eslint is bumped, or via Dependabot.
+- Measure queries held under the advisory lock on Neon at M11. Deferred (2026-11-03, PR #14 review finding 4): a login runs about 8-10 statements inside the locked transaction (lock, prune, count, offset query, insert per key); at 5-20 ms per query on a remote DB, bursts behind one IP queue up. Merge into fewer statements only if the measurement says so.
 
 ## Maintenance
 

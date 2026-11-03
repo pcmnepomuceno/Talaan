@@ -27,10 +27,31 @@ Contract first. Applications (milestone 3) and interviews (milestone 4) CRUD are
 `/health` and `/ping` are unauthenticated and unversioned so pingers and Render checks survive version bumps (DECISIONS.md, 2026-10-20).
 
 ## Status codes
-200 OK, 201 Created, 204 No Content (delete, logout), 401 not logged in or bad credentials, 404 not found **or not yours**, 409 duplicate email, 422 validation, 429 rate limited (v1b), 503 `/health` when the database is unreachable.
+200 OK, 201 Created, 204 No Content (delete, logout), 401 not logged in or bad credentials, 404 not found **or not yours**, 409 duplicate email, 422 validation, 429 rate limited, 503 `/health` when the database is unreachable, or `/login` and `/signup` when the rate limiter cannot reach it (fail closed).
 
 ## Errors
 FastAPI default: `{"detail": "message"}`. Validation errors (422) use FastAPI's `detail` list. Clients branch on status code, not on message text.
+
+## Rate limits
+`POST /login`: 10 attempts per IP and 5 failed attempts per email, per 15 minutes (a successful login removes only its own attempt from the email count; earlier failures stay counted). `POST /signup`: 5 attempts per IP per hour. Over a limit: `429 {"detail": "Too many attempts. Try again later."}` with a `Retry-After` header in seconds. The body is the same for every limit. Blocked attempts are not counted. Defaults come from env (`LOGIN_IP_LIMIT`, `LOGIN_EMAIL_LIMIT`, `SIGNUP_IP_LIMIT` and the `*_WINDOW_SECONDS` pair for each).
+
+The client IP is the socket peer. `TRUST_PROXY=true` (only behind a proxy you control) uses the right-most `X-Forwarded-For` value instead; with `false` that header is ignored. Authenticated endpoints are not rate limited yet. `/login` returns the same 401 for an unknown email and a wrong password, including passwords over 72 bytes.
+
+Limits are exact under concurrency (one advisory lock per key; DECISIONS.md). To check by hand, send 20 parallel logins for a fresh email. The result must be exactly 5x 401 and 15x 429:
+
+```bash
+EMAIL="burst-$(date +%s)@example.com"
+seq 20 | xargs -P20 -I{} curl -s -o /dev/null -w '%{http_code}\n' \
+  -X POST http://localhost:8000/api/v1/login \
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$EMAIL\",\"password\":\"Wr0ng!pass\"}" | sort | uniq -c
+#       5 401
+#      15 429
+```
+
+Inside Docker Compose (`docker compose up -d`), every request from the host reaches the `api` container from the Docker bridge gateway IP (for example `172.18.0.1`), so all local clients (browser, curl, tests by hand) share one per-IP bucket. For local work, raise `LOGIN_IP_LIMIT` and `SIGNUP_IP_LIMIT` (and `LOGIN_EMAIL_LIMIT` if needed) in `.env`; the `api` service reads `.env` through `env_file` (optional file), and its own `DATABASE_URL` still wins. Recreate the container after editing `.env` (`docker compose up -d api`).
+
+Your IP must also have fewer than 5 login attempts in the last 15 minutes, or the per-IP limit (10) answers first (for example 20x 429). For a fresh IP every run, start the server with `TRUST_PROXY=true` and add `-H "X-Forwarded-For: 198.51.100.$((RANDOM % 250 + 1))"`. The same burst with 20 different emails from one IP must give exactly 10x 401 and 10x 429. Restart the server after pulling, because without `--reload` it keeps running the old code.
 
 ## Ownership
 Another user's application or interview returns **404, never 403**, so IDs cannot be probed. Ownership checks live in shared dependencies.

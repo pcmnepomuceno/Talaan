@@ -234,3 +234,65 @@
 - **Decision:** The navigation rail from 768 to 1279 is 88px wide, up from 80px. The content offset (`md:pl-22`) matches. This amends DESIGN.md section 7 (the approved DESIGN.md edit for this change) and the CLAUDE.md route note.
 - **Rationale:** The bold "Applications" label does not fit in an 80px rail. At 88px it fits with `tracking-tight` (77px label in a 79px pill).
 - **Alternative:** Keep 80px and shrink the label token or abbreviate the label (worse legibility, and a second token only for the rail).
+
+---
+
+# Decision: Auth rate limiting in Postgres, and constant-work login
+
+- **Date:** 2026-11-03
+- **Decision:** Login and signup are rate limited with a sliding window stored in a new `rate_limit_events` table (key, created_at; index on both). Defaults, all from env: login 10 attempts per IP and 5 failed attempts per email per 15 minutes; signup 5 per IP per hour. Over the limit returns 429 with `Retry-After` and one body for every limit. Each check deletes the checked key's expired rows, so no cron is needed.
+- **Why Postgres:** Render free restarts and spins down, which would reset in-memory counters. Redis would cost money. The table costs one indexed query pair per attempt.
+- **Why both IP and email keys:** the IP limit stops one client trying many emails; the email limit stops many IPs (or a botnet) guessing one account. Email keys are the SHA-256 of the stripped, lowercased address, so no raw email is stored and any length gives a fixed-length key. Unknown emails are counted too; otherwise only real accounts could be locked and that would reveal them.
+- **Client IP:** the socket peer. Only with `TRUST_PROXY=true` is the right-most `X-Forwarded-For` value used (the one our own proxy appended; everything to its left is client-controlled). `TRUST_PROXY` is the only trust switch: uvicorn runs with `--no-proxy-headers`, otherwise it would rewrite the peer from forwarded headers on its own. IPv6 is bucketed to its /64 and IPv4-mapped IPv6 is unwrapped. A missing or invalid address maps to the shared key `unknown`, so it is still limited. The Render proxy hop must be checked at deploy (M11).
+- **Login timing:** an unknown email now verifies against a dummy bcrypt hash built once at startup with the same algorithm and cost, and returns the same 401 as a wrong password. No early return. Passwords over 72 bytes (which bcrypt 5 rejects with an exception) are hashed on their first 72 bytes for equal cost and then rejected, so they return 401 instead of 500; signup already refuses them.
+- **Fail closed:** a DB error in the limiter returns 503, never a pass. 503 and not 429 because the fault is ours and a 429 would invent a `Retry-After`. Login cannot work without the DB anyway.
+- **Accepted trade-offs:**
+  - Check-then-record is not atomic, so concurrent requests can overshoot a limit by a small amount.
+  - Successful logins count against the per-IP limit, so a shared IP (campus, office) can hit it. Accepted for now; raise `LOGIN_IP_LIMIT` if it happens.
+  - An attacker who knows an email can lock it for the window with bad guesses. The owner can log in again when the window passes.
+  - Rows are pruned per key only. Keys that never return, and expired sessions, stay until a purge exists. That purge is a blocker for M11.
+- **Duplicate-email leak (partial fix):** signup still reveals whether an email exists (400 "Email already exists."). The response is unchanged. Enumeration is now limited by the signup rate limit and, in M9, by the invite code. The full fix is email verification, planned for a later milestone.
+- **Alternative:** in-process counters (reset on restart, one per worker); `slowapi` (new dependency, still needs a store); a CAPTCHA (cost, frontend work).
+
+---
+
+# Decision: BCRYPT_ROUNDS stays fixed after launch
+
+- **Date:** 2026-11-03
+- **Decision:** Once real accounts exist, `BCRYPT_ROUNDS` does not change. Tests still set 4 through the environment.
+- **Rationale:** a stored hash keeps the cost it was made with, but the login dummy hash for unknown emails is built at startup with the current `BCRYPT_ROUNDS`. If the cost changes, unknown emails and real accounts take different times to verify (one step up roughly doubles the time), so response time again reveals which emails are registered: the gap the constant-work login closed.
+- **Possible future change:** rehash on successful login. Read the cost from the stored hash prefix (`$2b$12$`), and when it differs from `BCRYPT_ROUNDS`, store a new hash of the password just verified. Even then, accounts that never log in keep the old cost, so a cost change still needs a plan for them.
+- **Alternative:** build rehash-on-login now. Not worth it yet: before launch every hash already has cost 12.
+
+---
+
+# Decision: Rate limits are exact per key (advisory lock)
+
+- **Date:** 2026-11-03
+- **Decision:** This replaces the accepted trade-off in "Auth rate limiting in Postgres" that concurrent requests may overshoot a limit. `rate_limit.enforce()` takes `pg_advisory_xact_lock(hashtext(key))` for each key, then prunes, counts and either inserts the attempt or returns the 429 wait, all in one transaction. Concurrent callers on the same key wait for each other, so a burst lets exactly `limit` attempts through. Login locks its two keys (IP, email) in sorted order, so two logins cannot deadlock.
+- **Why:** manual testing sent 20 parallel logins for a fresh email and got 16x 401 instead of 5. Every request passed the count before any insert was committed, so even the per-IP limit of 10 was exceeded.
+- **Lock scope:** transaction-scoped, released by the commit that happens before bcrypt runs, so slow password checks never hold it. A rollback (fail-closed 503) also releases it. Because nothing outlives the transaction, this works with Neon's pooled (PgBouncer, transaction mode) connections. A session-level `pg_advisory_lock` would not: the pooler can give the next transaction a different server connection.
+- **Cost:** requests on the same key are serialized for the length of a short transaction (a few milliseconds). A `hashtext` collision makes two unrelated keys share a lock, which only adds waiting.
+- **Alternative:** `SERIALIZABLE` isolation with retries (more code, retries on every conflict), or a per-key counter row updated with `SELECT ... FOR UPDATE` (needs an upsert first, and a different table shape).
+
+---
+
+# Decision: A successful login deletes only its own email attempt
+
+- **Date:** 2026-11-03
+- **Decision:** This replaces "a successful login clears the email key" (the login route deleted every row on the email key). `rate_limit.record()` now returns the new row id and `enforce()` returns `{key: id}`. On a successful login the route deletes only this attempt's email-key row, in the same transaction that creates the session. The IP row stays counted, and every other row on the email key stays. Attempts are still recorded and committed before bcrypt runs.
+- **Why:** clearing the whole key let the account owner reset an attacker's budget. An attacker spreading guesses for one email across many IPs got a fresh 5 guesses every time the owner logged in (several devices, an app re-login). It also deleted failures that other connections recorded between this request's `enforce()` commit and its success, so the per-email count was not exact.
+- **Effect:** the per-email limit now counts failed attempts only. A success does not use up the budget (six successes in a row all work), and it does not refund failures either: after 4 failures and 1 success, the next failure is the 5th.
+- **No lock for the delete:** removing one row can only free budget. A concurrent caller that counted the row before it was deleted is at worst stricter for that one check.
+- **Cost:** the owner can still be locked out for the window by someone who knows the email (the accepted trade-off in "Auth rate limiting in Postgres"). `record()` flushes each row to get its id, so login sends two INSERTs instead of one batched INSERT: one extra round trip inside the locked transaction.
+- **Alternative:** keep clearing the key (resets attacker budgets); record attempts only after a failed verify (drops the record-before-verify order, so concurrent guesses would not see each other during bcrypt).
+
+---
+
+# Decision: Advisory lock ids come from SHA-256, locked in id order
+
+- **Date:** 2026-11-03
+- **Decision:** This replaces the lock id and lock order in "Rate limits are exact per key". `enforce()` no longer calls `pg_advisory_xact_lock(hashtext(key))` in key-string order. It computes each key's lock id in Python (the first 8 bytes of SHA-256 of the key, as a signed 64-bit int), removes duplicate ids, and takes `pg_advisory_xact_lock(:id)` in ascending id order.
+- **Why:** sorting by key string does not order the locks themselves. If two keys collide on one id, two callers can take the same ids in opposite orders (A locks [a, b] = ids [5, 1], B locks [c, d] = ids [1, 5]) and deadlock. Postgres aborts one, `fail_closed` turns that into a 503, and a valid login fails. Sorting by id gives every caller the same order for shared locks, so no wait cycle can form. `hashtext` is 32-bit, so collisions were plausible at scale; 64 bits makes them far rarer, and the ordering makes them harmless anyway (extra waiting only).
+- **Test:** a burst with a mocked id function that forces the collision above. With key-string order it fails with 503s (deadlock), three runs out of three; with id order it passes.
+- **Alternative:** one combined lock per call (hash of all keys). Unrelated calls that share one key would then not serialize on it, which breaks exactness.

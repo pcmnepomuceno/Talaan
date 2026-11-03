@@ -23,6 +23,11 @@ services:
     build: .
     container_name: talaan-api
     restart: unless-stopped
+    # Limits, TRUST_PROXY and BCRYPT_ROUNDS come from .env (optional). `environment` wins
+    # over env_file, so DATABASE_URL below (host `db`) replaces the .env one (`localhost`).
+    env_file:
+      - path: .env
+        required: false
     environment:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-talaan}:${POSTGRES_PASSWORD:-change-me}@db:5432/${POSTGRES_DB:-talaan}
     ports:

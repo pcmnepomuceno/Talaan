@@ -23,3 +23,8 @@ def test_login_failures_are_indistinguishable(client, user):
     a = client.post("/api/v1/login", json={"email": "no@example.com", "password": USER_PASSWORD})
     b = client.post("/api/v1/login", json={"email": USER_EMAIL, "password": "Wr0ng!pass"})
     assert a.json() == b.json()
+
+
+def test_login_email_ignores_case_and_padding(client, user):
+    r = client.post("/api/v1/login", json={"email": "  " + USER_EMAIL.upper() + " ", "password": USER_PASSWORD})
+    assert r.status_code == 200
