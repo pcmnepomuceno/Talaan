@@ -220,7 +220,7 @@ export function LoginForm({
                 helper="Paste the code you were given; dashes are optional"
                 error={err("invite_code")}
               />
-              <TextField label="Account name" name="account_name" required autoComplete="username" error={err("account_name")} />
+              <TextField label="Account name" name="account_name" required autoComplete="nickname" error={err("account_name")} />
             </>
           )}
           <TextField
@@ -228,7 +228,7 @@ export function LoginForm({
             name="email"
             type="email"
             required
-            autoComplete="email"
+            autoComplete="username"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             error={err("email")}

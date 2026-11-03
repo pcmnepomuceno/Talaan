@@ -67,6 +67,12 @@ describe("shell", () => {
     expect(screen.getByText("Access is by invitation for now.")).toBeTruthy();
   });
 
+  it("log in autocomplete: email is the username, current password", () => {
+    render(<LoginForm />);
+    expect(screen.getByLabelText("Email").getAttribute("autocomplete")).toBe("username");
+    expect(screen.getByLabelText("Password").getAttribute("autocomplete")).toBe("current-password");
+  });
+
   it("switching mode clears errors", async () => {
     render(<LoginForm />);
     await userEvent.click(screen.getByRole("button", { name: "Log in" }));
@@ -237,8 +243,9 @@ describe("create account", () => {
     expect(invite.getAttribute("autocapitalize")).toBe("characters");
     expect(invite.getAttribute("autocomplete")).toBe("off");
     expect(screen.getByText("Paste the code you were given; dashes are optional")).toBeTruthy();
-    expect(screen.getByLabelText("Account name").getAttribute("autocomplete")).toBe("username");
-    expect(screen.getByLabelText("Email").getAttribute("autocomplete")).toBe("email");
+    // Password managers save the "username" field as the login; that must be the email, not the name.
+    expect(screen.getByLabelText("Account name").getAttribute("autocomplete")).toBe("nickname");
+    expect(screen.getByLabelText("Email").getAttribute("autocomplete")).toBe("username");
     expect(screen.getByLabelText("Password").getAttribute("autocomplete")).toBe("new-password");
   });
 
