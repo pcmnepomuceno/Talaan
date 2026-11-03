@@ -92,3 +92,21 @@ def test_cookie_secure_parsing(value, expected):
     )
     assert r.stdout.strip() == expected
 
+
+
+@pytest.mark.parametrize("value", ["ture", "maybe", "2"])
+def test_trust_proxy_typo_fails_startup_naming_the_variable(value):
+    r = import_config(TRUST_PROXY=value)
+    assert r.returncode != 0
+    assert f"ValueError: TRUST_PROXY must be true or false, got {value!r}" in r.stderr
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"), [("", "False"), ("true", "True"), (" YES ", "True"), ("false", "False"), ("0", "False")]
+)
+def test_trust_proxy_parsing(value, expected):
+    r = subprocess.run(
+        [sys.executable, "-c", "from app import config; print(config.TRUST_PROXY)"],
+        env={**os.environ, "TRUST_PROXY": value}, capture_output=True, text=True, check=False,
+    )
+    assert r.stdout.strip() == expected, r.stderr

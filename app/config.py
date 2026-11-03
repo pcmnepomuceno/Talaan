@@ -53,9 +53,6 @@ LOGIN_EMAIL_WINDOW_SECONDS = _int("LOGIN_EMAIL_WINDOW_SECONDS", 900, minimum=1)
 SIGNUP_IP_LIMIT = _int("SIGNUP_IP_LIMIT", 5, minimum=1)
 SIGNUP_IP_WINDOW_SECONDS = _int("SIGNUP_IP_WINDOW_SECONDS", 3600, minimum=1)
 
-# True only behind a proxy you control: then the right-most X-Forwarded-For value is the client.
-TRUST_PROXY = os.getenv("TRUST_PROXY", "false").strip().lower() in ("1", "true", "yes")
-
 
 def _bool(name: str, default: bool) -> bool:
     raw = (os.getenv(name) or "").strip().lower()  # blank means unset
@@ -66,6 +63,11 @@ def _bool(name: str, default: bool) -> bool:
     if raw in ("0", "false", "no", "off"):
         return False
     raise ValueError(f"{name} must be true or false, got {raw!r}")
+
+
+# True only behind a proxy you control: then the right-most X-Forwarded-For value is the client.
+# Strict like COOKIE_SECURE: a typo fails startup instead of silently meaning false.
+TRUST_PROXY = _bool("TRUST_PROXY", False)
 
 
 # Session cookie Secure flag and `__Host-` name prefix (app/auth/cookies.py). Read at call
