@@ -20,6 +20,7 @@ from app import config
 from app.auth.models import RateLimitEvent
 
 logger = logging.getLogger(__name__)
+_warned: set[str] = set()  # client_ip warning reasons already logged by this process
 
 def utcnow() -> datetime:
     """The limiter's clock. Tests patch this instead of sleeping."""
@@ -56,10 +57,18 @@ def client_ip(request: Request) -> str:
     if config.TRUST_PROXY:
         hop = ",".join(request.headers.getlist("x-forwarded-for")).split(",")[-1]
         ip = _normalize_ip(_strip_port(hop))
-        if ip == "unknown":
+        reason = "invalid" if hop.strip() else "missing"
+        if ip == "unknown" and reason not in _warned:
             # Every such request shares one bucket, so a misconfigured proxy locks out
-            # everyone: make it visible. Short repr only (no full header, no newlines).
-            logger.warning("TRUST_PROXY: no usable X-Forwarded-For address (right-most hop %r)", hop.strip()[:40])
+            # everyone: make it visible, once per process per reason (not per request).
+            # Short repr only (no full header, no newlines).
+            _warned.add(reason)
+            logger.warning(
+                "TRUST_PROXY: %s X-Forwarded-For address (right-most hop %r); "
+                "not logged again until restart",
+                reason,
+                hop.strip()[:40],
+            )
         return ip
     return _normalize_ip(request.client.host if request.client else None)
 

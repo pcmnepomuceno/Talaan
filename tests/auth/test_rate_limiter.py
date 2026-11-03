@@ -47,10 +47,27 @@ def test_trusted_xff_strips_ports_and_keeps_rightmost(monkeypatch):
     assert rate_limit.client_ip(_request(xff=["2001:db8:0:1::5"])) == "2001:db8:0:1::/64"  # bare v6 kept
 
 
-def test_trusted_xff_unusable_logs_short_sample(monkeypatch, caplog):
+@pytest.fixture
+def fresh_warnings(monkeypatch):
     monkeypatch.setattr(config, "TRUST_PROXY", True)
+    monkeypatch.setattr(rate_limit, "_warned", set())
     # alembic's fileConfig (the in-process test migration) disables existing loggers.
     monkeypatch.setattr(rate_limit.logger, "disabled", False)
+
+
+def test_trusted_xff_unusable_logs_once_per_reason(fresh_warnings, caplog):
+    with caplog.at_level("WARNING", logger="app.auth.rate_limit"):
+        for _ in range(3):
+            assert rate_limit.client_ip(_request()) == "unknown"  # missing
+            assert rate_limit.client_ip(_request(xff=["junk"])) == "unknown"  # invalid
+            assert rate_limit.client_ip(_request(xff=["1.1.1.1, "])) == "unknown"  # missing
+    assert [r.getMessage().split(" X-")[0] for r in caplog.records] == [
+        "TRUST_PROXY: missing",
+        "TRUST_PROXY: invalid",
+    ]
+
+
+def test_trusted_xff_unusable_logs_short_sample(fresh_warnings, caplog):
     with caplog.at_level("WARNING", logger="app.auth.rate_limit"):
         assert rate_limit.client_ip(_request(xff=["1.1.1.1, " + "x" * 500 + "\nforged"])) == "unknown"
         assert rate_limit.client_ip(_request()) == "unknown"
