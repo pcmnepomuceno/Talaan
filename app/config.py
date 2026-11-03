@@ -19,7 +19,11 @@ DATABASE_URL = os.getenv(
 
 
 def _int(name: str, default: int, minimum: int | None = None) -> int:
-    value = int(os.getenv(name, default))
+    raw = os.getenv(name) or default  # blank (`KEY=` in .env) means unset
+    try:
+        value = int(raw)
+    except ValueError:
+        raise ValueError(f"{name} must be an integer, got {raw!r}") from None
     if minimum is not None and value < minimum:
         raise ValueError(f"{name} must be >= {minimum}, got {value}")
     return value

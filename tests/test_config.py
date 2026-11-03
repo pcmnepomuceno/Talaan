@@ -38,6 +38,20 @@ def test_limits_of_one_are_accepted():
     assert import_config(**dict.fromkeys(LIMIT_VARS, "1")).returncode == 0
 
 
+def test_blank_numeric_setting_uses_the_default(monkeypatch):
+    monkeypatch.setenv("LOGIN_IP_LIMIT", "")
+    assert config._int("LOGIN_IP_LIMIT", 10, minimum=1) == 10
+    # And at startup, for every numeric setting at once.
+    r = import_config(**dict.fromkeys([*LIMIT_VARS, "BCRYPT_ROUNDS"], ""))
+    assert r.returncode == 0, r.stderr
+
+
+def test_non_integer_setting_fails_startup_naming_the_variable():
+    r = import_config(LOGIN_IP_LIMIT="ten")
+    assert r.returncode != 0
+    assert "ValueError: LOGIN_IP_LIMIT must be an integer, got 'ten'" in r.stderr
+
+
 def test_bcrypt_rounds_default_is_12():
     assert config.DEFAULT_BCRYPT_ROUNDS == 12
 
