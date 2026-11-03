@@ -1,6 +1,6 @@
 # Talaan Roadmap
 
-**Current milestone:** Frontend F5 (applications on the real API: list with server-side status filter and Load more, detail with stale-while-revalidate, create and edit form with dirty guard, delete) built on `feature/f5-applications`, in review; interviews are read-only until F6. F1 to F4 merged. Backend: Milestone 4 done (interviews CRUD, `no-store` middleware for `/api/v1`, `Interview.updated_at` clock fix). CI added (GitHub Actions). Docker done (Dockerfile, `api` compose service). v1b: hashed session tokens done; M8 (login/signup rate limiting in Postgres, login timing fix) built on `feature/auth-rate-limit`, in review. M9 merged (invite-code signup: hashed single-use codes, `python -m app.admin` CLI; PR #15). M10 done on `feature/account-deletion` (account deletion, cookie flags, Origin check; in review). Next: M11 deploy. **M11 blocker:** purge `rate_limit_events` and expired `sessions` (pruning is per key only, so rows for keys that never return stay). The duplicate-email leak is only limited (rate limit now, invite code in M9); email verification is the full fix, planned later.
+**Current milestone:** Frontend F6 (interviews: create, edit, delete in Philippine time, Add interview on the detail) built on `feature/f6-interviews`, in review. F1 to F5 merged. Next: F7 Vercel deploy. Backend: Milestone 4 done (interviews CRUD, `no-store` middleware for `/api/v1`, `Interview.updated_at` clock fix). CI added (GitHub Actions). Docker done (Dockerfile, `api` compose service). v1b: hashed session tokens done; M8 (login/signup rate limiting in Postgres, login timing fix) built on `feature/auth-rate-limit`, in review. M9 merged (invite-code signup: hashed single-use codes, `python -m app.admin` CLI; PR #15). M10 done on `feature/account-deletion` (account deletion, cookie flags, Origin check; in review). Next: M11 deploy. **M11 blocker:** purge `rate_limit_events` and expired `sessions` (pruning is per key only, so rows for keys that never return stay). The duplicate-email leak is only limited (rate limit now, invite code in M9); email verification is the full fix, planned later.
 
 ## Roadmap
 
@@ -30,9 +30,8 @@ Next.js app in `frontend/`, built from `docs/DESIGN.md`. Each milestone is merge
   - Account screen: a delete-account flow. First modal states exactly what will be permanently deleted (the account, all applications, all interviews, all sessions) and that it cannot be undone. Second step requires typing the account email and the password; the final button stays disabled until the typed email matches. Calls `POST /account/delete`; 403 means wrong password (show it inline, do not log out), 401 means the session is gone.
   - Note for copy and tests: the account stays deleted even if the user later gets a new invite code; signing up again creates a fresh, empty account.
 - F5 (done, in review on `feature/f5-applications`): application list (server-side status filter, Load more), detail (stale-while-revalidate, isolated interviews error), create and edit form, delete. Interviews are read-only on the detail.
-- F6 (next): interviews create, edit and delete (DESIGN 8.5 and 8.6 patterns; the detail gets its "Add interview" action).
-  - Deferred from the F5 review: the xl detail header's `xlAction` class and its disabled-button-or-Link branch for Edit and Delete (`(ledger)/screen.tsx`) repeat what `BarAction` (`app-bar.tsx`) does. Give `BarAction` a tone or className prop and reuse it there, so sizing and focus fixes land once. F6 adds interview actions, so do it then.
-- F7: Vercel deploy.
+- F6 (done, in review on `feature/f6-interviews`): interviews create, edit and delete (full-screen routes, times in PHT only, no automatic status change), Add interview on the detail, shared `TextAction`.
+- F7 (next): Vercel deploy.
 
 ## Clients
 
@@ -42,7 +41,7 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 
 - CI `changes` job clones the full history (`fetch-depth: 0`) only to list changed paths. Deferred (2026-10-28): a full clone of this small repo costs seconds. Revisit if clone time grows (many binary design assets); `gh pr diff --name-only` or the `pulls/{n}/files` API needs no checkout.
 - Playwright layout smoke tests in CI (clipping, 44px targets, no horizontal scroll). Reason (2026-11-02): layout can't be tested in jsdom; the F2a review checks (segment clipping at 320px, hover band) were run by hand in Chrome.
-- Detail has no "Add interview" action until F6. The 88px rail fits the bold 14px label "Applications" only with `tracking-tight` (77px label in a 79px pill, 4px from the rail edges). A longer label or a third item needs a wider rail or a smaller label token.
+- The 88px rail fits the bold 14px label "Applications" only with `tracking-tight` (77px label in a 79px pill, 4px from the rail edges). A longer label or a third item needs a wider rail or a smaller label token.
 - Add a formatter (Prettier) and a CI format check. Reason (2026-11-03): no formatter config exists, so JSX indentation drifted by hand in the F3 layouts (code review finding 9). Not added in F3 to keep the PR scoped; needs a dependency decision.
 - Backend: `ruff format --check` fails on many pre-existing files. Add a formatter run (one `ruff format` commit) and a CI format check, same as the frontend formatter item. Found 2026-11-03 (PR #14); nothing reformatted yet.
 - 2026-11-03: `npm audit` shows 16 moderate findings, all one minimatch advisory (GHSA-g3hv-75wg-m249) through the ESLint toolchain, dev-only (`npm audit --omit=dev` = 0). No non-breaking fix; do NOT run `npm audit fix --force` (it downgrades to eslint 4.0.0). Recheck when eslint-config-next or typescript-eslint is bumped, or via Dependabot.
