@@ -15,7 +15,14 @@ npm run lint && npm run typecheck && npm test && npm run build
 
 ## Routes
 
-`/` redirects to `/applications`. `/login` (log in and create account; `?expired=1`, `?deleted=1`, `?next=`), `/applications` (`?status=` filter), `/applications/[id]`, `/account` (real user, theme, log out, delete account), plus placeholders at `/applications/new` and `/applications/[id]/edit`. Auth is real (below); application and interview data still come from the in-memory mock in `src/lib/api.ts` (resets on reload) until F5. From 1280 the list and detail show side by side. `/design` is the component gallery.
+`/` redirects to `/applications`. `/login` (log in and create account; `?expired=1`, `?deleted=1`, `?next=`), `/applications` (`?status=` filter, 50 rows per page with Load more), `/applications/[id]`, `/applications/new`, `/applications/[id]/edit` (one shared form), `/account` (real user, theme, log out, delete account). From 1280 the list and detail show side by side. Interviews are read-only on the detail (create, edit, delete come in F6). `/design` is the component gallery.
+
+## Applications and the API
+
+- `src/lib/api.ts` is the client (list, detail, interviews, create, edit, delete); `src/lib/mappers.ts` owns the JSON shapes; `src/lib/cache.ts` holds the in-memory list and detail caches (never web storage), cleared by every write and by login, logout and account deletion.
+- The API pages at most 100 rows per request and filters by `status`, so each status tab is its own request (`limit=50`) plus a "Load more" button. A cached tab shows while page 1 refetches.
+- The form (`src/components/application-form.tsx`, rules in `src/lib/application-form.ts`) mirrors the backend limits. Leaving a dirty form asks "Discard changes?"; the browser Back button and the side/bottom nav links are not intercepted (reload and tab close get the browser's own prompt).
+- Local end-to-end check on the real backend (not in CI, no dependency): `NODE_PATH=<dir containing playwright> node scripts/e2e-applications.cjs`; `seed-applications.cjs` seeds sample data and keeps the stack up for manual looking; `screens-applications.cjs` writes the screenshots to `.screenshots/`. All three use `scripts/local-env.cjs`, which starts the API on the `_test` database and `next dev` on free ports, then stops them, truncates the test database and prints that the dev database and any foreign :8000 process were untouched.
 
 ## Auth and the API
 
@@ -34,7 +41,7 @@ The browser only calls `/api/...` on the Next origin; `next.config.ts` rewrites 
 | `Icon` | Material Symbols Outlined as inline SVG, 24 or 20px, decorative |
 | `Button` | `primary`, `secondary`, `ghost`, `destructive`; `href` renders a `next/link` |
 | `TextField`, `PasswordField`, `Textarea`, `Select` | `fields.tsx`; label, `required`, `helper`, `error`; `prefix`/`suffix` on TextField; forward `ref` and native props |
-| `SegmentedControl` | Native radios in a fieldset (arrow keys from the browser) |
+| `SegmentedControl` | Native radios in a fieldset (arrow keys from the browser); `value={null}` = nothing chosen, `required`/`error` make it a radiogroup |
 | `StatusStamp` | Any status or outcome; `STATUSES`/`OUTCOMES` match the API enums |
 | `FilterTabs` | "All" plus each status, `aria-pressed` buttons, scrolls sideways |
 | `Banner` | Inline error banner, `role="alert"` |
@@ -42,7 +49,8 @@ The browser only calls `/api/...` on the Next origin; `next.config.ts` rewrites 
 | `Dialog`, `DeleteConfirm` | `dialog.tsx`; native `<dialog>`: bottom sheet under 768px, centered from 768px; Escape or Cancel only |
 | `ToastProvider`, `useToast()` | `success(msg)` auto-dismisses after 4s (paused on hover or focus), `error(msg)` stays; max 3 |
 | `AppBar`, `BarAction`, `MainNav` | App shell: ink top bar (hidden from 1280), bottom nav / rail / side nav |
-| `EmptyState` | Title, one sentence, optional action button |
+| `EmptyState`, `NotFoundState` | Title, one sentence, optional action button; the not-found view for an unknown application |
+| `ApplicationForm` | Shared create/edit form with inline errors, dirty guard and Saving… state |
 
 All of them are on `/design` in every state, in a light and a dark panel.
 

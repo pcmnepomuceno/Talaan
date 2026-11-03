@@ -1,109 +1,23 @@
+// Real applications client (F5). Screens import only these functions. Every request goes through
+// request() in http.ts; every response goes through mappers.ts. The three writes clear the
+// in-memory caches themselves (cache.ts), so no screen can forget to.
+import { clearCaches } from "./cache";
+import { ApiError, request } from "./http";
+import {
+  type ApplicationInput,
+  fromApiApplication,
+  fromApiInterview,
+  fromApiPage,
+  idOf,
+  type Page,
+  toCreateBody,
+  toPatchBody,
+} from "./mappers";
 import { type Application, type Interview, STATUSES, type Status } from "./types";
 
-// F3 mock data layer. Screens import ONLY the functions below; F5 replaces the bodies with fetch
-// calls to /api/v1 and keeps these signatures. The seed is private on purpose.
-// Fake latency: 300ms in dev (so skeletons show), 0 under Vitest. setMockDelay overrides it.
-let delay = process.env.NODE_ENV === "test" ? 0 : 300;
-export const setMockDelay = (ms: number) => {
-  delay = ms;
-};
-const wait = () => new Promise<void>((r) => setTimeout(r, delay));
-
-const stamp = "2026-10-01T09:00:00+08:00";
-const app = (id: number, rest: Omit<Application, "id" | "contact_email" | "created_at" | "updated_at">): Application => ({
-  id,
-  contact_email: null,
-  created_at: `2026-10-${String(10 + id).padStart(2, "0")}T09:00:00+08:00`,
-  updated_at: stamp,
-  ...rest,
-});
-
-const seedApplications = (): Application[] => [
-  app(1, {
-    company: "Pinagsama Tech",
-    job_name: "Frontend Engineer",
-    contact_website: "https://pinagsama.example.ph",
-    status: "interviewing",
-    salary: 85000,
-    mode_of_work: "hybrid",
-    remarks: "Referred by a former teammate.\nAsk about the team size.",
-    date_applied: "2026-10-14",
-  }),
-  app(2, {
-    company: "Bayanihan Digital",
-    job_name: "Product Designer",
-    contact_website: "https://bayanihan.example.ph/careers",
-    status: "offered",
-    salary: 95000,
-    mode_of_work: "remote",
-    remarks: null,
-    date_applied: "2026-09-28",
-  }),
-  app(3, {
-    company: "Mayon Software Labs",
-    job_name: "Full Stack Developer",
-    contact_website: null,
-    status: "applied",
-    salary: null,
-    mode_of_work: "on_site",
-    remarks: null,
-    date_applied: "2026-10-19",
-  }),
-  app(4, {
-    company: "Kalayaan Logistics",
-    job_name: "Operations Analyst",
-    contact_website: "https://kalayaan.example.ph",
-    status: "saved",
-    salary: 50000,
-    mode_of_work: "remote",
-    remarks: "Apply after the holidays.",
-    date_applied: null,
-  }),
-  app(5, {
-    company: "Haraya Solutions International Holdings and Technology Services",
-    job_name: "Senior Principal Staff Software Engineer, Platform Reliability and Developer Experience",
-    contact_website: "https://haraya.example.ph",
-    status: "rejected",
-    salary: 120000,
-    mode_of_work: "hybrid",
-    remarks: null,
-    date_applied: "2026-10-02",
-  }),
-];
-
-// Stored out of date order on purpose: screens must sort.
-const seedInterviews = (): Interview[] => {
-  const i = (id: number, job_application_id: number, rest: Partial<Interview> & Pick<Interview, "scheduled_at" | "mode" | "outcome">): Interview => ({
-    id,
-    job_application_id,
-    interviewer: null,
-    remarks: null,
-    created_at: stamp,
-    updated_at: stamp,
-    ...rest,
-  });
-  return [
-    i(1, 1, { scheduled_at: "2026-10-24T14:00:00+08:00", mode: "online", outcome: "pending", interviewer: "Mark Rivera" }),
-    i(2, 1, {
-      scheduled_at: "2026-10-18T10:00:00+08:00",
-      mode: "online",
-      outcome: "good",
-      interviewer: "Ana Santos",
-      remarks: "Portfolio walkthrough.",
-    }),
-    i(3, 2, { scheduled_at: "2026-09-30T15:30:00+08:00", mode: "on_site", outcome: "good" }),
-    i(4, 5, { scheduled_at: "2026-10-09T09:00:00+08:00", mode: "async", outcome: "bad", remarks: "Take-home test." }),
-  ];
-};
-
-let applications = seedApplications();
-let interviews = seedInterviews();
-
-/** Test helper: restore the seed. */
-export function resetMock() {
-  applications = seedApplications();
-  interviews = seedInterviews();
-}
+export const PAGE_SIZE = 50;
+export const INTERVIEWS_LIMIT = 100;
+const BASE = "/api/v1/applications";
 
 /** A route id is valid only in canonical form ("1", not "01" or "1e3") and as a safe integer. */
 export function parseId(raw: string): number | null {
@@ -115,29 +29,60 @@ export function parseId(raw: string): number | null {
 export const parseStatus = (raw: string | null | undefined): Status | undefined =>
   STATUSES.find((s) => s === raw);
 
-// Newest first (created_at desc, id desc), like GET /applications.
-export async function getApplications(status?: Status): Promise<Application[]> {
-  await wait();
-  return applications
-    .filter((a) => !status || a.status === status)
-    .sort((a, b) => (a.created_at === b.created_at ? b.id - a.id : a.created_at < b.created_at ? 1 : -1))
-    .map((a) => ({ ...a }));
+/** One page, newest first. `total` counts every row matching the status filter, not just this page. */
+export async function getApplications(status?: Status, offset = 0): Promise<Page<Application>> {
+  const q = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) });
+  if (status) q.set("status", status);
+  return fromApiPage(await request<unknown>(`${BASE}?${q}`), fromApiApplication);
 }
 
+/** null = not found (missing, or another user's: the API answers 404 for both). */
 export async function getApplication(id: number): Promise<Application | null> {
-  await wait();
-  const a = applications.find((x) => x.id === id);
-  return a ? { ...a } : null;
+  try {
+    return fromApiApplication(await request<unknown>(`${BASE}/${id}`));
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null;
+    throw e;
+  }
 }
 
-// Unsorted, like the API's list; the screen sorts with sortInterviewsByDate.
-export async function getInterviews(applicationId: number): Promise<Interview[]> {
-  await wait();
-  return interviews.filter((i) => i.job_application_id === applicationId).map((i) => ({ ...i }));
+/** Oldest first. Rejects with ApiError(404) when the application is gone. */
+export async function getInterviews(applicationId: number): Promise<Page<Interview>> {
+  return fromApiPage(
+    await request<unknown>(`${BASE}/${applicationId}/interviews?limit=${INTERVIEWS_LIMIT}&offset=0`),
+    fromApiInterview,
+  );
 }
 
+// The writes resolve to the row's id only. Once the server has the row the caches are stale, so they
+// are cleared first; and a response the client cannot fully map (say a new status) must not turn a
+// saved row into an error, whose "Try again" would create a duplicate. The detail refetches anyway.
+
+/** Resolves to the new row's id. */
+export async function createApplication(input: ApplicationInput): Promise<number> {
+  const raw = await request<unknown>(BASE, { method: "POST", body: toCreateBody(input) });
+  clearCaches();
+  return idOf(raw);
+}
+
+/** Sends only the fields that differ from `initial`. Resolves to `id`. */
+export async function updateApplication(id: number, initial: ApplicationInput, next: ApplicationInput): Promise<number> {
+  try {
+    await request<unknown>(`${BASE}/${id}`, { method: "PATCH", body: toPatchBody(initial, next) });
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) clearCaches();
+    throw e;
+  }
+  clearCaches();
+  return id;
+}
+
+/** 404 means it is already gone, which is what the caller wanted: resolves either way. */
 export async function deleteApplication(id: number): Promise<void> {
-  await wait();
-  applications = applications.filter((a) => a.id !== id);
-  interviews = interviews.filter((i) => i.job_application_id !== id);
+  try {
+    await request(`${BASE}/${id}`, { method: "DELETE" });
+  } catch (e) {
+    if (!(e instanceof ApiError && e.status === 404)) throw e;
+  }
+  clearCaches();
 }

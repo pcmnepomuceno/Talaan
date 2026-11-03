@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError, errorMessage, request, safeNext } from "../src/lib/http";
+import { ApiError, errorMessage, isLeavingForLogin, request, safeNext } from "../src/lib/http";
 
 function reply(status: number, body?: unknown, headers: Record<string, string> = {}) {
   const init = { status, headers };
@@ -14,6 +14,7 @@ beforeEach(() => {
   vi.stubGlobal("location", { pathname: "/account", search: "?x=1", replace: replaceMock });
 });
 afterEach(() => {
+  window.dispatchEvent(new Event("pageshow")); // resets the 401 "leaving" flag
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -106,6 +107,22 @@ describe("request", () => {
     expect(replaceMock).toHaveBeenCalledWith("/login?expired=1&next=%2Faccount%3Fx%3D1");
     await new Promise((r) => setTimeout(r, 10));
     expect(settled).not.toHaveBeenCalled();
+  });
+
+  it("the 401 redirect marks the page as leaving until it is shown again", async () => {
+    expect(isLeavingForLogin()).toBe(false);
+    reply(401, { detail: "Not authenticated" });
+    void request("/api/v1/me");
+    await vi.waitFor(() => expect(replaceMock).toHaveBeenCalled());
+    expect(isLeavingForLogin()).toBe(true);
+    window.dispatchEvent(new Event("pageshow")); // bfcache restore after Back from /login
+    expect(isLeavingForLogin()).toBe(false);
+  });
+
+  it("an error with redirectOn401: false does not mark the page as leaving", async () => {
+    reply(401, { detail: "Invalid email or password." });
+    await request("/x", { method: "POST", redirectOn401: false }).catch(() => {});
+    expect(isLeavingForLogin()).toBe(false);
   });
 
   it("401 with redirectOn401: false throws instead", async () => {

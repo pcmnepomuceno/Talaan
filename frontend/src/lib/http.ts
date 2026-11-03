@@ -17,7 +17,7 @@ export class ApiError extends Error {
 }
 
 type Options = {
-  method?: "GET" | "POST";
+  method?: "GET" | "POST" | "PATCH" | "DELETE";
   body?: unknown;
   // A 401 means the session is dead: send the user to /login?expired=1&next=<here>. Login, signup,
   // logout and the login page's own /me probe turn this off (a 401 there is an answer, not expiry).
@@ -25,6 +25,13 @@ type Options = {
 };
 
 export const FALLBACK_NEXT = "/applications";
+
+// Set when a 401 starts the redirect to /login. beforeunload guards check it and do not prompt:
+// "Stay" would cancel the redirect and leave the caller on a promise that never settles. Cleared
+// when the page is shown again (a bfcache restore after Back keeps module state).
+let leaving = false;
+export const isLeavingForLogin = () => leaving;
+if (typeof window !== "undefined") window.addEventListener("pageshow", () => void (leaving = false));
 
 // Same-origin relative paths only. Rejects anything a browser could resolve to another origin
 // ("//host", "/\host", "https:", "javascript:") or that carries control characters; "/login..."
@@ -92,6 +99,7 @@ export async function request<T = void>(path: string, opts: Options = {}): Promi
 
   if (res.status === 401 && redirectOn401 && !window.location.pathname.startsWith("/login")) {
     const here = window.location.pathname + window.location.search;
+    leaving = true;
     window.location.replace(`/login?expired=1&next=${encodeURIComponent(here)}`);
     // Never settles: the page is being replaced, so the caller must not flash an error state.
     return new Promise<T>(() => {});
