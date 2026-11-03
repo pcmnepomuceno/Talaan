@@ -12,6 +12,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, Request
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -71,8 +72,8 @@ def email_key(email: str) -> str:
 
 def check(db: Session, key: str, limit: int, window_seconds: int) -> int | None:
     """Prune this key's expired rows, then return seconds until a slot frees if over
-    the limit, else None. Check-then-record is not atomic: concurrent requests can
-    overshoot by a few (DECISIONS.md, 2026-11-03)."""
+    the limit, else None. Not atomic on its own: call it through enforce(), which holds
+    the key's advisory lock (DECISIONS.md, 2026-11-03)."""
     now = utcnow()
     window = timedelta(seconds=window_seconds)
     db.query(RateLimitEvent).filter(
@@ -83,7 +84,8 @@ def check(db: Session, key: str, limit: int, window_seconds: int) -> int | None:
     if count < limit:
         return None
     # A slot frees when count drops to limit - 1, i.e. when the (count - limit)-th event
-    # (0-based, oldest first) expires. Usually that is the oldest; after an overshoot it is later.
+    # (0-based, oldest first) expires. Usually that is the oldest; it is later if the key is
+    # over the limit (rows from before the lock, or a lowered limit).
     freeing = events.order_by(RateLimitEvent.created_at).offset(count - limit).limit(1).scalar()
     return max(1, math.ceil((freeing + window - now).total_seconds()))
 
@@ -101,8 +103,16 @@ def enforce(db: Session, *limits: tuple[str, int, int]) -> None:
     Commits either way (keeps the prune, and the attempt counts even if the client then
     disconnects), so call it before any slow work such as bcrypt. Over a limit: 429 with
     the longest wait. Blocked attempts are not recorded, so a lockout ends with its window.
-    A DB error: 503."""
+    A DB error: 503.
+
+    Atomic per key: a transaction-scoped advisory lock per key serializes concurrent
+    callers from prune to commit, so a burst lets exactly `limit` through. Keys are locked
+    in sorted order, so two callers with the same keys cannot deadlock. The commit releases
+    the locks: never hold them across slow work."""
     with fail_closed(db):
+        for key in sorted({key for key, _, _ in limits}):
+            # hashtext collisions only make two keys share a lock (extra waiting, no error).
+            db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": key})
         waits = [w for key, limit, window in limits if (w := check(db, key, limit, window)) is not None]
         if not waits:
             for key, _, _ in limits:

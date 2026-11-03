@@ -5,7 +5,6 @@ deleted in `finally`."""
 import threading
 import uuid
 
-import pytest
 from fastapi import HTTPException
 
 from app.auth import rate_limit
@@ -14,9 +13,6 @@ from app.database import SessionLocal
 
 N = 20
 LIMIT = 5
-
-# Removed by the fix: check-then-record is not yet atomic.
-RACE = pytest.mark.xfail(strict=True, reason="enforce() races: check and record are not atomic")
 
 
 def burst(make_limits):
@@ -63,7 +59,6 @@ def count(key):
         db.close()
 
 
-@RACE
 def test_parallel_burst_lets_exactly_limit_through():
     key = f"test:concurrency:{uuid.uuid4()}"
     try:
@@ -73,7 +68,6 @@ def test_parallel_burst_lets_exactly_limit_through():
         cleanup(key)
 
 
-@RACE
 def test_parallel_burst_on_two_keys_in_either_order_is_exact_and_does_not_deadlock():
     """Login passes (ip, email). Half the threads pass them reversed: the lock order must
     not depend on argument order. The tighter limit (email) decides."""
@@ -84,3 +78,37 @@ def test_parallel_burst_on_two_keys_in_either_order_is_exact_and_does_not_deadlo
         assert count(ip) == count(email) == LIMIT
     finally:
         cleanup(ip, email)
+
+
+def test_login_releases_the_locks_before_bcrypt(monkeypatch):
+    """Through the real route and real sessions: while the password is being verified,
+    another connection can take both keys' advisory locks, and both rows are committed."""
+    from fastapi.testclient import TestClient
+    from sqlalchemy import text
+
+    from app.auth import router
+    from app.main import app
+
+    email = f"lock-{uuid.uuid4()}@example.com"
+    ip_key, em_key = "login:ip:unknown", rate_limit.email_key(email)  # TestClient peer is "testclient"
+    seen = {}
+
+    def spy(password, hashed):
+        other = SessionLocal()
+        try:
+            for key in (ip_key, em_key):
+                seen[key] = other.execute(text("SELECT pg_try_advisory_xact_lock(hashtext(:k))"), {"k": key}).scalar()
+            seen["rows"] = (count(ip_key), count(em_key))
+        finally:
+            other.close()
+        return False
+
+    monkeypatch.setattr(router, "verify_password", spy)
+    cleanup(ip_key)  # the shared IP key may hold committed rows from an aborted earlier run
+    try:
+        with TestClient(app) as c:
+            r = c.post("/api/v1/login", json={"email": email, "password": "Wr0ng!pass"})
+        assert r.status_code == 401
+        assert seen == {ip_key: True, em_key: True, "rows": (1, 1)}
+    finally:
+        cleanup(ip_key, em_key)
