@@ -6,7 +6,7 @@ Run locally with:
 
 from fastapi import FastAPI, Request
 
-from app import health
+from app import health, security
 from app.applications import router as applications
 from app.auth import router as auth
 from app.interviews import router as interviews
@@ -14,6 +14,8 @@ from app.users import router as users
 
 app = FastAPI(title="Talaan", description="Job application tracker")
 
+# Registered before no_store so it sits inside it: its 403s still get Cache-Control: no-store.
+app.middleware("http")(security.origin_check)
 
 
 @app.middleware("http")

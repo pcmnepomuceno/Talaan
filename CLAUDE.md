@@ -13,10 +13,10 @@ the **Current milestone** in `docs/ROADMAP.md`. Other docs: `docs/PROJECT_BRIEF.
 ## Stack
 - FastAPI (Python), SQLAlchemy, PostgreSQL 16 (Docker)
 - Password hashing: `bcrypt` directly (`passlib` dropped: unmaintained, broken on bcrypt 5.x)
-- Docker: `docker compose up -d` (db + api on :8000), then `docker compose run --rm api python -m alembic upgrade head` (never auto-run).
+- Docker: set `COOKIE_SECURE=false` in `.env` first (plain http), then `docker compose up -d` (db + api on :8000), then `docker compose run --rm api python -m alembic upgrade head` (never auto-run).
   The `api` service reads `.env` via `env_file` (`required: false`); its own `DATABASE_URL` wins. Inside Compose every host request comes from the bridge gateway IP, so all local clients share one rate-limit bucket: raise the `LOGIN_*`/`SIGNUP_*` limits in `.env` for local work.
 - Invites (admin CLI, uses `DATABASE_URL`): `python -m app.admin create-invite [--note TEXT] [--expires-in 14d]` (prints the code once), `list-invites`, `revoke-invite ID` (unused only). In Docker: `docker compose run --rm api python -m app.admin ...`.
-- Run: `cp .env.example .env`, `docker compose up -d db`, `pip install -r requirements-dev.txt`,
+- Run: `cp .env.example .env` (then set `COOKIE_SECURE=false` in `.env` for plain http; the default true is for production), `docker compose up -d db`, `pip install -r requirements-dev.txt`,
   `alembic upgrade head`, `uvicorn app.main:app --reload --no-proxy-headers`
   (`--no-proxy-headers` keeps uvicorn from rewriting the client address from `X-Forwarded-For`;
   `TRUST_PROXY` in `.env` is the only trust switch, default false)
@@ -32,7 +32,7 @@ FKs live on the "many" side only (query `created_by`, never store lists on Users
 
 **Users** (matches model): id, email (UNIQUE), password_hash, account_name
 
-**Sessions** (matches model): id, token_hash (UNIQUE, SHA-256 hex of the `session_token`
+**Sessions** (matches model; `user_id` ON DELETE CASCADE, indexed): id, token_hash (UNIQUE, SHA-256 hex of the `session_token`
 HttpOnly cookie value; raw token never stored), user_id → Users.id, created_at, expires_at
 (both `DateTime(timezone=True)`)
 
@@ -62,8 +62,11 @@ ENUM value lists and column choices are logged in DECISIONS.md (2026-10-20).
 - **`BCRYPT_ROUNDS`** (`app/config.py`, default 12): cost for `hash_password` (read at call time) and for the login dummy hash (built once at startup), so they always match. `tests/conftest.py` sets 4; never lower it outside tests. **Must stay fixed after launch**: old hashes keep their cost, so a change reintroduces a timing gap between known and unknown emails (rehash-on-login is a possible future change; DECISIONS.md 2026-11-03).
 - **Invite codes** (`app/auth/invites.py`, `app/admin.py`): signup requires `invite_code`. Format `TLN-XXXX-XXXX-XXXX` (12 Crockford base32 chars, 60 bits); input is normalized (non-ASCII rejected; strip, uppercase, drop dashes/whitespace, map O→0 and I/L→1, drop `TLN` only from 15-char input) then SHA-256 hashed. Single use, with expiry. Signup order: rate limit, non-consuming code check, duplicate email, then one transaction: insert user + atomic `UPDATE ... RETURNING` to consume (no row: roll back, same error). Every bad-code case is `400 {"detail": "Invalid or expired invite code."}`. No bypass flag, no admin endpoint; tests make codes with `create_invite` in `tests/conftest.py`. Never log or return a plaintext code except the one-time CLI print. DECISIONS.md 2026-11-03.
 - **Rate limits** (`app/auth/rate_limit.py`, Postgres): login per IP and per email, signup per IP; limits from env (`.env.example`). Client IP is the socket peer; `TRUST_PROXY=true` uses the right-most `X-Forwarded-For`. `TRUST_PROXY` is the only trust switch (run uvicorn with `--no-proxy-headers`). Limiter DB error returns 503.
+- **Session cookie** (`app/auth/cookies.py`, the only place name and attributes live): HttpOnly, SameSite=Lax, Path=/, no Domain, Max-Age = `SESSION_LIFETIME`, Secure from `COOKIE_SECURE` (default true). Secure on: name `__Host-session_token`; off: `session_token`. Never `SameSite=None`. **With `COOKIE_SECURE=true` (the default) a plain-http client such as curl or Safari will not send the cookie; set `COOKIE_SECURE=false` in your local `.env`.** Existing local sessions stop working once because the cookie name changes. Tests force `COOKIE_SECURE=false`; cookie tests patch `config.COOKIE_SECURE` and read the raw `Set-Cookie`.
+- **Origin check** (`app/security.py`, middleware inside `no_store`): POST/PUT/PATCH/DELETE get 403 if `Sec-Fetch-Site` is `cross-site`; `same-origin` passes without the list (Swagger at `/docs`); otherwise 403 if `Origin` is present and not in `ALLOWED_ORIGINS` (default `http://localhost:3000`, parsed by `config.parse_origins`: each entry `http(s)://host[:port]`, lowercased, default port dropped; `*` or a malformed entry fails startup). No Origin = allowed (non-browser). No CORS middleware: the frontend proxies through Next.js. DECISIONS.md 2026-11-03.
+- **Account deletion** (`POST /api/v1/account/delete`, `app/users/router.py`): hard delete, password required (wrong = 403, not 401), rate limited per user and IP (`ACCOUNT_DELETE_*`), `FOR UPDATE` on the user row then one `DELETE`; FK cascades remove applications, interviews and sessions; `invite_codes.used_by_user_id` goes NULL (code stays used); the user's `login:email:<hash>` rate rows are deleted. Same email can re-signup only with a new invite code.
 - **Sessions over JWT**: instant revocation (delete the row); no horizontal-scaling need.
-- **Session lifetime 30 days**: `SESSION_LIFETIME` in `app/routes/auth.py`, used
+- **Session lifetime 30 days**: `SESSION_LIFETIME` in `app/auth/router.py`, used
   for both `expires_at` and cookie `max_age` (must stay in sync). Rationale in DECISIONS.md.
 - **Passwords**: at least 8 characters and at most 72 UTF-8 bytes (bcrypt limit)
   + upper/lower/digit/special; enforced on `UserCreate` only, not `UserLogin`.
@@ -105,10 +108,10 @@ Decision changes get a new dated entry in DECISIONS.md (append; never rewrite ol
 ## Structure
 Domain packages (`app/`). Applications and interviews have CRUD. A middleware in `main.py` sets `Cache-Control: no-store` on every `/api/v1` response.
 
-    app/main.py, config.py, database.py, health.py
-    app/auth/          router, schemas, models [Session, RateLimitEvent, InviteCode], dependencies, security, rate_limit, invites
+    app/main.py, config.py, database.py, health.py, security.py (Origin check)
+    app/auth/          router, schemas, models [Session, RateLimitEvent, InviteCode], dependencies, security, cookies, rate_limit, invites
     app/admin.py       CLI: python -m app.admin {create-invite,list-invites,revoke-invite}
-    app/users/         router, schemas, models
+    app/users/         router (/me, /account/delete), schemas, models
     app/applications/  models, schemas, router, dependencies (service planned)
     app/interviews/    models, schemas, router, dependencies (service planned)
     tests/             mirrors app/
@@ -127,6 +130,7 @@ Routers mount under `/api/v1` (`/api/v1/signup`, `/login`, `/logout`, `/me`).
 - [x] Auth + health tests (pytest + httpx; 23 tests, `_test` database)
 - [x] M8: login/signup rate limiting in Postgres (`rate_limit_events`; per IP and per email; 429 + `Retry-After`; 503 fail closed), constant-work login (dummy hash), 72-byte login guard; tests: see CI. See DECISIONS.md 2026-11-03
 - [x] M9: invite-code signup (`invite_codes` table, hashed single-use codes with expiry, `python -m app.admin` CLI, atomic consume; see DECISIONS.md 2026-11-03)
+- [x] M10: account deletion (`POST /account/delete`), cookie flags + `__Host-` name, Origin/Sec-Fetch-Site check, `sessions.user_id` ON DELETE CASCADE; see DECISIONS.md 2026-11-03
 - [ ] Manually exercise the app end-to-end (`/docs`, curl cookie jar, psql)
 - [x] Domain layout move; routers under `/api/v1`
 - [x] Applications CRUD (ownership 404, pagination, status filter, `saved` migration; 64 tests)
@@ -158,9 +162,7 @@ Next.js (App Router, TypeScript, Tailwind v4, npm) in `frontend/`; deploys to Ve
 ## Backlog
 - PATCH has no optimistic concurrency (no ETag/version): concurrent edits are last-write-wins
 - No-store middleware matches the prefix `/api/v1`, so a future `/api/v10` would match too; use `/api/v1/`
-- Cookie `samesite="lax"` and `secure=True` in production (via config)
 - Signup reveals whether an email exists ("Email already exists"), but only to holders of a valid invite code (M9); email verification is the full fix
-- `sessions.user_id` FK: add `ON DELETE CASCADE` and an index (new migration)
 - Stale stub docstrings in `app/` reference the old learning-mode rules and passlib; clean up.
 - Google OAuth signup: needs nullable `password_hash` + `auth_provider`/`google_id`
   (or an `oauth_identities` table) and a rule for email collisions with local accounts

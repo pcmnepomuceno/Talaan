@@ -3,7 +3,7 @@
 Stub — request validation is yours to write (CLAUDE.md rule 2).
 Typical set: UserCreate (email + raw password in), UserRead (no password out).
 """
-from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 # TODO: implement User schemas
 
@@ -57,3 +57,9 @@ class UserLogin(BaseModel):
         if value is None:
             return value
         return str(value).strip().lower()
+
+
+class AccountDelete(BaseModel):
+    # No complexity rules: any wrong value up to the cap, however odd (empty, over 72 bytes),
+    # gets the same 403. The cap only stops a huge body being parsed and encoded per attempt.
+    password: str = Field(max_length=1024)

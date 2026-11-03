@@ -10,6 +10,7 @@ from fastapi import HTTPException
 from app.auth import rate_limit
 from app.auth.models import RateLimitEvent
 from app.database import SessionLocal
+from tests.concurrency import join_all, spawn
 
 N = 20
 LIMIT = 5
@@ -33,11 +34,7 @@ def burst(make_limits):
         finally:
             db.close()
 
-    threads = [threading.Thread(target=attempt, args=(i,)) for i in range(N)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join(timeout=30)
+    join_all([spawn(attempt, i) for i in range(N)])
     assert not errors, errors
     return results.count("pass"), results.count(429)
 

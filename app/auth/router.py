@@ -16,12 +16,17 @@ app/schemas/session.py for the pieces these will need.
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import config
 from app.auth import invites, rate_limit
+from app.auth.cookies import (
+    clear_session_cookie,
+    read_session_token,
+    set_session_cookie,
+)
 from app.auth.models import Session as SessionModel
 from app.auth.security import (
     DUMMY_PASSWORD_HASH,
@@ -33,6 +38,8 @@ from app.auth.security import (
 from app.database import get_db
 from app.users.models import User as UserModel
 from app.users.schemas import UserCreate, UserLogin, UserRead
+
+FOREIGN_KEY_VIOLATION = "23503"  # Postgres SQLSTATE
 
 router = APIRouter(tags=["auth"])
 
@@ -132,21 +139,26 @@ def login(
         expires_at=datetime.now(timezone.utc) + SESSION_LIFETIME
     )
     db.add(session)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as e:
+        # Only a foreign key violation (23503) means the account was deleted between the
+        # password check and this insert (the FK insert waited for the delete to commit).
+        # No session row exists; same 401. Any other integrity error is a real bug: re-raise.
+        db.rollback()
+        if getattr(e.orig, "pgcode", None) != FOREIGN_KEY_VIOLATION:
+            raise
+        raise HTTPException(status_code=401, detail="Invalid email or password.") from None
     db.refresh(session)
 
-    response.set_cookie(
-        key="session_token",
-        value=session_token,
-        httponly=True,
-        max_age=int(SESSION_LIFETIME.total_seconds()),
-    )
+    set_session_cookie(response, session_token, int(SESSION_LIFETIME.total_seconds()))
 
     return {"detail": "Logged in"}
 
 @router.post("/logout", status_code=204)
-def logout(session_token: str = Cookie(None), db: Session = Depends(get_db)):
+def logout(request: Request, db: Session = Depends(get_db)):
     # Idempotent: missing/invalid token is not an error (DECISIONS.md)
+    session_token = read_session_token(request)
     session = None
     if session_token:
         session = (
@@ -160,5 +172,5 @@ def logout(session_token: str = Cookie(None), db: Session = Depends(get_db)):
 
     # Cookie must be cleared on the returned response object
     response = Response(status_code=204)
-    response.delete_cookie(key="session_token")
+    clear_session_cookie(response)
     return response
