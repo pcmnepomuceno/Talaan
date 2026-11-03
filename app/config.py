@@ -6,6 +6,7 @@ present). Keep real secrets in .env, never commit them — see .env.example.
 
 import logging
 import os
+from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
 
@@ -76,14 +77,43 @@ TRUST_PROXY = _bool("TRUST_PROXY", False)
 COOKIE_SECURE = _bool("COOKIE_SECURE", True)
 
 
+DEFAULT_PORTS = {"http": 80, "https": 443}
+
+
+def _origin(entry: str) -> str:
+    """One allow-list entry as the browser would send it in Origin: scheme://host[:port],
+    lowercase, default port dropped. Anything else is a startup error naming the entry."""
+    def bad(why: str) -> ValueError:
+        return ValueError(f"ALLOWED_ORIGINS entry {entry!r} {why}; expected scheme://host[:port]")
+
+    if "*" in entry:
+        raise ValueError("ALLOWED_ORIGINS must list exact origins, not a wildcard")
+    parts = urlsplit(entry.lower())
+    if parts.scheme not in DEFAULT_PORTS:
+        raise bad("must start with http:// or https://")
+    if parts.username is not None or parts.password is not None:
+        raise bad("must not contain user info")
+    if parts.path not in ("", "/") or parts.query or parts.fragment or "?" in entry or "#" in entry:
+        raise bad("must not have a path, query or fragment")
+    try:
+        port = parts.port
+    except ValueError:
+        raise bad("has an invalid port") from None
+    host = parts.hostname
+    if not host:
+        raise bad("has no host")
+    if ":" in host:  # IPv6 literal
+        host = f"[{host}]"
+    if port is not None and port != DEFAULT_PORTS[parts.scheme]:
+        host = f"{host}:{port}"
+    return f"{parts.scheme}://{host}"
+
+
 def parse_origins(raw: str | None) -> frozenset[str]:
     """Comma-separated browser origins for the CSRF check (app/security.py). Entries are
-    stripped, lowercased and lose a trailing slash; blanks are dropped; nothing left means
-    the default. A wildcard is a startup error, never a fallback."""
-    items = {part.strip().rstrip("/").lower() for part in (raw or "").split(",")}
-    items.discard("")
-    if any("*" in item for item in items):
-        raise ValueError("ALLOWED_ORIGINS must list exact origins, not a wildcard")
+    stripped and normalized by _origin; blanks are dropped; nothing left means the default.
+    A wildcard or malformed entry is a startup error, never a fallback."""
+    items = {_origin(part.strip()) for part in (raw or "").split(",") if part.strip()}
     return frozenset(items or {"http://localhost:3000"})
 
 

@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 import sys
 
@@ -124,6 +125,11 @@ D = frozenset({ALLOWED})
         (" https://a.example/ , https://B.example ", frozenset({"https://a.example", "https://b.example"})),
         ("https://a.example,https://a.example/", frozenset({"https://a.example"})),
         ("https://a.example,,", frozenset({"https://a.example"})),
+        ("https://x.com:443", frozenset({"https://x.com"})),
+        ("http://x.com:80", frozenset({"http://x.com"})),
+        ("HTTPS://X.COM:8443", frozenset({"https://x.com:8443"})),
+        ("http://x.com:443", frozenset({"http://x.com:443"})),
+        ("http://[::1]:3000", frozenset({"http://[::1]:3000"})),
     ],
 )
 def test_parse_origins(raw, expected):
@@ -134,6 +140,38 @@ def test_parse_origins(raw, expected):
 def test_wildcard_rejected(raw):
     with pytest.raises(ValueError, match="wildcard"):
         config.parse_origins(raw)
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        "example.com",
+        "null",
+        "ftp://x.com",
+        "https://x.com/app",
+        "https://x.com/?a=1",
+        "https://x.com?a=1",
+        "https://x.com#top",
+        "https://user@x.com",
+        "https://user:pw@x.com",
+        "https://x.com:abc",
+        "https://x.com:99999",
+        "https://",
+    ],
+)
+def test_malformed_origin_rejected_naming_the_entry(entry):
+    with pytest.raises(ValueError, match=re.escape(f"ALLOWED_ORIGINS entry {entry!r}")):
+        config.parse_origins(f"https://ok.example, {entry}")
+
+
+def test_malformed_origin_fails_startup():
+    r = subprocess.run(
+        [sys.executable, "-c", "import app.config"],
+        env={**os.environ, "ALLOWED_ORIGINS": "https://x.com/app"},
+        capture_output=True, text=True, check=False,
+    )
+    assert r.returncode != 0
+    assert "ValueError: ALLOWED_ORIGINS entry 'https://x.com/app'" in r.stderr
 
 
 def test_wildcard_fails_startup():
