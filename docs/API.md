@@ -41,7 +41,7 @@ POST/PUT/PATCH/DELETE (login and signup included) return `403 {"detail": "Cross-
 
 ## Account deletion
 `POST /account/delete` with `{"password": "..."}` and a valid session cookie. Deletes the user and, permanently, all their applications, interviews and sessions, in one transaction, then clears the cookie.
-- `204` deleted. `401` no, expired or already-deleted session (also the loser of two simultaneous deletes). `403 {"detail": "Incorrect password."}` wrong password (not 401, so a client does not treat it as an expired session). `429` too many wrong attempts (5 per user and 10 per IP per 15 minutes; `ACCOUNT_DELETE_*` env). `503` database failure; nothing is deleted.
+- `204` deleted. `401` no, expired or already-deleted session (also the loser of two simultaneous deletes). `403 {"detail": "Incorrect password."}` wrong password (not 401, so a client does not treat it as an expired session). `429` too many wrong attempts (5 per user and 10 per IP per 15 minutes; `ACCOUNT_DELETE_*` env). `503` database failure; nothing is deleted. `422` password missing or over 1024 characters (any wrong password up to that, including over 72 bytes, is the same 403).
 - Used invite codes stay used (`used_by_user_id` becomes NULL). The same email can sign up again, but only with a new invite code; the old account does not come back.
 
 ## Signup

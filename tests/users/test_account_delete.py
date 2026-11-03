@@ -125,12 +125,20 @@ def test_wrong_password_403_and_nothing_deleted(authed, db, user):
     assert counts(db, uid) == before
 
 
-@pytest.mark.parametrize("password", ["", "x" * 73, "é" * 40, USER_PASSWORD + "x" * 80, " " * 200])
+@pytest.mark.parametrize(
+    "password", ["", "x" * 73, "é" * 40, USER_PASSWORD + "x" * 80, " " * 200, "x" * 1024, "é" * 1024]
+)
 def test_odd_passwords_get_the_same_403(authed, db, user, password):
     uid = user.id
     r = delete(authed, password)
     assert r.status_code == 403
     assert r.json() == {"detail": "Incorrect password."}
+    assert counts(db, uid)["users"] == 1
+
+
+def test_password_over_1024_chars_is_422_and_nothing_deleted(authed, db, user):
+    uid = user.id
+    assert delete(authed, "x" * 1025).status_code == 422
     assert counts(db, uid)["users"] == 1
 
 
