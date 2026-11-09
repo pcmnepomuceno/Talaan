@@ -30,15 +30,16 @@ export function Button({ variant = "primary", className = "", ...props }: Props)
   return <button type="button" {...props} className={cls} />;
 }
 
-// The one 44px text action (Edit, Delete). `href` renders a link, `onClick` a button; `disabled`
-// always renders a real disabled button (a link cannot be disabled). `bar` inherits the app bar's colour.
+// The one 44px text action (Edit, Delete). `href` renders a link, `onClick` a button. `disabled` keeps
+// the same element (aria-disabled, click ignored): swapping elements during a background refresh would
+// remount the node and drop keyboard focus. `bar` inherits the app bar's colour.
 type Tone = "bar" | "primary" | "danger";
 const tones: Record<Tone, { on: string; off: string }> = {
   bar: { on: "", off: "text-bar-text/60" },
   primary: { on: "text-primary", off: "text-text-muted" },
   danger: { on: "text-error-text", off: "text-text-muted" },
 };
-const action = "inline-flex min-h-11 min-w-11 items-center justify-center rounded-sm px-2 text-body-medium disabled:cursor-not-allowed";
+const action = "inline-flex min-h-11 min-w-11 items-center justify-center rounded-sm px-2 text-body-medium aria-disabled:cursor-not-allowed";
 
 export function TextAction({
   href,
@@ -55,20 +56,15 @@ export function TextAction({
   "aria-label"?: string;
   children: ReactNode;
 }) {
-  if (disabled) {
-    return (
-      <button type="button" disabled aria-label={ariaLabel} className={`${action} ${tones[tone].off}`}>
-        {children}
-      </button>
-    );
-  }
-  const cls = `${action} ${tones[tone].on}`;
+  const cls = `${action} ${disabled ? tones[tone].off : tones[tone].on}`;
+  const off = disabled || undefined;
   return href ? (
-    <Link href={href} aria-label={ariaLabel} className={cls}>
+    // Next's Link skips navigation when the click's default is prevented.
+    <Link href={href} aria-disabled={off} onClick={(e) => disabled && e.preventDefault()} aria-label={ariaLabel} className={cls}>
       {children}
     </Link>
   ) : (
-    <button type="button" onClick={onClick} aria-label={ariaLabel} className={cls}>
+    <button type="button" aria-disabled={off} onClick={() => !disabled && onClick?.()} aria-label={ariaLabel} className={cls}>
       {children}
     </button>
   );
