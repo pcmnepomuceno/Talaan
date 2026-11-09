@@ -82,7 +82,7 @@ it("delete: the dialog names the date and mode; confirming removes the row at on
   await list();
   await userEvent.click(screen.getByRole("button", { name: `Delete interview, ${DATE1}` }));
   expect(await screen.findByRole("heading", { name: "Delete this interview?" })).toBeTruthy();
-  expect(ivDialog().textContent).toContain(`The Online interview on ${DATE1} will be removed. This cannot be undone.`);
+  expect(ivDialog().textContent).toContain(`The online interview on ${DATE1} will be removed. This cannot be undone.`);
 
   let release!: () => void;
   const gate = new Promise<void>((r) => (release = r));

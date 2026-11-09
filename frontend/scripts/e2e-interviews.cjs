@@ -205,7 +205,7 @@ withEnv(async ({ base, createInvite }) => {
   page.on("request", onGet);
   await page.getByRole("button", { name: "Delete interview, Nov 19, 2026, 12:30 AM PHT" }).click();
   await page.getByRole("heading", { name: "Delete this interview?" }).waitFor();
-  check("delete dialog names the mode and date", (await page.getByRole("dialog").innerText()).includes("The On-site interview on Nov 19, 2026, 12:30 AM PHT will be removed."));
+  check("delete dialog names the mode and date", (await page.getByRole("dialog").innerText()).includes("The on-site interview on Nov 19, 2026, 12:30 AM PHT will be removed."));
   await page.getByRole("dialog").getByRole("button", { name: "Delete interview" }).click();
   await page.waitForFunction(() => !document.body.innerText.includes("Nov 19, 2026, 12:30 AM PHT"));
   await page.waitForTimeout(1000);

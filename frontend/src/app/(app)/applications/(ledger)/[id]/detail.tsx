@@ -10,9 +10,9 @@ import { DetailRows, InterviewRow, LedgerSheet, LedgerSkeleton } from "@/compone
 import { NotFoundState } from "@/components/not-found-state";
 import { deleteInterview, parseStatus } from "@/lib/api";
 import { formatDateTimePHT } from "@/lib/format";
-import { type Interview, interviewMode } from "@/lib/types";
+import type { Interview } from "@/lib/types";
 import { StatusStamp } from "@/components/status-stamp";
-import { sortInterviewsByDate } from "@/lib/interviews";
+import { interviewDeleteMessage, sortInterviewsByDate } from "@/lib/interviews";
 import { useDetail } from "../screen";
 
 const heading = "mb-2 text-section-title text-text-secondary";
@@ -154,7 +154,7 @@ export function ApplicationDetail() {
         onCancel={() => setDeleting(null)}
         onConfirm={confirmDelete}
         title="Delete this interview?"
-        message={deleting ? `The ${interviewMode(deleting.mode)?.label ?? ""} interview on ${when(deleting)} will be removed. This cannot be undone.` : ""}
+        message={deleting ? interviewDeleteMessage(deleting, when(deleting)) : ""}
         confirmLabel="Delete interview"
       />
     </div>
