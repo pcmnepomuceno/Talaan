@@ -53,6 +53,7 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - F6 review item 9 (2026-11-09): the "Interview not found." `NotFoundState` props and the form page wrapper (`AppBar` + `<main id="content" ... max-w-[640px] ...>`) repeat in 3-5 files. Extract an `InterviewNotFound` and a form page shell in the same small refactor PR.
 - F6 review item 10 (2026-11-09): the `DetailContext` value is a new object on every `ApplicationsScreen` render, so the detail pane re-renders on list-only updates. Memoize it only if profiling shows a measurable cost.
 - DECISIONS.md (2026-11-09): the F6 entry (2026-11-04) has its last five bullets duplicated ("The backend's PATCH and DELETE are flat" through "Local scripts"). Remove the duplicate in a tiny docs commit; it is a copy error, not a rewrite of the decision.
+- Interview writes clear every cache (2026-11-09): `clearCaches()` also empties the list cache, so at 1280 the list pane briefly shows skeleton rows after an interview delete although the list is unchanged (seen in the F6 review e2e). Scope the clear for interview writes to the detail caches only.
 
 ## Maintenance
 
