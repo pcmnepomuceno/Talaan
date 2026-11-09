@@ -258,6 +258,18 @@ it("a MappingError on save shows the banner, sends nothing, and never leaves Sav
   await waitFor(() => expect(replace).toHaveBeenCalledWith("/applications/1"));
 });
 
+it("edit: a stored time outside 1900-2200 in PHT opens, and a Notes-only edit saves just the notes", async () => {
+  fake.db.interviews[0].scheduled_at = "2200-12-31T20:00:00Z"; // 2201-01-01 04:00 in PHT
+  mountEdit("1");
+  await waitFor(() => expect(timeField().value).toBe("2201-01-01T04:00"));
+  await userEvent.type(field("Notes"), "Bring the portfolio.");
+  await userEvent.click(save());
+  await waitFor(() => expect(replace).toHaveBeenCalledWith("/applications/1"));
+  expect(screen.queryByText("Enter a year between 1900 and 2200.")).toBeNull();
+  expect(fake.callsTo("PATCH", /^\/interviews\/1$/)[0].body).toEqual({ remarks: "Bring the portfolio." });
+  expect(await screen.findByText("Interview saved.")).toBeTruthy();
+});
+
 it("edit: a load failure offers Retry", async () => {
   fake.failNext("GET", /interviews\/1$/, 500);
   mountEdit("1");

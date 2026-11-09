@@ -15,13 +15,18 @@ export const FIELD_ORDER: readonly FieldName[] = ["scheduled_at", "mode", "inter
 
 const points = (s: string) => [...s].length;
 
-/** `timeBad`: the browser's input holds a partial date it cannot turn into a value (its value is then ""). */
-export function validate(v: InterviewFormValues, { timeBad = false }: { timeBad?: boolean } = {}): Errors {
+/**
+ * `timeBad`: the browser's input holds a partial date it cannot turn into a value (its value is then "").
+ * `initialTime`: the edit form's starting value. An untouched time skips the year check: the API took it
+ * in the offset it was sent in, so its PHT year can be 2201 or 1899 and it must not block other edits.
+ */
+export function validate(v: InterviewFormValues, { timeBad = false, initialTime }: { timeBad?: boolean; initialTime?: string } = {}): Errors {
   const e: Errors = {};
+  const changed = initialTime === undefined || v.scheduled_at.slice(0, 16) !== initialTime.slice(0, 16);
   if (timeBad) e.scheduled_at = "Enter a complete date and time.";
   else if (v.scheduled_at === "") e.scheduled_at = "Enter the date and time.";
   else if (fromPhtInput(v.scheduled_at) === null) e.scheduled_at = "Enter a valid date and time.";
-  else if (!phtYearOk(v.scheduled_at)) e.scheduled_at = "Enter a year between 1900 and 2200.";
+  else if (changed && !phtYearOk(v.scheduled_at)) e.scheduled_at = "Enter a year between 1900 and 2200.";
 
   if (v.mode === "") e.mode = "Choose an interview mode.";
   if (points(v.interviewer.trim()) > LIMITS.name) e.interviewer = `Interviewer must be ${LIMITS.name} characters or fewer.`;

@@ -23,6 +23,14 @@ it("time: badInput, impossible dates, year range", () => {
   expect(validate({ ...ok, scheduled_at: "2200-12-31T23:59" })).toEqual({});
 });
 
+it("year range only when the time was changed: an untouched stored 2201 PHT time passes", () => {
+  const stored = { ...ok, scheduled_at: "2201-01-01T04:00" };
+  expect(validate(stored, { initialTime: "2201-01-01T04:00" })).toEqual({});
+  expect(validate({ ...ok, scheduled_at: "2201-01-01T05:00" }, { initialTime: "2201-01-01T04:00" }).scheduled_at).toBe("Enter a year between 1900 and 2200.");
+  expect(validate(stored, { initialTime: "" }).scheduled_at).toBe("Enter a year between 1900 and 2200."); // create
+  expect(validate(stored).scheduled_at).toBe("Enter a year between 1900 and 2200.");
+});
+
 it("interviewer: 200 code points after trim (emoji and CJK count once)", () => {
   expect(validate({ ...ok, interviewer: "😀".repeat(200) }).interviewer).toBeUndefined();
   expect(validate({ ...ok, interviewer: "李".repeat(200) }).interviewer).toBeUndefined();

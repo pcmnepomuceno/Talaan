@@ -90,7 +90,7 @@ export function InterviewForm({ applicationId, interview, qs }: { applicationId:
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (submitting.current) return;
-    const errs = validate(values, { timeBad: timeRef.current?.validity.badInput ?? false });
+    const errs = validate(values, { timeBad: timeRef.current?.validity.badInput ?? false, initialTime: initial.scheduled_at });
     if (Object.values(errs).some(Boolean)) {
       setErrors(errs);
       setBanner([]);
