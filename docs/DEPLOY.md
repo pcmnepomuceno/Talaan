@@ -59,6 +59,7 @@ Startup errors are the check: a wrong production config exits with `Refusing to 
 - [ ] Caching: Vercel caches external rewrites that return `Cache-Control` (projects created on or after 2026-04-06). `/api/v1` sends `no-store`, so responses should show no `x-vercel-cache: HIT`. Check one.
 - [ ] Manual run of the Purge workflow (Actions > Purge > Run workflow) prints `Purged N rate_limit_events, M sessions`.
 - [ ] `alembic check` against Neon is clean.
+- [ ] **After the first week:** check Vercel usage once (function/proxy invocations, CPU) against the free limits. Every `/api` request runs `src/proxy.ts` on purpose (DECISIONS.md 2026-11-09, client IP entry).
 
 ## 5. Cold starts
 
