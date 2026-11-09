@@ -33,6 +33,13 @@ function realIpTrusted() {
   return process.env.VERCEL === "1" || /^(1|true)$/i.test(process.env.TRUST_X_REAL_IP?.trim() ?? "");
 }
 
+// The secret only travels over https, or to this machine (local dev). A plain-http BACKEND_URL to
+// another host would put it on the wire in clear text, and whoever read it could name any client IP.
+function secureBackend(url: URL) {
+  const host = url.hostname;
+  return url.protocol === "https:" || host === "localhost" || host === "[::1]" || /^127(\.\d{1,3}){3}$/.test(host);
+}
+
 function forwardToApi(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   const backend = (process.env.BACKEND_URL || "http://localhost:8000").replace(/\/+$/, "");
@@ -41,7 +48,14 @@ function forwardToApi(request: NextRequest) {
   headers.delete(PROXY_SECRET_HEADER);
   const secret = process.env.PROXY_SECRET?.trim();
   const ip = request.headers.get("x-real-ip")?.trim();
-  if (secret && !realIpTrusted()) {
+  const target = new URL(`${backend}${pathname}${search}`);
+  if (secret && !secureBackend(target)) {
+    warnOnce(
+      "insecure",
+      `proxy: not sending PROXY_SECRET to ${target.host}: BACKEND_URL must be https:// (or a loopback host). ` +
+        "Client IPs are not being forwarded.",
+    );
+  } else if (secret && !realIpTrusted()) {
     warnOnce(
       "untrusted",
       "proxy: PROXY_SECRET is set but client IPs are not being forwarded (x-real-ip is not trusted here). " +
@@ -53,7 +67,7 @@ function forwardToApi(request: NextRequest) {
     headers.set(PROXY_SECRET_HEADER, secret);
     if (ip) headers.set(CLIENT_IP_HEADER, ip);
   }
-  return NextResponse.rewrite(new URL(`${backend}${pathname}${search}`), { request: { headers } });
+  return NextResponse.rewrite(target, { request: { headers } });
 }
 
 export function proxy(request: NextRequest) {

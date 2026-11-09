@@ -184,6 +184,35 @@ describe("api forwarding", () => {
     });
   });
 
+  describe("backend transport", () => {
+    it("never sends the secret to a plain-http, non-loopback backend, and warns once", async () => {
+      vi.stubEnv("BACKEND_URL", "http://api.example.com");
+      vi.stubEnv("PROXY_SECRET", SECRET);
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const fresh = await freshProxy();
+      const first = fresh(request({ "x-real-ip": "198.51.100.7" }));
+      fresh(request({ "x-real-ip": "198.51.100.8" }));
+      expect(upstream(first, PROOF)).toBeNull();
+      expect(upstream(first, CLIENT)).toBeNull();
+      expect(getRewrittenUrl(first)).toBe("http://api.example.com/api/v1/login?a=1"); // still forwarded
+      expect(warn).toHaveBeenCalledTimes(1);
+      const message = warn.mock.calls[0].join(" ");
+      expect(message).toContain("api.example.com");
+      expect(message).not.toContain(SECRET);
+    });
+
+    it.each(["https://api.example.com", "http://localhost:8000", "http://127.0.0.2:8000", "http://127.1:8000", "http://[::1]:8000"])(
+      "sends the secret to %s (https or loopback)",
+      (url) => {
+        vi.stubEnv("BACKEND_URL", url);
+        vi.stubEnv("PROXY_SECRET", SECRET);
+        const res = api({ "x-real-ip": "198.51.100.7" });
+        expect(upstream(res, PROOF)).toBe(SECRET);
+        expect(upstream(res, CLIENT)).toBe("198.51.100.7");
+      },
+    );
+  });
+
   it("keeps the other request headers (cookie, origin)", () => {
     vi.stubEnv("PROXY_SECRET", SECRET);
     const res = api({ "x-real-ip": "198.51.100.7", cookie: "session_token=abc", origin: "http://localhost:3000" });
