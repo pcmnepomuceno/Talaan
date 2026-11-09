@@ -420,3 +420,11 @@
 - **Why it works:** the clear's state resets render in a later scheduler task; the code after `await deleteInterview(...)` runs in a microtask before that, so the cache already holds the post-delete page when React renders. The tests that guard this (row gone at once, no skeleton, no "not found", refetch still made) pass unchanged, and the local e2e watches the detail pane for a skeleton from the delete click on.
 - **What changed in behavior:** only one corner. The held copy lived in hook state, so leaving the page before the refetch landed dropped it. The cached copy survives until the next clear or the refetch, so a revisit in that window shows the post-delete page at once (stale-while-revalidate) instead of the skeleton. It is never pre-write data: it is the server's state after the delete.
 - **Alternative:** keep the held copy (about 50 more lines across the hook, the context and the detail, kept in sync by hand); rejected after code review item 6.
+
+---
+
+# Decision: interview edit baseline and year check (F6 review fixes)
+
+- **Date:** 2026-11-09
+- **Edit baseline from the server record.** Amends the F6 bullet "Edit compares like with like": the baseline is still in the form's own shape (PHT rebuilt with +08:00, trimmed), but it is built once from the server record (`toInterviewInput`, like `toApplicationInput`). A stored time the PHT input cannot show makes the edit page say "Couldn't load this interview." instead of opening a form that would fail on Save. A conversion error at submit shows the save banner; Save never does nothing.
+- **Year check only on a changed time.** The API checks 1900-2200 in the offset it was sent in, so a stored instant can read as 2201 or 1899 in PHT. The form checks the year only when the time differs from the value it opened with, so such a row stays editable (a Notes-only edit sends only the notes). Create always checks. Alternative: clamp or rewrite the stored time; rejected, a silent change to data the user did not touch.
