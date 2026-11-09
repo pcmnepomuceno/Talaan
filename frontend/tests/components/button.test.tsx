@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
-import { Button } from "../../src/components/button";
+import { Button, TextAction } from "../../src/components/button";
 import { Icon } from "../../src/components/icon";
 
 it("is a named button that defaults to type=button", () => {
@@ -44,4 +44,38 @@ it("renders a link when given href", () => {
   );
   expect(screen.getByRole("link", { name: "Back" }).getAttribute("href")).toBe("/design");
   expect(screen.queryByRole("button")).toBeNull();
+});
+
+// TextAction must keep its element when `disabled` toggles (a background refresh): swapping a link
+// for a disabled button remounts the node and drops keyboard focus to <body>.
+it("TextAction link: same node and focus while disabled, aria-disabled, and a click does not navigate", async () => {
+  const { rerender } = render(<TextAction href="/applications/1/edit">Edit</TextAction>);
+  const before = screen.getByRole("link", { name: "Edit" });
+  before.focus();
+  rerender(<TextAction href="/applications/1/edit" disabled>Edit</TextAction>);
+  const during = screen.getByRole("link", { name: "Edit" });
+  expect(during).toBe(before);
+  expect(document.activeElement).toBe(before);
+  expect(during.getAttribute("aria-disabled")).toBe("true");
+  expect(fireEvent.click(during)).toBe(false); // default prevented: no navigation
+  rerender(<TextAction href="/applications/1/edit">Edit</TextAction>);
+  expect(screen.getByRole("link", { name: "Edit" })).toBe(before);
+  expect(document.activeElement).toBe(before);
+  expect(before.getAttribute("aria-disabled")).toBeNull();
+});
+
+it("TextAction button: same node and focus while disabled, and a click does nothing", async () => {
+  const onClick = vi.fn();
+  const { rerender } = render(<TextAction onClick={onClick}>Delete</TextAction>);
+  const before = screen.getByRole("button", { name: "Delete" });
+  before.focus();
+  rerender(<TextAction onClick={onClick} disabled>Delete</TextAction>);
+  expect(screen.getByRole("button", { name: "Delete" })).toBe(before);
+  expect(document.activeElement).toBe(before);
+  expect(before.getAttribute("aria-disabled")).toBe("true");
+  await userEvent.click(before);
+  expect(onClick).not.toHaveBeenCalled();
+  rerender(<TextAction onClick={onClick}>Delete</TextAction>);
+  await userEvent.click(before);
+  expect(onClick).toHaveBeenCalledOnce();
 });

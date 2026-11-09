@@ -221,3 +221,6 @@ __marimo__/
 !frontend/src/lib/
 
 .playwright-mcp/
+
+# dependencies and tool caches at the repo root (frontend/ has its own)
+node_modules/

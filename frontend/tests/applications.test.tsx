@@ -161,7 +161,7 @@ it("failed delete: error toast, dialog stays open, Cancel and Escape still work"
   params = { id: "1" };
   screenUnderTest();
   await screen.findByRole("list", { name: "Interviews" });
-  const dialog = () => document.querySelector("dialog")!;
+  const dialog = () => [...document.querySelectorAll("dialog")].find((d) => d.textContent?.includes("Delete this application?"))!; // the detail also holds the interview dialog
   fake.failNext("DELETE", /^\/applications\/1$/);
   await userEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
   await userEvent.click(await screen.findByRole("button", { name: "Delete application" }));

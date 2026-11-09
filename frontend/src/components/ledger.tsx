@@ -72,7 +72,8 @@ export function ApplicationRow({
 }
 
 // DESIGN.md 6.6. The outcome stamp always shows; interviewer and notes only when present.
-export function InterviewRow({ interview: i }: { interview: Interview }) {
+// `actions` (Edit, Delete) sit under the notes; the detail passes them, read-only lists omit them.
+export function InterviewRow({ interview: i, actions }: { interview: Interview; actions?: ReactNode }) {
   const mode = interviewMode(i.mode);
   return (
     <li className="flex flex-col gap-1 p-4">
@@ -98,6 +99,7 @@ export function InterviewRow({ interview: i }: { interview: Interview }) {
         )}
       </p>
       {i.remarks && <p className={`whitespace-pre-line text-caption text-text-muted ${wrap}`}>{i.remarks}</p>}
+      {actions && <div className="-mx-2 -mb-2 flex items-center">{actions}</div>}
     </li>
   );
 }

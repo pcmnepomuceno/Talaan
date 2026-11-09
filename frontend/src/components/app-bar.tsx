@@ -1,5 +1,6 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
+import { TextAction } from "./button";
 import { Icon } from "./icon";
 import { Wordmark } from "./logo";
 
@@ -48,35 +49,5 @@ export function AppBar({ title, backHref, actions, onBack }: Props) {
   );
 }
 
-const action = "inline-flex min-h-11 min-w-11 items-center justify-center rounded-sm px-2 text-body-medium";
-
-// Text action for the bar (Edit, Delete): a link when `href` is given, else a button.
-// `disabled` renders a real disabled button in both cases (a link cannot be disabled).
-export function BarAction({
-  href,
-  onClick,
-  disabled = false,
-  children,
-}: {
-  href?: string;
-  onClick?: () => void;
-  disabled?: boolean;
-  children: ReactNode;
-}) {
-  if (disabled) {
-    return (
-      <button type="button" disabled className={`${action} text-bar-text/60 disabled:cursor-not-allowed`}>
-        {children}
-      </button>
-    );
-  }
-  return href ? (
-    <Link href={href} className={action}>
-      {children}
-    </Link>
-  ) : (
-    <button type="button" onClick={onClick} className={action}>
-      {children}
-    </button>
-  );
-}
+// Text action for the bar (Edit, Delete): the shared TextAction in the bar's colour.
+export const BarAction = (props: Omit<ComponentProps<typeof TextAction>, "tone">) => <TextAction tone="bar" {...props} />;

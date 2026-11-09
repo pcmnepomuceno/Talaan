@@ -35,7 +35,7 @@ const mount = () =>
     </ToastProvider>,
   );
 const detailSection = () => screen.getByRole("region", { name: "Application detail" });
-const actions = () => [screen.getAllByRole("button", { name: "Edit" }), screen.getAllByRole("button", { name: "Delete" })].flat();
+const actions = () => [screen.getAllByRole("link", { name: "Edit" }), screen.getAllByRole("button", { name: "Delete" })].flat();
 
 it("stale-while-revalidate: cached detail shows at once, Edit and Delete are disabled and aria-busy is set until fresh data lands", async () => {
   const first = mount();
@@ -51,13 +51,13 @@ it("stale-while-revalidate: cached detail shows at once, Edit and Delete are dis
   expect(screen.getByRole("list", { name: "Interviews" })).toBeTruthy();
   expect(detailSection().getAttribute("aria-busy")).toBe("true");
   expect(actions().length).toBeGreaterThan(0);
-  for (const b of actions()) expect((b as HTMLButtonElement).disabled).toBe(true);
+  for (const b of actions()) expect(b.getAttribute("aria-disabled")).toBe("true");
 
   release();
   await waitFor(() => expect(screen.getAllByText("Renamed Co").length).toBeGreaterThan(0));
   expect(detailSection().getAttribute("aria-busy")).toBeNull();
   expect(screen.getAllByRole("link", { name: "Edit" }).length).toBeGreaterThan(0);
-  expect((screen.getAllByRole("button", { name: "Delete" })[0] as HTMLButtonElement).disabled).toBe(false);
+  for (const b of actions()) expect(b.getAttribute("aria-disabled")).toBeNull();
 });
 
 it("a write clears the cached detail, so a revisit shows the skeleton, never old fields", async () => {
@@ -191,7 +191,7 @@ it("delete: a server failure keeps the dialog open and the application", async (
   await userEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
   await userEvent.click(await screen.findByRole("button", { name: "Delete application" }));
   expect(await screen.findByText("Couldn't delete the application. Try again.")).toBeTruthy();
-  expect(document.querySelector("dialog")!.hasAttribute("open")).toBe(true);
+  expect([...document.querySelectorAll("dialog")].find((d) => d.textContent?.includes("Delete this application?"))!.hasAttribute("open")).toBe(true);
   expect(replace).not.toHaveBeenCalled();
   expect(fake.db.apps.some((a) => a.id === 1)).toBe(true);
 });

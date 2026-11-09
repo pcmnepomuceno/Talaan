@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 
 type Variant = "primary" | "secondary" | "ghost" | "destructive";
 
@@ -28,4 +28,44 @@ export function Button({ variant = "primary", className = "", ...props }: Props)
   const cls = `${base} ${variants[variant]} ${className}`;
   if (props.href !== undefined) return <Link {...props} className={cls} />;
   return <button type="button" {...props} className={cls} />;
+}
+
+// The one 44px text action (Edit, Delete). `href` renders a link, `onClick` a button. `disabled` keeps
+// the same element (aria-disabled, click ignored): swapping elements during a background refresh would
+// remount the node and drop keyboard focus. `bar` inherits the app bar's colour.
+type Tone = "bar" | "primary" | "danger";
+const tones: Record<Tone, { on: string; off: string }> = {
+  bar: { on: "", off: "text-bar-text/60" },
+  primary: { on: "text-primary", off: "text-text-muted" },
+  danger: { on: "text-error-text", off: "text-text-muted" },
+};
+const action = "inline-flex min-h-11 min-w-11 items-center justify-center rounded-sm px-2 text-body-medium aria-disabled:cursor-not-allowed";
+
+export function TextAction({
+  href,
+  onClick,
+  disabled = false,
+  tone = "primary",
+  "aria-label": ariaLabel,
+  children,
+}: {
+  href?: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  tone?: Tone;
+  "aria-label"?: string;
+  children: ReactNode;
+}) {
+  const cls = `${action} ${disabled ? tones[tone].off : tones[tone].on}`;
+  const off = disabled || undefined;
+  return href ? (
+    // Next's Link skips navigation when the click's default is prevented.
+    <Link href={href} aria-disabled={off} onClick={(e) => disabled && e.preventDefault()} aria-label={ariaLabel} className={cls}>
+      {children}
+    </Link>
+  ) : (
+    <button type="button" aria-disabled={off} onClick={() => !disabled && onClick?.()} aria-label={ariaLabel} className={cls}>
+      {children}
+    </button>
+  );
 }
