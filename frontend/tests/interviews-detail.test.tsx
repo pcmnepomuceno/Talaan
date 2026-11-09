@@ -109,6 +109,25 @@ it("delete: the dialog names the date and mode; confirming removes the row at on
   expect(fake.callsTo("DELETE", /^\/interviews\/1$/)).toHaveLength(1);
 });
 
+it("delete: focus moves to the Interviews heading, or to Add interview when no rows remain", async () => {
+  const view = mount();
+  await list();
+  await userEvent.click(screen.getByRole("button", { name: `Delete interview, ${DATE1}` }));
+  await userEvent.click(await screen.findByRole("button", { name: "Delete interview" }));
+  await screen.findByText("Interview deleted.");
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Interviews" })));
+  view.unmount();
+
+  clearCaches();
+  fake.db.interviews = [makeInterview(9, 1, { scheduled_at: "2026-10-24T14:00:00+08:00" })];
+  mount();
+  await list();
+  await userEvent.click(screen.getByRole("button", { name: `Delete interview, ${DATE1}` }));
+  await userEvent.click(await screen.findByRole("button", { name: "Delete interview" }));
+  await screen.findByText("No interviews yet.");
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("link", { name: "Add interview" })));
+});
+
 it("delete: a 404 (already gone) is success", async () => {
   mount();
   await list();

@@ -209,6 +209,7 @@ withEnv(async ({ base, createInvite }) => {
   await page.getByRole("dialog").getByRole("button", { name: "Delete interview" }).click();
   await page.waitForFunction(() => !document.body.innerText.includes("Nov 19, 2026, 12:30 AM PHT"));
   await page.waitForTimeout(1000);
+  check("focus moved to the Interviews heading", await page.evaluate(() => document.activeElement?.id === "d-interviews"), await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 80)));
   page.off("request", onGet);
   check("toast 'Interview deleted.'", (await toasts()).some((t) => t.includes("Interview deleted.")));
   check("two rows left", (await ivTexts()).length === 2);

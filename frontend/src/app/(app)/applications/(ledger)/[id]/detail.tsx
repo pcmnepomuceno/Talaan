@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, TextAction } from "@/components/button";
 import { DeleteConfirm } from "@/components/dialog";
 import { useToast } from "@/components/toast";
@@ -24,6 +24,16 @@ export function ApplicationDetail() {
   const qs = status ? `?status=${status}` : "";
   const [deleting, setDeleting] = useState<Interview | null>(null);
   const [busy, setBusy] = useState(false);
+  // After a confirmed delete the Delete button that opened the dialog is gone, so the Dialog's focus
+  // return lands on <body>. This effect runs after the Dialog's (child effects first) and wins.
+  const focusAfterDelete = useRef(false);
+  const ivHeading = useRef<HTMLHeadingElement>(null);
+  const emptyAdd = useRef<HTMLAnchorElement>(null);
+  useEffect(() => {
+    if (!focusAfterDelete.current) return;
+    focusAfterDelete.current = false;
+    (emptyAdd.current ?? ivHeading.current)?.focus();
+  });
 
   // The screen's persistent live region announces "Loading application"; the skeleton is visual only.
   if (state.kind === "removed") return null;
@@ -50,6 +60,7 @@ export function ApplicationDetail() {
     }
     dropInterview(target.id);
     setDeleting(null);
+    focusAfterDelete.current = true; // read by the effect after this render
     toast.success("Interview deleted.");
   }
 
@@ -80,7 +91,7 @@ export function ApplicationDetail() {
       )}
       <section aria-labelledby="d-interviews">
         <div className="mb-2 flex min-h-11 items-center justify-between gap-3">
-          <h3 id="d-interviews" className="text-section-title text-text-secondary">
+          <h3 ref={ivHeading} id="d-interviews" tabIndex={-1} className="text-section-title text-text-secondary outline-none">
             Interviews
           </h3>
           {iv.kind === "ready" && iv.items.length > 0 && (
@@ -96,7 +107,7 @@ export function ApplicationDetail() {
         ) : iv.items.length === 0 ? (
           <div className="flex flex-col items-start gap-3">
             <p className="text-caption text-text-muted">No interviews yet.</p>
-            <Button variant="secondary" href={addHref}>
+            <Button ref={emptyAdd} variant="secondary" href={addHref}>
               Add interview
             </Button>
           </div>
