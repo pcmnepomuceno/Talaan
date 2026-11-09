@@ -1,7 +1,7 @@
 // Real applications client (F5). Screens import only these functions. Every request goes through
 // request() in http.ts; every response goes through mappers.ts. The three writes clear the
 // in-memory caches themselves (cache.ts), so no screen can forget to.
-import { clearCaches, clearDetail } from "./cache";
+import { clearCaches, clearDetail, getDetail, replaceDetail } from "./cache";
 import { ApiError, request } from "./http";
 import {
   type ApplicationInput,
@@ -154,7 +154,11 @@ export async function updateInterview(applicationId: number, id: number, initial
   return id;
 }
 
-/** 404 means it is already gone, which is what the caller wanted: resolves either way (and clears everything then). */
+/**
+ * 404 means it is already gone, which is what the caller wanted: resolves either way (and clears
+ * everything then). On success the cached detail is replaced by its page minus this row in one step
+ * (replaceDetail), so the open detail keeps showing the page while it refetches, never a skeleton.
+ */
 export async function deleteInterview(applicationId: number, id: number): Promise<void> {
   try {
     await request(`${INTERVIEWS}/${id}`, { method: "DELETE" });
@@ -163,5 +167,9 @@ export async function deleteInterview(applicationId: number, id: number): Promis
     clearCaches();
     return;
   }
-  clearDetail(applicationId);
+  const cached = getDetail(applicationId);
+  if (cached?.interviews) {
+    const { items, total } = cached.interviews;
+    replaceDetail(applicationId, { ...cached, interviews: { items: items.filter((i) => i.id !== id), total: Math.max(0, total - 1) } });
+  } else clearDetail(applicationId);
 }

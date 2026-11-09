@@ -43,9 +43,23 @@ export function clearCaches() {
   for (const fn of [...listeners]) fn();
 }
 
+function bumpDetail(id: number) {
+  detailBumps.set(id, detailStamp(id) + 1);
+  for (const fn of [...listeners]) fn(id);
+}
+
 /** Drops one application's detail only (an interview write). Lists and other details stay. */
 export function clearDetail(id: number) {
   details.delete(id);
-  detailBumps.set(id, detailStamp(id) + 1);
-  for (const fn of [...listeners]) fn(id);
+  bumpDetail(id);
+}
+
+/**
+ * Like clearDetail(id) (in-flight detail responses are dropped, listeners refetch), but the entry is
+ * replaced instead of dropped, in the same synchronous step, so the first render after the
+ * notification already finds `entry`: no caller has to win a race against React's render.
+ */
+export function replaceDetail(id: number, entry: DetailEntry) {
+  details.set(id, entry);
+  bumpDetail(id);
 }

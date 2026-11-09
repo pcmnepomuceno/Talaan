@@ -74,18 +74,6 @@ export function ApplicationDetail() {
     } finally {
       setBusy(false);
     }
-    // Timing-sensitive: deleteInterview cleared this application's detail, which queued a refetch and a
-    // reset to "nothing loaded" (the list is untouched: an interview changes no list field). This cache write must run before React renders that clear, so the render finds the page
-    // minus the row (the cached/refreshing path) instead of a skeleton; the refetch then replaces it. It
-    // works only because the await's continuation runs before React's scheduled render: adding any await
-    // between deleteInterview and setDetail brings back the skeleton flash. The skeleton check in
-    // scripts/e2e-interviews.cjs guards this.
-    if (iv.kind === "ready") {
-      setDetail(a.id, {
-        application: a,
-        interviews: { items: iv.items.filter((i) => i.id !== target.id), total: Math.max(0, iv.total - 1) },
-      });
-    }
     setDeleting(null);
     focusAfterDelete.current = true; // read by the effect after this render
     toast.success("Interview deleted.");

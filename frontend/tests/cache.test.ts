@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { cacheVersion, clearCaches, clearDetail, detailStamp, getDetail, getList, onCachesCleared, setDetail, setList } from "../src/lib/cache";
+import { cacheVersion, clearCaches, clearDetail, detailStamp, replaceDetail, getDetail, getList, onCachesCleared, setDetail, setList } from "../src/lib/cache";
 import { deleteAccount, login, logout } from "../src/lib/auth";
 
 const entry = { items: [], total: 0, nextOffset: 0 };
@@ -59,4 +59,21 @@ it.each([
   setList(undefined, entry);
   await run();
   expect(getList()).toBeUndefined();
+});
+
+it("replaceDetail swaps the entry before listeners run, bumps only that id's stamp, and keeps the lists", () => {
+  setList(undefined, entry);
+  const before = { application: { id: 1 } as never, interviews: null };
+  const after = { application: { id: 1 } as never, interviews: { items: [], total: 0 } };
+  setDetail(1, before);
+  const v = cacheVersion();
+  const stamp = detailStamp(1);
+  const seen: unknown[] = [];
+  const off = onCachesCleared((id) => seen.push([id, getDetail(1)]));
+  replaceDetail(1, after);
+  expect(seen).toEqual([[1, after]]); // atomic: the listener already finds the replacement
+  expect(detailStamp(1)).toBe(stamp + 1);
+  expect(cacheVersion()).toBe(v);
+  expect(getList()).toBe(entry);
+  off();
 });
