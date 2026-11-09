@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { parseId, parseStatus } from "@/lib/api";
 import { AppBar } from "@/components/app-bar";
-import { InterviewForm } from "@/components/interview-form";
 import { NotFoundState } from "@/components/not-found-state";
+import { NewInterviewScreen } from "./new-screen";
 
 export const metadata: Metadata = { title: "Add interview", robots: { index: false } };
 
@@ -28,5 +28,5 @@ export default async function Page({
       </>
     );
   }
-  return <InterviewForm applicationId={n} qs={qs} />;
+  return <NewInterviewScreen key={n} id={n} qs={qs} />;
 }

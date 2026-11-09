@@ -241,12 +241,9 @@ withEnv(async ({ base, createInvite }) => {
   ]);
   check("deleting the application removed its interviews (all 404)", remaining.length === 2 && gone.every((r) => r.status() === 404));
   await page.goto(`${appUrl}/interviews/new`);
-  check("form for a deleted application: not found on save", await (async () => {
-    await time().waitFor();
-    await time().fill("2026-11-25T10:00");
-    await page.getByRole("radio", { name: "Online" }).check({ force: true });
-    await page.getByRole("button", { name: "Save interview" }).click();
-    return page.getByText("Application not found.").waitFor().then(() => true, () => false);
+  check("new interview for a deleted application: not found before any form", await (async () => {
+    const shown = await page.getByRole("heading", { name: "Application not found." }).waitFor().then(() => true, () => false);
+    return shown && (await time().count()) === 0;
   })());
 
   check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));

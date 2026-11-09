@@ -3,9 +3,10 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { EditInterviewScreen } from "../src/app/(app)/applications/[id]/interviews/[interviewId]/edit/edit-screen";
+import NewInterviewPage from "../src/app/(app)/applications/[id]/interviews/new/page";
 import { InterviewForm } from "../src/components/interview-form";
 import { ToastProvider } from "../src/components/toast";
-import { clearCaches } from "../src/lib/cache";
+import { clearCaches, setDetail } from "../src/lib/cache";
 import { type Fake, installFake, json, makeInterview } from "./helpers/fake-api";
 
 // Lets one test make the submit-time conversion throw (it cannot after validate() passes today).
@@ -344,4 +345,44 @@ it("beforeunload is registered only while dirty, and removed on save and on unmo
   expect(unloadPrevented()).toBe(true);
   second.unmount();
   expect(unloadPrevented()).toBe(false);
+});
+
+// ---- new route: the application is checked before the form ----
+const mountNewRoute = async (id: string, status?: string) =>
+  render(wrap(await NewInterviewPage({ params: Promise.resolve({ id }), searchParams: Promise.resolve({ status }) })));
+const skeletonRow = () => document.querySelector("li.animate-ledger-pulse");
+
+it("new route for a missing (deleted or another user's) application shows not found and no form", async () => {
+  await mountNewRoute("999", "applied");
+  expect(await screen.findByRole("heading", { name: "Application not found." })).toBeTruthy();
+  expect(screen.queryByLabelText(/Date and time/)).toBeNull();
+  expect(screen.queryByRole("button", { name: /Save interview/ })).toBeNull();
+  expect(fake.callsTo("GET", /^\/applications\/999$/)).toHaveLength(1);
+  expect(fake.calls.filter((c) => c.method === "POST")).toHaveLength(0);
+});
+
+it("new route while the application loads shows a skeleton and no form, then the form", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  fake.on("GET", /^\/applications\/1$/, async () => (await gate, json(200, fake.db.apps[0])));
+  await mountNewRoute("1");
+  expect(skeletonRow()).toBeTruthy();
+  expect(screen.queryByLabelText(/Date and time/)).toBeNull();
+  release();
+  expect(await screen.findByLabelText(/Date and time/)).toBeTruthy();
+  expect(skeletonRow()).toBeNull();
+});
+
+it("new route with the application in the detail cache shows the form at once, and keeps it after the save clears the caches", async () => {
+  setDetail(1, { application: fake.db.apps[0], interviews: null });
+  const page = async () => wrap(await NewInterviewPage({ params: Promise.resolve({ id: "1" }), searchParams: Promise.resolve({}) }));
+  const { rerender } = render(await page());
+  expect(screen.getByLabelText(/Date and time/)).toBeTruthy();
+  await fillMinimum();
+  await userEvent.click(save());
+  await waitFor(() => expect(replace).toHaveBeenCalledWith("/applications/1"));
+  rerender(await page()); // the route re-renders after the save cleared the caches
+  expect(skeletonRow()).toBeNull();
+  expect(screen.getByLabelText(/Date and time/)).toBeTruthy();
+  expect(fake.callsTo("GET", /^\/applications\/1$/)).toHaveLength(0);
 });
