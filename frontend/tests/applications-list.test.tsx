@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ApplicationsScreen } from "../src/app/(app)/applications/(ledger)/screen";
 import { ANNOUNCE_MS, useApplicationList } from "../src/app/(app)/applications/(ledger)/use-list";
 import { ToastProvider } from "../src/components/toast";
-import { clearCaches, getList } from "../src/lib/cache";
+import { clearCaches, forgetLoaded, getList } from "../src/lib/cache";
 import { STATUSES } from "../src/lib/types";
 import { type Fake, installFake, json, makeApp } from "./helpers/fake-api";
 
@@ -376,6 +376,7 @@ const advance = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
 
 it("a first list load pending past 3 s shows the waking-up line, gone when it lands", async () => {
   setup(3);
+  forgetLoaded(); // earlier tests in this file already loaded data in this module
   let release!: () => void;
   const gate = new Promise<void>((r) => (release = r));
   const real = fake.spy.getMockImplementation()!;
@@ -385,7 +386,7 @@ it("a first list load pending past 3 s shows the waking-up line, gone when it la
   await advance(2999);
   expect(screen.queryByText(WAKE)).toBeNull();
   await advance(1);
-  expect(screen.getByText(WAKE)).toBeTruthy();
+  expect(screen.getAllByText(WAKE)).toHaveLength(2); // one copy per layout; CSS displays one
   await act(async () => {
     release();
     await gate;
@@ -397,13 +398,14 @@ it("a first list load pending past 3 s shows the waking-up line, gone when it la
 
 it("it also goes away when the first load fails", async () => {
   setup(3);
+  forgetLoaded();
   let fail!: () => void;
   const gate = new Promise<void>((r) => (fail = r));
   fake.on("GET", /^\/applications\?/, async () => (await gate, json(500, { detail: "x" })));
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   mount();
   await advance(3000);
-  expect(screen.getByText(WAKE)).toBeTruthy();
+  expect(screen.getAllByText(WAKE)).toHaveLength(2);
   await act(async () => {
     fail();
     await gate;

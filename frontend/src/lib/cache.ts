@@ -20,10 +20,23 @@ let version = 0; // bumped by clearCaches() only: guards in-flight list response
 const detailBumps = new Map<number, number>(); // per id, bumped by clearDetail(): guards in-flight detail responses
 
 export const listKey = (status?: string) => status ?? "all";
+// Set by the first list or detail the server sent in this tab and never reset (a clear included):
+// once anything has loaded the API is awake, so the slow-start line (DESIGN.md 6.12) is not shown again.
+let loaded = false;
+export const loadedOnce = () => loaded;
+/** Tests only: start again as a fresh tab. */
+export const forgetLoaded = () => void (loaded = false);
+
 export const getList = (status?: string) => lists.get(listKey(status));
-export const setList = (status: string | undefined, entry: ListEntry) => void lists.set(listKey(status), entry);
+export const setList = (status: string | undefined, entry: ListEntry) => {
+  loaded = true;
+  lists.set(listKey(status), entry);
+};
 export const getDetail = (id: number) => details.get(id);
-export const setDetail = (id: number, entry: DetailEntry) => void details.set(id, entry);
+export const setDetail = (id: number, entry: DetailEntry) => {
+  loaded = true;
+  details.set(id, entry);
+};
 export const dropDetail = (id: number) => void details.delete(id);
 
 export const cacheVersion = () => version;

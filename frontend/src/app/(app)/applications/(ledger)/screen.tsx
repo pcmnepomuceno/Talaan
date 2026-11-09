@@ -14,6 +14,7 @@ import { ApplicationRow, LedgerSheet, LedgerSkeleton } from "@/components/ledger
 import { useToast } from "@/components/toast";
 import { WakingUp } from "@/components/waking-up";
 import { deleteApplication, parseStatus } from "@/lib/api";
+import { loadedOnce } from "@/lib/cache";
 import { type DetailState, useApplicationDetail } from "./use-detail";
 import { useApplicationList } from "./use-list";
 
@@ -57,6 +58,8 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
   const refreshing = state.kind === "ready" && state.refreshing;
   const detailBusy = state.kind === "loading" || (state.kind === "ready" && (state.refreshing || state.interviews.kind === "loading"));
   const cls = panes(hasDetail);
+  // Only while there is nothing to show yet: never for a reload after a cache clear.
+  const wakePending = (view.kind === "loading" || (hasDetail && state.kind === "loading")) && !loadedOnce();
 
   const base = hasDetail ? `/applications/${id}` : "/applications";
   const onFilter = (f: Filter) => router.replace(f === "all" ? base : `${base}?status=${f}`);
@@ -107,9 +110,9 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
       <div role="status" className="sr-only">
         {hasDetail && state.kind === "loading" ? "Loading application" : view.kind === "loading" ? "Loading applications" : announcement}
       </div>
-      {/* One line above both panes while the first list or detail load is slow (DESIGN.md 6.12). */}
-      <div className="mx-auto max-w-[640px] px-4 xl:max-w-[1120px] xl:px-6">
-        <WakingUp pending={view.kind === "loading" || (hasDetail && state.kind === "loading")} />
+      {/* Below 1280: one line above the screen while the first list or detail load is slow (DESIGN.md 6.12). */}
+      <div className="mx-auto max-w-[640px] px-4 xl:hidden">
+        <WakingUp pending={wakePending} />
       </div>
       <main
         id="content"
@@ -124,6 +127,11 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
           <div className="mb-4 hidden items-center justify-between gap-3 xl:flex">
             <h1 className="text-section-title text-text-primary">Applications</h1>
             <Button href={`/applications/new${qs}`}>Add application</Button>
+          </div>
+          {/* From 1280 the same line sits inside the h-dvh list pane, so it never makes the page scroll.
+              Only one of the two copies is displayed (and so announced) at any width. */}
+          <div className="hidden xl:block">
+            <WakingUp pending={wakePending} />
           </div>
           <StatusFilter value={status ?? "all"} onChange={onFilter} />
           <div className="mt-3" ref={listRef}>
