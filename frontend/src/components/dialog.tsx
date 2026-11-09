@@ -135,7 +135,9 @@ export function DeleteConfirm({
 // DESIGN.md 6.8b. Nine radios, one per status, each labelled by its stamp. Choosing only changes the
 // selection (arrow keys move native radios, so one tap per status would send a request per key);
 // "Update status" sends it. The current status is checked and has initial focus; the selection
-// starts from `current` on every open. `busy` disables everything and Escape, like DeleteConfirm.
+// starts from `current` on every open. `busy` blocks every control and Escape, but with
+// aria-disabled and ignored input, not `disabled`: disabling the focused control drops focus to
+// <body>. When busy ends with the dialog still open (the save failed), the checked radio gets focus.
 export function StatusDialog({
   open,
   current,
@@ -157,25 +159,34 @@ export function StatusDialog({
     setWasOpen(open);
     if (open) setPicked(current);
   }
+  const form = useRef<HTMLFormElement>(null);
+  const wasBusy = useRef(busy);
+  useEffect(() => {
+    if (wasBusy.current && !busy && open) form.current?.querySelector<HTMLInputElement>("input:checked")?.focus();
+    wasBusy.current = busy;
+  }, [busy, open]);
+  const off = busy || undefined;
   return (
     <Dialog open={open} onClose={onCancel} busy={busy} title="Change status">
       <form
+        ref={form}
         noValidate
         onSubmit={(e) => {
           e.preventDefault();
           if (!busy) onConfirm(picked);
         }}
       >
-        <fieldset disabled={busy} className="mt-3 min-w-0 border-0 p-0">
+        <fieldset className="mt-3 min-w-0 border-0 p-0">
           <legend className="sr-only">Status</legend>
           {STATUSES.map((s) => (
-            <label key={s} className="flex min-h-11 cursor-pointer items-center gap-3 has-disabled:cursor-not-allowed">
+            <label key={s} className="flex min-h-11 cursor-pointer items-center gap-3 has-aria-disabled:cursor-not-allowed">
               <input
                 type="radio"
                 name="status"
                 value={s}
                 checked={picked === s}
-                onChange={() => setPicked(s)}
+                onChange={() => !busy && setPicked(s)}
+                aria-disabled={off}
                 data-autofocus={s === current || undefined}
                 className="size-5 shrink-0 accent-primary"
               />
@@ -184,10 +195,10 @@ export function StatusDialog({
           ))}
         </fieldset>
         <div className="mt-6 flex flex-col gap-3">
-          <Button type="submit" className="w-full" disabled={busy}>
+          <Button type="submit" className="w-full" aria-disabled={off}>
             Update status
           </Button>
-          <Button variant="secondary" className="w-full" onClick={onCancel} disabled={busy}>
+          <Button variant="secondary" className="w-full" onClick={() => !busy && onCancel()} aria-disabled={off}>
             Cancel
           </Button>
         </div>

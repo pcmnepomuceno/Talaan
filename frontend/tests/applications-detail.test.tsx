@@ -272,7 +272,7 @@ it("the same status sends nothing and says nothing", async () => {
   expect(screen.queryByText("Status updated.")).toBeNull();
 });
 
-it("a double activation sends one request, and both buttons are disabled while it runs", async () => {
+it("a double activation sends one request, and both buttons are aria-disabled while it runs", async () => {
   let release!: () => void;
   const gate = new Promise<void>((r) => (release = r));
   fake.on("PATCH", /^\/applications\/1$/, async () => (await gate, json(200, { ...fake.db.apps[0], ...SERVER_ROW })));
@@ -285,8 +285,8 @@ it("a double activation sends one request, and both buttons are disabled while i
     btn.click();
   });
   expect(patches()).toHaveLength(1);
-  expect((update() as HTMLButtonElement).disabled).toBe(true);
-  expect((screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(true);
+  expect(update().getAttribute("aria-disabled")).toBe("true");
+  expect(screen.getByRole("button", { name: "Cancel" }).getAttribute("aria-disabled")).toBe("true");
   release();
   expect(await screen.findByText("Status updated.")).toBeTruthy();
 });
@@ -301,7 +301,7 @@ it("a failed save keeps the dialog open, shows an error, and writes nothing to t
   expect(dialog.hasAttribute("open")).toBe(true);
   expect(getDetail(1)?.application.status).toBe("interviewing");
   expect(fake.callsTo("GET", /^\/applications\/1$/)).toHaveLength(1); // no refetch: nothing was cleared
-  expect((update() as HTMLButtonElement).disabled).toBe(false); // can retry
+  expect(update().getAttribute("aria-disabled")).toBeNull(); // can retry
   expect(screen.queryByText("Status updated.")).toBeNull();
 });
 
