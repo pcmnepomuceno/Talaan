@@ -59,6 +59,10 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - ~~Login "waking up" message (2026-11-09, F7): when the API takes more than about 3 seconds to answer, show that the server is waking up. A cold start was measured at 19 seconds (docs/DEPLOY.md section 5).~~ Done in P1 for login, sign-up and the first list or detail load. Not covered: the edit screens' fresh fetch and the Account `getMe`; add `WakingUp` there if they prove slow.
 - No keep-alive ping that touches the database (2026-11-09, F7): it would burn Neon free compute hours. Check Neon's current free limits before adding any keep-alive; a ping to `/ping` (no DB) only wakes Render.
 - Check Vercel usage once after the first week (2026-11-09, F7): see the last item of docs/DEPLOY.md section 4.
+- PR #23 review item 8 (2026-11-10): Change status blocks a double submit four times (the `savingStatus` ref, `statusBusy`, the `if (!busy)` in StatusDialog's onSubmit, and aria-disabled controls). Since the busy controls use aria-disabled instead of `disabled`, the onSubmit check is the one that blocks Enter; the ref covers two clicks in one tick. Fold the rest into those two.
+- `scripts/e2e-auth.cjs` (2026-11-10): start its stack through `local-env.cjs` like the other e2e scripts (free ports, `_test` database, teardown with proof the dev database was untouched), and fix its header and any docs that mention `test-env.sh`, which does not exist.
+- `DeleteConfirm` (2026-11-10, PR #23 review): `busy` sets `disabled` on the focused confirm button, which drops focus to `<body>`; a failed delete leaves the open dialog with no focus. Use the StatusDialog approach (aria-disabled, focus back on failure).
+- Waking-up line (2026-11-10): shown only before the first data in a tab. If the free-tier API sleeps again mid-session, a later slow reload gets no explanation. Accepted for now.
 
 ## Maintenance
 

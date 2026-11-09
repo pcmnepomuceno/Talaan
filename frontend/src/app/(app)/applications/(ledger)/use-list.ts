@@ -8,7 +8,8 @@ import type { Application, Status } from "@/lib/types";
 // One status tab = one cached list, fetched 50 at a time from the server (the API pages and
 // filters). Cached rows show at once while page 1 is refetched; the fresh page 1 then REPLACES the
 // entry, dropping any extra pages the user had loaded, because their offsets may have shifted.
-// Any write (clearCaches) empties the cache and refetches the current tab. Load more asks for
+// A full clear (clearCaches) empties the cache and refetches the current tab; a status change
+// (storeApplication) patches the cached rows, which the view reads directly. Load more asks for
 // nextOffset (rows the server has sent), not items.length (rows left after de-duplication); a
 // page that adds no new row means the offsets shifted, so Load more is withdrawn and page 1 refetched.
 export type ListView =

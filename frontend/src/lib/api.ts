@@ -1,6 +1,12 @@
 // Real applications client (F5). Screens import only these functions. Every request goes through
-// request() in http.ts; every response goes through mappers.ts. The three writes clear the
-// in-memory caches themselves (cache.ts), so no screen can forget to.
+// request() in http.ts; every response goes through mappers.ts. Every write updates the in-memory
+// caches itself (cache.ts), so no screen can forget to. The rules:
+//   - create, edit, delete of an application: clearCaches()
+//   - status change: storeApplication(row) patches every cache from the server's row (no refetch);
+//     clearCaches() when that response cannot be mapped
+//   - interview create and edit: clearDetail(applicationId)
+//   - interview delete: replaceDetail(applicationId, page minus the row) (the detail still refetches)
+//   - any 404 on a write: clearCaches() (the row, or its application, may be gone)
 import { clearCaches, clearDetail, getDetail, replaceDetail, storeApplication } from "./cache";
 import { ApiError, request } from "./http";
 import {
@@ -58,9 +64,10 @@ export async function getInterviews(applicationId: number): Promise<Page<Intervi
   );
 }
 
-// The writes resolve to the row's id only. Once the server has the row the caches are stale, so they
-// are cleared first; and a response the client cannot fully map (say a new status) must not turn a
-// saved row into an error, whose "Try again" would create a duplicate. The detail refetches anyway.
+// Create, edit and delete resolve to the row's id only. Once the server has the row the caches are
+// stale, so they are cleared first; and a response the client cannot fully map (say a new status)
+// must not turn a saved row into an error, whose "Try again" would create a duplicate. The detail
+// refetches anyway.
 
 /** Resolves to the new row's id. */
 export async function createApplication(input: ApplicationInput): Promise<number> {
@@ -127,9 +134,9 @@ export async function getInterview(id: number): Promise<Interview | null> {
   }
 }
 
-// Interview writes follow the F5 rule: caches are cleared as soon as the server has the row, before
+// Interview writes follow the F5 rule: the cache is updated as soon as the server has the row, before
 // the response is read, and only the id comes back. Saving never touches the application's status.
-// Only that application's detail is cleared (an interview changes no list field); a 404 clears
+// Only that application's detail is touched (an interview changes no list field); a 404 clears
 // everything, because the application itself may be gone and the lists stale.
 
 /** Rejects with ApiError(404) when the application is gone. Resolves to the new interview's id. */

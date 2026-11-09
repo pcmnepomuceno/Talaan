@@ -1,10 +1,16 @@
 // In-memory caches for the applications screens (module state, so they survive client-side
-// navigation but not a reload). Never touches web storage. Every write goes through
-// clearCaches(): the api.ts mutations call it themselves, so no caller can forget, and auth calls
-// it on login, logout and account deletion so one user's rows are never visible to the next.
-// The one narrower clear is clearDetail(id), for interview writes: an interview changes nothing a
-// list row shows (list fields come from the application, and the order is created_at), so the lists
-// and every other detail stay valid.
+// navigation but not a reload). Never touches web storage. Only the api.ts writes and auth change
+// them, so no screen can forget to (the per-write rules are listed at the top of api.ts):
+//   - clearCaches(): everything is dropped and refetched. Application create, edit and delete, any
+//     404 on a write, and login, logout and account deletion (one user's rows never reach the next).
+//   - clearDetail(id): one detail is dropped and refetched (interview create and edit). An interview
+//     changes nothing a list row shows, so the lists and every other detail stay valid.
+//   - replaceDetail(id, entry): like clearDetail, but the entry is replaced in the same step, so the
+//     detail never shows a skeleton while it refetches (interview delete).
+//   - storeApplication(row, from): a status change. Every list and the detail are patched exactly
+//     from the server's row; nothing is dropped or refetched.
+// Each of these sets the new state before notifying listeners, in one synchronous call, so no
+// caller has to win a race against React's next render.
 import type { Application, Interview } from "./types";
 
 // nextOffset = the server offset of the next page: offset + rows the server sent, which can be more

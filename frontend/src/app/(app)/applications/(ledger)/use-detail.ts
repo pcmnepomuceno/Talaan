@@ -115,7 +115,8 @@ export function useApplicationDetail(id: string | undefined) {
     setIvTry((t) => t + 1);
   }, []);
   // A clear drops both results (so the cache-store effect never pairs an old one with a new one)
-  // and refetches: the user sees the skeleton, then fresh data.
+  // and refetches: the user sees the skeleton, then fresh data, unless the clear replaced the entry
+  // (replaceDetail), whose content then shows while the refetch runs.
   useEffect(
     () =>
       onCachesCleared((cleared) => {
