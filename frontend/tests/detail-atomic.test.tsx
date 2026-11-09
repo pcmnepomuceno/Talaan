@@ -74,3 +74,16 @@ it("interview delete: an extra awaited tick after the API resolves cannot show a
   w.stop();
   expect(w.seen).toEqual([]);
 });
+
+it("status change: an extra awaited tick after the API resolves cannot show a skeleton", async () => {
+  mount();
+  await screen.findByRole("list", { name: "Interviews" });
+  await userEvent.click(screen.getByRole("button", { name: "Change status" }));
+  await userEvent.click(screen.getByRole("radio", { name: "Applied" }));
+  const w = watchSkeleton();
+  await userEvent.click(screen.getByRole("button", { name: "Update status" }));
+  await screen.findByText("Status updated.");
+  await new Promise((r) => setTimeout(r, 30));
+  w.stop();
+  expect(w.seen).toEqual([]);
+});

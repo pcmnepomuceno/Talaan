@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { cacheVersion, clearCaches, clearDetail, detailStamp, replaceDetail, getDetail, getList, onCachesCleared, setDetail, setList } from "../src/lib/cache";
+import { cacheVersion, clearCaches, clearDetail, detailStamp, getDetail, getList, onApplicationStored, onCachesCleared, patchList, replaceDetail, setDetail, setList, storeApplication } from "../src/lib/cache";
+import { makeApp } from "./helpers/fake-api";
 import { deleteAccount, login, logout } from "../src/lib/auth";
 
 const entry = { items: [], total: 0, nextOffset: 0 };
@@ -76,4 +77,89 @@ it("replaceDetail swaps the entry before listeners run, bumps only that id's sta
   expect(cacheVersion()).toBe(v);
   expect(getList()).toBe(entry);
   off();
+});
+
+// ---- status change: patchList (PR #23 review item 1) ----
+// makeApp(n) is created n minutes after a fixed time, so a higher id is newer (listed first).
+const app = (id: number, status: "applied" | "offered" | "saved", rest = {}) => makeApp(id, { status, ...rest });
+const ids = (e: { items: { id: number }[] } | undefined) => e?.items.map((a) => a.id);
+
+it("patchList, all: replaces a held row in place (order, total and cursor unchanged); a row it does not hold changes nothing", () => {
+  const e = { items: [app(3, "applied"), app(2, "applied"), app(1, "applied")], total: 10, nextOffset: 3 };
+  const out = patchList("all", e, app(2, "offered"), "applied")!;
+  expect(ids(out)).toEqual([3, 2, 1]);
+  expect(out.items[1].status).toBe("offered");
+  expect([out.total, out.nextOffset]).toEqual([10, 3]);
+  expect(patchList("all", e, app(9, "offered"), "applied")).toBe(e);
+});
+
+it("patchList, old status holding the row: removed, total - 1, nextOffset - 1", () => {
+  const e = { items: [app(3, "applied"), app(2, "applied"), app(1, "applied")], total: 10, nextOffset: 3 };
+  const out = patchList("applied", e, app(2, "offered"), "applied")!;
+  expect(ids(out)).toEqual([3, 1]);
+  expect([out.total, out.nextOffset]).toEqual([9, 2]);
+});
+
+it("patchList, old status not holding the row (beyond the cursor): total - 1, nextOffset unchanged", () => {
+  const e = { items: [app(30, "applied"), app(29, "applied")], total: 10, nextOffset: 2 };
+  const out = patchList("applied", e, app(5, "offered"), "applied")!;
+  expect(ids(out)).toEqual([30, 29]);
+  expect([out.total, out.nextOffset]).toEqual([9, 2]);
+});
+
+it("patchList, new status, complete list: inserted at its sorted place, ties on created_at ordered by id desc", () => {
+  const t = "2026-10-01T09:00:00+08:00";
+  const e = { items: [app(9, "offered", { created_at: "2026-10-02T00:00:00Z" }), app(6, "offered", { created_at: t }), app(4, "offered", { created_at: t }), app(2, "offered")], total: 4, nextOffset: 4 };
+  const out = patchList("offered", e, app(5, "offered", { created_at: "2026-10-01T01:00:00Z" }), "applied")!; // the same instant as t
+  expect(ids(out)).toEqual([9, 6, 5, 4, 2]);
+  expect([out.total, out.nextOffset]).toEqual([5, 5]);
+  // complete list, the row is the oldest: appended at the end (no "range" rule for a complete list)
+  const last = patchList("offered", e, app(1, "offered"), "applied")!;
+  expect(ids(last)).toEqual([9, 6, 4, 2, 1]);
+  expect([last.total, last.nextOffset]).toEqual([5, 5]);
+});
+
+it("patchList, new status, more pages: inside the held range inserted (+1/+1); after the last held row only total + 1", () => {
+  const e = { items: [app(9, "offered"), app(7, "offered")], total: 6, nextOffset: 2 };
+  const inside = patchList("offered", e, app(8, "offered"), "applied")!;
+  expect(ids(inside)).toEqual([9, 8, 7]);
+  expect([inside.total, inside.nextOffset]).toEqual([7, 3]);
+  const outside = patchList("offered", e, app(3, "offered"), "applied")!;
+  expect(ids(outside)).toEqual([9, 7]);
+  expect([outside.total, outside.nextOffset]).toEqual([7, 2]);
+});
+
+it("patchList, new status: a created_at that cannot be ordered exactly drops that list instead of guessing", () => {
+  const e = { items: [app(9, "offered"), app(7, "offered")], total: 2, nextOffset: 2 };
+  expect(patchList("offered", e, app(8, "offered", { created_at: "not a date" }), "applied")).toBeUndefined();
+  const badHeld = { items: [app(9, "offered", { created_at: "??" })], total: 1, nextOffset: 1 };
+  expect(patchList("offered", badHeld, app(8, "offered"), "applied")).toBeUndefined();
+});
+
+it("patchList, a list for another status is unchanged", () => {
+  const e = { items: [app(4, "saved")], total: 1, nextOffset: 1 };
+  expect(patchList("saved", e, app(2, "offered"), "applied")).toBe(e);
+});
+
+it("storeApplication patches every list and the detail before its listeners run, and clears nothing", () => {
+  setList(undefined, { items: [app(2, "applied"), app(1, "applied")], total: 2, nextOffset: 2 });
+  setList("applied", { items: [app(2, "applied"), app(1, "applied")], total: 2, nextOffset: 2 });
+  setList("offered", { items: [], total: 0, nextOffset: 0 });
+  setList("saved", entry);
+  setDetail(2, { application: app(2, "applied"), interviews: { items: [], total: 0 } });
+  const v = cacheVersion();
+  const stamp = detailStamp(2);
+  const cleared = vi.fn();
+  const offC = onCachesCleared(cleared);
+  const seen: unknown[] = [];
+  const off = onApplicationStored((a) => seen.push([a.id, ids(getList()), ids(getList("applied")), ids(getList("offered")), getDetail(2)?.application.status]));
+  storeApplication(app(2, "offered"), "applied");
+  expect(seen).toEqual([[2, [2, 1], [1], [2], "offered"]]);
+  expect(getList("saved")).toBe(entry);
+  expect(getDetail(2)?.interviews).toEqual({ items: [], total: 0 });
+  expect(cacheVersion()).toBe(v);
+  expect(detailStamp(2)).toBe(stamp);
+  expect(cleared).not.toHaveBeenCalled();
+  off();
+  offC();
 });

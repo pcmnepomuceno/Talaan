@@ -43,6 +43,76 @@ export function clearCaches() {
   for (const fn of [...listeners]) fn();
 }
 
+// ---- status change: exact patch from the server's row (no clear, no refetch) ----
+// The list order is created_at desc, id desc (the API's ORDER BY), which a status never changes, so a
+// status change only moves the row in or out of the filtered lists. Every list is patched exactly.
+
+/** a sorts before b in the list order; null when created_at cannot be compared exactly. */
+function sortsBefore(a: Application, b: Application): boolean | null {
+  const ta = Date.parse(a.created_at);
+  const tb = Date.parse(b.created_at);
+  if (Number.isNaN(ta) || Number.isNaN(tb)) return null;
+  return ta !== tb ? ta > tb : a.id > b.id;
+}
+
+/**
+ * One list after `row` changed from `oldStatus` to `row.status`. Returns `entry` itself when nothing
+ * changes, and undefined when the row's place cannot be found exactly (drop that list; it refetches
+ * when viewed). `nextOffset` is the server offset of the next unsent row, so it moves with every row
+ * removed or inserted before it.
+ */
+export function patchList(key: string, entry: ListEntry, row: Application, oldStatus: string): ListEntry | undefined {
+  const i = entry.items.findIndex((a) => a.id === row.id);
+  if (key === listKey()) {
+    if (i === -1) return entry;
+    return { ...entry, items: entry.items.map((a) => (a.id === row.id ? row : a)) };
+  }
+  if (key === row.status && i !== -1) return { ...entry, items: entry.items.map((a) => (a.id === row.id ? row : a)) };
+  if (key === oldStatus) {
+    // Held: it was among the rows sent, so the cursor moves back one. Not held: it was beyond the cursor.
+    if (i === -1) return { ...entry, total: Math.max(0, entry.total - 1) };
+    return { items: entry.items.filter((a) => a.id !== row.id), total: Math.max(0, entry.total - 1), nextOffset: Math.max(0, entry.nextOffset - 1) };
+  }
+  if (key !== row.status) return entry;
+  // The row joins this list. Its place among the held rows (or after all of them):
+  let at = entry.items.length;
+  for (let j = 0; j < entry.items.length; j++) {
+    const before = sortsBefore(row, entry.items[j]);
+    if (before === null) return undefined;
+    if (before) {
+      at = j;
+      break;
+    }
+  }
+  // After every held row: shown now only when the list is complete; otherwise a later page sends it.
+  if (at === entry.items.length && entry.nextOffset < entry.total) return { ...entry, total: entry.total + 1 };
+  return { items: [...entry.items.slice(0, at), row, ...entry.items.slice(at)], total: entry.total + 1, nextOffset: entry.nextOffset + 1 };
+}
+
+const stored = new Set<(row: Application) => void>();
+/** Calls `fn` after storeApplication(), once every cache already holds the new row. */
+export function onApplicationStored(fn: (row: Application) => void) {
+  stored.add(fn);
+  return () => void stored.delete(fn);
+}
+
+/**
+ * A status change the server confirmed: patch every cached list and the cached detail with the
+ * server's row, then notify, in one synchronous step. Nothing is cleared: the version and the detail
+ * stamps stay, because a status change cannot alter interviews (an in-flight interviews request is
+ * still valid) and the screens take the row from the cache, not from a refetch.
+ */
+export function storeApplication(row: Application, oldStatus: string) {
+  for (const [key, entry] of [...lists]) {
+    const next = patchList(key, entry, row, oldStatus);
+    if (next === undefined) lists.delete(key);
+    else if (next !== entry) lists.set(key, next);
+  }
+  const d = details.get(row.id);
+  if (d) details.set(row.id, { ...d, application: row });
+  for (const fn of [...stored]) fn(row);
+}
+
 function bumpDetail(id: number) {
   detailBumps.set(id, detailStamp(id) + 1);
   for (const fn of [...listeners]) fn(id);

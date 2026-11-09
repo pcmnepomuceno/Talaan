@@ -1,7 +1,7 @@
 // Real applications client (F5). Screens import only these functions. Every request goes through
 // request() in http.ts; every response goes through mappers.ts. The three writes clear the
 // in-memory caches themselves (cache.ts), so no screen can forget to.
-import { clearCaches, clearDetail, getDetail, replaceDetail } from "./cache";
+import { clearCaches, clearDetail, getDetail, replaceDetail, storeApplication } from "./cache";
 import { ApiError, request } from "./http";
 import {
   type ApplicationInput,
@@ -69,39 +69,42 @@ export async function createApplication(input: ApplicationInput): Promise<number
   return idOf(raw);
 }
 
-/** Sends only the fields that differ from `initial`. Resolves to `id`. */
-export async function updateApplication(id: number, initial: ApplicationInput, next: ApplicationInput): Promise<number> {
+/** The one application PATCH. A 404 clears every cache (the row is gone) and rethrows. */
+async function patchApplication(id: number, body: unknown): Promise<unknown> {
   try {
-    await request<unknown>(`${BASE}/${id}`, { method: "PATCH", body: toPatchBody(initial, next) });
+    return await request<unknown>(`${BASE}/${id}`, { method: "PATCH", body });
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) clearCaches();
     throw e;
   }
+}
+
+/** Sends only the fields that differ from `initial`. Resolves to `id`. */
+export async function updateApplication(id: number, initial: ApplicationInput, next: ApplicationInput): Promise<number> {
+  await patchApplication(id, toPatchBody(initial, next));
   clearCaches();
   return id;
 }
 
 /**
  * PATCH `{status}` only (the server fills date_applied for a non-saved status; the client never
- * sends a date). Caches are cleared as soon as the server has the row, before the response is read.
- * Resolves to the application the server returned, so the detail can show it at once; null when that
- * response cannot be mapped (the row is saved all the same, and the caller falls back to a refetch).
- * Rejects with ApiError, 404 included (caches cleared then too).
+ * sends a date). `from` is the status on screen before the change. The server's row is written into
+ * every cache in one step (storeApplication: the lists are patched, the detail swapped, nothing is
+ * refetched), and returned. When that response cannot be mapped, the row is saved all the same:
+ * the caches are cleared instead and null is returned (skeleton, then a refetch).
+ * Rejects with ApiError, 404 included (caches cleared then).
  */
-export async function changeStatus(id: number, status: Status): Promise<Application | null> {
-  let raw: unknown;
+export async function changeStatus(id: number, status: Status, from: Status): Promise<Application | null> {
+  const raw = await patchApplication(id, { status });
+  let row: Application;
   try {
-    raw = await request<unknown>(`${BASE}/${id}`, { method: "PATCH", body: { status } });
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 404) clearCaches();
-    throw e;
-  }
-  clearCaches();
-  try {
-    return fromApiApplication(raw);
+    row = fromApiApplication(raw);
   } catch {
+    clearCaches();
     return null;
   }
+  storeApplication(row, from);
+  return row;
 }
 
 /** 404 means it is already gone, which is what the caller wanted: resolves either way. */

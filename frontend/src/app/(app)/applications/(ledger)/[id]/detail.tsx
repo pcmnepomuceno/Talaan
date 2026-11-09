@@ -9,7 +9,6 @@ import { LoadError } from "@/components/load-error";
 import { DetailRows, InterviewRow, LedgerSheet, LedgerSkeleton } from "@/components/ledger";
 import { NotFoundState } from "@/components/not-found-state";
 import { changeStatus, deleteInterview, parseStatus } from "@/lib/api";
-import { setDetail } from "@/lib/cache";
 import { formatDateTimePHT } from "@/lib/format";
 import { ApiError, errorMessage } from "@/lib/http";
 import type { Interview, Status } from "@/lib/types";
@@ -37,8 +36,9 @@ export function ApplicationDetail() {
     (emptyAdd.current ?? ivHeading.current)?.focus();
   });
 
-  // Status change. The button is disabled while the detail refreshes (which a save starts), so the
-  // Dialog's own focus return fails; this effect focuses it once the refetch lands and it is enabled.
+  // Status change. Focus goes back to Change status. When the PATCH response could not be mapped the
+  // caches are cleared instead (skeleton, then a refetch) and the button remounts disabled, so the
+  // Dialog's own focus return fails; this effect focuses it once it is back and enabled.
   const [changing, setChanging] = useState(false);
   const [statusBusy, setStatusBusy] = useState(false);
   const savingStatus = useRef(false); // a ref: two clicks in one tick both see the same stale state
@@ -87,9 +87,9 @@ export function ApplicationDetail() {
     }
     savingStatus.current = true;
     setStatusBusy(true);
-    let row;
     try {
-      row = await changeStatus(a.id, next);
+      // The server's row is in every cache when this resolves (storeApplication): no skeleton, no refetch.
+      await changeStatus(a.id, next, a.status);
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) setChanging(false); // the not-found view takes over
       else toast.error(errorMessage(e) ?? "Couldn't change the status. Try again."); // the dialog stays open
@@ -97,14 +97,6 @@ export function ApplicationDetail() {
     } finally {
       savingStatus.current = false;
       setStatusBusy(false);
-    }
-    // Same timing rule as the interview delete above: changeStatus cleared the caches, which queued a
-    // refetch and a reset to "nothing loaded"; this write must land before React renders that clear, so
-    // the render finds the server's row (the cached/refreshing path) instead of a skeleton. Only data
-    // the server returned after the write is cached (DECISIONS.md 2026-11-09). No await in between.
-    // null = the response could not be mapped: skip the write, the normal skeleton and refetch follow.
-    if (row) {
-      setDetail(a.id, { application: row, interviews: iv.kind === "ready" ? { items: iv.items, total: iv.total } : null });
     }
     setChanging(false);
     focusAfterStatus.current = true;

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getApplication, getInterviews, parseId } from "@/lib/api";
-import { cacheVersion, detailStamp, dropDetail, getDetail, onCachesCleared, setDetail } from "@/lib/cache";
+import { cacheVersion, detailStamp, dropDetail, getDetail, onApplicationStored, onCachesCleared, setDetail } from "@/lib/cache";
 import { ApiError } from "@/lib/http";
 import type { Page } from "@/lib/mappers";
 import type { Application, Interview } from "@/lib/types";
@@ -123,6 +123,9 @@ export function useApplicationDetail(id: string | undefined) {
       }),
     [retryApp, retryInterviews],
   );
+  // A status change (storeApplication) hands over the server's row: it is the fresh application, and
+  // a status cannot change interviews, so nothing is refetched and the actions stay enabled.
+  useEffect(() => onApplicationStored((row) => row.id === open.current && setAppRes({ a: row })), []);
   /** Call before the DELETE request, with false again if it fails. */
   const setRemoving = useCallback((on: boolean) => {
     removing.current = on;

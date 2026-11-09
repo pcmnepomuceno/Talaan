@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getApplications } from "@/lib/api";
-import { cacheVersion, getList, onCachesCleared, setList } from "@/lib/cache";
+import { cacheVersion, getList, onApplicationStored, onCachesCleared, setList } from "@/lib/cache";
 import type { Application, Status } from "@/lib/types";
 
 // One status tab = one cached list, fetched 50 at a time from the server (the API pages and
@@ -65,12 +65,28 @@ export function useApplicationList(status: Status | undefined) {
   // Only a full clear refetches: an interview write clears one detail (an id is passed) and no list row changes.
   useEffect(() => onCachesCleared((id) => id === undefined && setTick((n) => n + 1)), []);
 
+  // A status change patched the cached lists in place (storeApplication): re-render from the cache.
+  // A page-1 request already in flight may have been answered before the PATCH, so it is restarted
+  // (the patched rows show meanwhile); a Load more in flight is handled in loadMore.
+  const pageOneBusy = useRef(false);
+  const [, setPatched] = useState(0);
+  useEffect(
+    () =>
+      onApplicationStored(() => {
+        if (pageOneBusy.current) setTick((n) => n + 1);
+        else setPatched((n) => n + 1);
+      }),
+    [],
+  );
+
   useEffect(() => {
     let live = true;
     const v = cacheVersion();
     const cached = getList(status);
+    pageOneBusy.current = true;
     getApplications(status).then(
       (page) => {
+        if (live) pageOneBusy.current = false;
         // Only a live request from the current cache version may write the cache: a write or tab
         // switch since it started makes it stale (`live` alone misses one landing before a re-render).
         if (!live || cacheVersion() !== v) return;
@@ -79,6 +95,7 @@ export function useApplicationList(status: Status | undefined) {
         setFetched({ key, ...entry, failed: false, refreshFailed: false, more: "idle" });
       },
       () => {
+        if (live) pageOneBusy.current = false;
         if (live && cacheVersion() === v)
           setFetched({
             key,
@@ -115,6 +132,12 @@ export function useApplicationList(status: Status | undefined) {
     try {
       const page = await getApplications(status, cur.nextOffset);
       if (keyRef.current !== at || cacheVersion() !== v) return;
+      if (getList(status) !== cur) {
+        // A status change moved rows under this request, so its offset may be off by one: drop the
+        // page and offer Load more again (from the patched cursor).
+        setFetched((f) => (f && f.key === at ? { ...f, more: "idle" } : f));
+        return;
+      }
       const items = appendUnique(cur.items, page.items);
       const added = items.length - cur.items.length;
       if (added === 0) {
@@ -138,9 +161,11 @@ export function useApplicationList(status: Status | undefined) {
 
   let view: ListView;
   if (fetched?.key === key) {
+    // The cache entry is the rows (it equals `fetched` unless a status change patched it since).
+    const rows = getList(status) ?? fetched;
     view = fetched.failed
       ? { kind: "failed" }
-      : { kind: "ready", items: fetched.items, total: fetched.total, nextOffset: fetched.nextOffset, refreshing: false, refreshFailed: fetched.refreshFailed, more: fetched.more };
+      : { kind: "ready", items: rows.items, total: rows.total, nextOffset: rows.nextOffset, refreshing: false, refreshFailed: fetched.refreshFailed, more: fetched.more };
   } else {
     const cached = getList(status);
     view = cached ? { kind: "ready", ...cached, refreshing: true, refreshFailed: false, more: "idle" } : { kind: "loading" };

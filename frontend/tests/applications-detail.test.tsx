@@ -239,15 +239,13 @@ it("confirming sends only {status}, toasts, and shows the new status", async () 
   expect(pageText("Interviewing")).toHaveLength(0);
 });
 
-it("the server's row shows at once: no skeleton, new stamp, filled date, while the refetch is pending", async () => {
+it("the server's row shows at once: no skeleton, new stamp, filled date, no refetch, actions enabled", async () => {
   Object.assign(fake.db.apps[0], { status: "saved", date_applied: null });
   mount();
   await screen.findByRole("list", { name: "Interviews" });
   expect(pageText("Nov 9, 2026")).toHaveLength(0);
-  let release!: () => void;
-  const gate = new Promise<void>((r) => (release = r));
   fake.on("PATCH", /^\/applications\/1$/, () => json(200, { ...fake.db.apps[0], ...SERVER_ROW }));
-  fake.on("GET", /^\/applications\/1$/, async () => (await gate, json(200, { ...fake.db.apps[0], ...SERVER_ROW, company: "Refetched Co" })));
+  const gets = fake.callsTo("GET", /^\/applications\/1(\/|$)/).length;
   await openStatus();
   await userEvent.click(screen.getByRole("radio", { name: "Applied" }));
   await userEvent.click(update());
@@ -256,11 +254,12 @@ it("the server's row shows at once: no skeleton, new stamp, filled date, while t
   expect(skeletons()).toBe(0);
   expect(screen.queryByText("Loading application")).toBeNull();
   expect(screen.getByRole("list", { name: "Interviews" })).toBeTruthy();
-  expect(detailSection().getAttribute("aria-busy")).toBe("true"); // still refreshing underneath
-  expect(fake.callsTo("GET", /^\/applications\/1$/)).toHaveLength(2); // the background refetch was requested
-  release();
-  await waitFor(() => expect(screen.getAllByText("Refetched Co").length).toBeGreaterThan(0)); // and overwrites
+  // The PATCH response is the fresh row and a status cannot change interviews: nothing is refetched.
+  await new Promise((r) => setTimeout(r, 30));
+  expect(fake.callsTo("GET", /^\/applications\/1(\/|$)/)).toHaveLength(gets);
   expect(detailSection().getAttribute("aria-busy")).toBeNull();
+  expect((screen.getByRole("button", { name: "Change status" }) as HTMLButtonElement).disabled).toBe(false);
+  for (const b of actions()) expect(b.getAttribute("aria-disabled")).toBeNull();
 });
 
 it("the same status sends nothing and says nothing", async () => {
