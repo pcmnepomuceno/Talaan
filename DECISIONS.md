@@ -447,7 +447,7 @@
 
 - **Date:** 2026-11-09
 - `ENVIRONMENT` is `development` (default, also blank) or `production`; anything else fails startup. Production turns off `/docs`, `/redoc` and `/openapi.json` (the Origin check trusts `Sec-Fetch-Site: same-origin`, so Swagger on the API origin could call every write route).
-- `app/main.py` refuses to import in production if `config.production_problems()` is not empty, and lists every problem at once: `COOKIE_SECURE` not true, `BCRYPT_ROUNDS` below 12 (it only warned before), `PROXY_SECRET` missing, `ALLOWED_ORIGINS` unset or blank, or listing a local (`localhost`, `127.0.0.1`, `[::1]`, `*.localhost`) or non-https origin.
+- `app/main.py` refuses to import in production if `config.production_problems()` is not empty, and lists every problem at once: `COOKIE_SECURE` not true, `BCRYPT_ROUNDS` below 12 (it only warned before), `PROXY_SECRET` missing, `ALLOWED_ORIGINS` unset or blank, or listing a local (`localhost`, `*.localhost`, or any loopback or unspecified IP checked with `ipaddress`: `127.0.0.0/8`, `0.0.0.0`, `[::1]`, `[::]`, and their IPv4-mapped IPv6 forms) or non-https origin. The check reads the parsed `ALLOWED_ORIGINS` (the same list the Origin check uses); equal to the local default means unset.
 - The check is in `main.py`, not at config import, so `python -m app.admin` and `alembic` still work with only `DATABASE_URL` (the purge workflow and the migration step need that). Alternative: validate at config import; rejected for that reason.
 
 ---

@@ -94,6 +94,11 @@ def test_development_keeps_docs(env):
         ({"ALLOWED_ORIGINS": "http://localhost:3000"}, "ALLOWED_ORIGINS"),
         ({"ALLOWED_ORIGINS": "https://talaan.vercel.app, http://127.0.0.1:3000"}, "ALLOWED_ORIGINS"),
         ({"ALLOWED_ORIGINS": "https://app.localhost"}, "ALLOWED_ORIGINS"),
+        ({"ALLOWED_ORIGINS": "https://127.0.0.2"}, "ALLOWED_ORIGINS"),
+        ({"ALLOWED_ORIGINS": "https://0.0.0.0"}, "ALLOWED_ORIGINS"),
+        ({"ALLOWED_ORIGINS": "https://[::ffff:127.0.0.1]"}, "ALLOWED_ORIGINS"),
+        ({"ALLOWED_ORIGINS": "https://[::]"}, "ALLOWED_ORIGINS"),
+        ({"ALLOWED_ORIGINS": "https://203.0.113.5"}, None),  # a public IP is not local
         ({"ALLOWED_ORIGINS": "http://talaan.vercel.app"}, "ALLOWED_ORIGINS"),
         ({"PROXY_SECRET": ""}, "PROXY_SECRET"),
         ({"BCRYPT_ROUNDS": "11"}, "BCRYPT_ROUNDS"),

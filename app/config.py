@@ -4,6 +4,7 @@ Reads settings from environment variables (loaded from a local .env file if
 present). Keep real secrets in .env, never commit them — see .env.example.
 """
 
+import ipaddress
 import logging
 import os
 from urllib.parse import urlsplit
@@ -100,6 +101,7 @@ COOKIE_SECURE = _bool("COOKIE_SECURE", True)
 
 
 DEFAULT_PORTS = {"http": 80, "https": 443}
+DEFAULT_ORIGINS = frozenset({"http://localhost:3000"})
 
 
 def _origin(entry: str) -> str:
@@ -136,7 +138,7 @@ def parse_origins(raw: str | None) -> frozenset[str]:
     stripped and normalized by _origin; blanks are dropped; nothing left means the default.
     A wildcard or malformed entry is a startup error, never a fallback."""
     items = {_origin(part.strip()) for part in (raw or "").split(",") if part.strip()}
-    return frozenset(items or {"http://localhost:3000"})
+    return frozenset(items) or DEFAULT_ORIGINS
 
 
 ALLOWED_ORIGINS = parse_origins(os.getenv("ALLOWED_ORIGINS"))
@@ -158,7 +160,20 @@ if ENVIRONMENT not in ("development", "production"):
 PRODUCTION = ENVIRONMENT == "production"
 
 MIN_PRODUCTION_BCRYPT_ROUNDS = DEFAULT_BCRYPT_ROUNDS
-_LOCAL_HOSTS = ("localhost", "127.0.0.1", "[::1]")
+
+
+def _is_local(host: str) -> bool:
+    """localhost, *.localhost, or any loopback/unspecified IP (127.0.0.0/8, 0.0.0.0, ::1, ::,
+    and IPv4-mapped IPv6 forms of those). `host` is urlsplit's hostname: no brackets."""
+    if host == "localhost" or host.endswith(".localhost"):
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False  # a DNS name
+    if ip.version == 6 and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    return ip.is_loopback or ip.is_unspecified
 
 
 def production_problems() -> list[str]:
@@ -172,13 +187,11 @@ def production_problems() -> list[str]:
         problems.append(f"BCRYPT_ROUNDS must be at least {MIN_PRODUCTION_BCRYPT_ROUNDS} (got {BCRYPT_ROUNDS})")
     if not PROXY_SECRET:
         problems.append("PROXY_SECRET must be set (without it every user shares one rate-limit bucket)")
-    if not (os.getenv("ALLOWED_ORIGINS") or "").strip():
+    if ALLOWED_ORIGINS == DEFAULT_ORIGINS:  # unset, blank, or just the local default
         problems.append("ALLOWED_ORIGINS must be set to the frontend's https origin")
     else:
         for origin in sorted(ALLOWED_ORIGINS):
-            host = urlsplit(origin).hostname or ""
-            host = f"[{host}]" if ":" in host else host
-            if host in _LOCAL_HOSTS or host.endswith(".localhost"):
+            if _is_local(urlsplit(origin).hostname or ""):
                 problems.append(f"ALLOWED_ORIGINS must not list a local origin ({origin})")
             elif not origin.startswith("https://"):
                 problems.append(f"ALLOWED_ORIGINS entries must be https ({origin})")
