@@ -149,10 +149,10 @@ withEnv(async ({ base, createInvite }) => {
   await page.getByLabel("Status", { exact: true }).selectOption("offered");
   await page.getByRole("button", { name: "Save application" }).click();
   await urlIs(new RegExp(`/applications/${id}\\?status=applied$`));
-  await page.getByText("Offered", { exact: true }).first().waitFor();
+  await page.locator('section[aria-label="Application detail"]').getByText("Offered", { exact: true }).first().waitFor();
   await page.reload();
   await page.getByRole("heading", { name: "Frontend Engineer 🚀" }).first().waitFor();
-  check("status change survives a reload", await page.getByText("Offered", { exact: true }).first().isVisible());
+  check("status change survives a reload", await page.locator('section[aria-label="Application detail"]').getByText("Offered", { exact: true }).first().isVisible());
 
   // 10. dirty guard on edit; unknown id; other-user style 404
   await page.goto(`${base}/applications/${id}/edit`);
@@ -175,6 +175,51 @@ withEnv(async ({ base, createInvite }) => {
   check("unknown id on detail: not found", await page.getByText("Application not found.").waitFor().then(() => true, () => false));
   await page.goto(`${base}/applications/999999/edit`);
   check("unknown id on edit: not found", await page.getByText("Application not found.").waitFor().then(() => true, () => false));
+
+  // 10b. Change status on the detail (1280: list + detail panes). Saved -> Applied: the server fills
+  // date_applied, the detail shows the server's row at once (no skeleton in the detail pane), and the
+  // background refetch still happens.
+  const sr = await page.request.post(`${base}/api/v1/applications`, { data: { company: "Status Co", job_name: "Status Role", status: "saved", mode_of_work: "remote" } });
+  const sid = (await sr.json()).id;
+  const manilaToday = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`${base}/applications/${sid}`);
+  await page.getByRole("heading", { name: "Status Role" }).first().waitFor();
+  await page.getByRole("list", { name: "Interviews" }).or(page.getByText("No interviews yet.")).first().waitFor();
+  check("Saved application starts with no date", (await (await page.request.get(`${base}/api/v1/applications/${sid}`)).json()).date_applied === null);
+  const changeBtn = page.getByRole("button", { name: "Change status" });
+  await changeBtn.focus();
+  await page.keyboard.press("Enter"); // keyboard only: open with Enter
+  const statusDialog = page.getByRole("dialog", { name: "Change status" });
+  await statusDialog.waitFor();
+  check("status dialog: current status checked and focused", await page.evaluate(() => document.activeElement?.matches('input[type="radio"]:checked') && document.activeElement.closest("label")?.textContent === "Saved"));
+  await page.keyboard.press("ArrowDown"); // Saved -> Applied
+  check("arrow key chose Applied without sending anything", (await page.getByRole("radio", { name: "Applied" }).isChecked()) && (await (await page.request.get(`${base}/api/v1/applications/${sid}`)).json()).status === "saved");
+  await page.evaluate(() => {
+    window.__sk = { detail: 0 };
+    const look = () => {
+      for (const el of document.querySelectorAll(".animate-ledger-pulse")) if (el.closest('section[aria-label="Application detail"]')) window.__sk.detail++;
+    };
+    window.__skObs = new MutationObserver(look);
+    window.__skObs.observe(document.body, { subtree: true, childList: true, attributes: true });
+  });
+  const stGets = [];
+  const onSt = (r) => r.method() === "GET" && new RegExp(`/api/v1/applications/${sid}$`).test(r.url()) && stGets.push(r.url());
+  page.on("request", onSt);
+  await page.keyboard.press("Enter"); // confirm with Enter
+  await page.waitForFunction(() => document.querySelector('section[aria-label="Application detail"]')?.textContent.includes("Applied"));
+  await page.waitForTimeout(1500);
+  const stSk = await page.evaluate(() => (window.__skObs.disconnect(), window.__sk));
+  page.off("request", onSt);
+  check("status change: no skeleton in the detail pane from confirm until after the refetch", stSk.detail === 0, JSON.stringify(stSk));
+  check("status change: the background refetch happened", stGets.length >= 1, `${stGets.length} GET`);
+  check("toast 'Status updated.'", (await toastText()).some((t) => t.includes("Status updated.")));
+  const sAfter = await (await page.request.get(`${base}/api/v1/applications/${sid}`)).json();
+  check("status change persisted and the server filled date_applied (today, Manila)", sAfter.status === "applied" && sAfter.date_applied === manilaToday, JSON.stringify([sAfter.status, sAfter.date_applied, manilaToday]));
+  check("detail shows the filled date", await page.locator('section[aria-label="Application detail"]').getByText(/^[A-Z][a-z]{2} \d{1,2}, \d{4}$/).first().isVisible());
+  check("focus is back on Change status", await page.evaluate(() => document.activeElement?.textContent === "Change status"));
+  check("list row shows the new status", (await page.getByRole("list", { name: "Applications" }).getByRole("link", { name: /Status Role/ }).innerText()).includes("Applied"));
+  await page.request.delete(`${base}/api/v1/applications/${sid}`);
 
   // 11. delete -> empty again
   await page.goto(`${base}/applications/${id}?status=offered`);
@@ -208,7 +253,7 @@ withEnv(async ({ base, createInvite }) => {
   check("1280px delete: 'Application not found' never appeared in the DOM", !notFoundSeen);
   check("1280px delete: the deleted id was not fetched again", detailGets.length === 0, JSON.stringify(detailGets));
   check("delete returns to the list keeping ?status=", pathOf(page.url()) === "/applications?status=offered");
-  await page.getByRole("button", { name: "All", exact: true }).click();
+  await page.getByRole("combobox", { name: "Status" }).selectOption("all");
   await page.getByText("No applications yet.").waitFor();
   check("after delete the empty state is back", true);
   const gone = await page.request.get(`${base}/api/v1/applications/${id}`);

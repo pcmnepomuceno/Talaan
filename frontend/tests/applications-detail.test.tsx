@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import ApplicationDetailPage from "../src/app/(app)/applications/(ledger)/[id]/page";
@@ -200,4 +200,156 @@ it("a mapping error (unknown status from the API) is the generic load error, not
   fake.on("GET", /^\/applications\/1$/, () => json(200, { ...fake.db.apps[0], status: "hired" }));
   mount();
   expect(await screen.findByText("Couldn't load this application.")).toBeTruthy();
+});
+
+// ---- Change status (P1) ----
+const openStatus = async () => {
+  await screen.findByRole("list", { name: "Interviews" });
+  await userEvent.click(screen.getByRole("button", { name: "Change status" }));
+  return screen.getByRole("dialog", { name: "Change status" });
+};
+const update = () => screen.getByRole("button", { name: "Update status" });
+const skeletons = () => document.querySelectorAll(".animate-ledger-pulse").length;
+// The dialog (and the status filter) also list every status; the page's own stamp is outside them.
+const pageText = (t: string) => screen.queryAllByText(t).filter((el) => !el.closest("dialog, select"));
+const patches = () => fake.callsTo("PATCH", /^\/applications\/1$/);
+const SERVER_ROW = { status: "applied", date_applied: "2026-11-09" };
+
+it("Change status opens a radio group of the nine statuses with the current one checked", async () => {
+  mount();
+  const dialog = await openStatus();
+  const radios = within(dialog).getAllByRole("radio") as HTMLInputElement[];
+  expect(radios.map((r) => r.closest("label")!.textContent)).toEqual([
+    "Saved", "Applied", "Screening", "Interviewing", "Offered", "Accepted", "Rejected", "Withdrawn", "Ghosted",
+  ]);
+  expect(radios.filter((r) => r.checked).map((r) => r.closest("label")!.textContent)).toEqual(["Interviewing"]);
+  expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeTruthy();
+});
+
+it("confirming sends only {status}, toasts, and shows the new status", async () => {
+  mount();
+  await openStatus();
+  await userEvent.click(screen.getByRole("radio", { name: "Applied" }));
+  expect(patches()).toHaveLength(0); // choosing alone sends nothing
+  await userEvent.click(update());
+  await waitFor(() => expect(patches()).toHaveLength(1));
+  expect(patches()[0].body).toEqual({ status: "applied" });
+  expect(await screen.findByText("Status updated.")).toBeTruthy();
+  await waitFor(() => expect(pageText("Applied").length).toBeGreaterThan(0));
+  expect(pageText("Interviewing")).toHaveLength(0);
+});
+
+it("the server's row shows at once: no skeleton, new stamp, filled date, while the refetch is pending", async () => {
+  Object.assign(fake.db.apps[0], { status: "saved", date_applied: null });
+  mount();
+  await screen.findByRole("list", { name: "Interviews" });
+  expect(pageText("Nov 9, 2026")).toHaveLength(0);
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  fake.on("PATCH", /^\/applications\/1$/, () => json(200, { ...fake.db.apps[0], ...SERVER_ROW }));
+  fake.on("GET", /^\/applications\/1$/, async () => (await gate, json(200, { ...fake.db.apps[0], ...SERVER_ROW, company: "Refetched Co" })));
+  await openStatus();
+  await userEvent.click(screen.getByRole("radio", { name: "Applied" }));
+  await userEvent.click(update());
+  await waitFor(() => expect(pageText("Applied").length).toBeGreaterThan(0));
+  expect(pageText("Nov 9, 2026").length).toBeGreaterThan(0); // the date the server filled in
+  expect(skeletons()).toBe(0);
+  expect(screen.queryByText("Loading application")).toBeNull();
+  expect(screen.getByRole("list", { name: "Interviews" })).toBeTruthy();
+  expect(detailSection().getAttribute("aria-busy")).toBe("true"); // still refreshing underneath
+  expect(fake.callsTo("GET", /^\/applications\/1$/)).toHaveLength(2); // the background refetch was requested
+  release();
+  await waitFor(() => expect(screen.getAllByText("Refetched Co").length).toBeGreaterThan(0)); // and overwrites
+  expect(detailSection().getAttribute("aria-busy")).toBeNull();
+});
+
+it("the same status sends nothing and says nothing", async () => {
+  mount();
+  const dialog = await openStatus();
+  await userEvent.click(update());
+  expect(patches()).toHaveLength(0);
+  expect(dialog.hasAttribute("open")).toBe(false);
+  expect(screen.queryByText("Status updated.")).toBeNull();
+});
+
+it("a double activation sends one request, and both buttons are disabled while it runs", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  fake.on("PATCH", /^\/applications\/1$/, async () => (await gate, json(200, { ...fake.db.apps[0], ...SERVER_ROW })));
+  mount();
+  await openStatus();
+  await userEvent.click(screen.getByRole("radio", { name: "Applied" }));
+  const btn = update();
+  await act(async () => {
+    btn.click();
+    btn.click();
+  });
+  expect(patches()).toHaveLength(1);
+  expect((update() as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(true);
+  release();
+  expect(await screen.findByText("Status updated.")).toBeTruthy();
+});
+
+it("a failed save keeps the dialog open, shows an error, and writes nothing to the cache", async () => {
+  fake.failNext("PATCH", /^\/applications\/1$/);
+  mount();
+  const dialog = await openStatus();
+  await userEvent.click(screen.getByRole("radio", { name: "Applied" }));
+  await userEvent.click(update());
+  expect(await screen.findByText("Talaan isn't responding right now. Try again in a moment.")).toBeTruthy();
+  expect(dialog.hasAttribute("open")).toBe(true);
+  expect(getDetail(1)?.application.status).toBe("interviewing");
+  expect(fake.callsTo("GET", /^\/applications\/1$/)).toHaveLength(1); // no refetch: nothing was cleared
+  expect((update() as HTMLButtonElement).disabled).toBe(false); // can retry
+  expect(screen.queryByText("Status updated.")).toBeNull();
+});
+
+it("a 404 on save shows the not-found view", async () => {
+  mount();
+  await openStatus();
+  fake.on("PATCH", /^\/applications\/1$/, () => json(404, { detail: "Application not found." }));
+  fake.on("GET", /^\/applications\/1$/, () => json(404, { detail: "Application not found." }));
+  fake.on("GET", /^\/applications\/1\/interviews/, () => json(404, { detail: "Application not found." }));
+  await userEvent.click(screen.getByRole("radio", { name: "Applied" }));
+  await userEvent.click(update());
+  expect(await screen.findByText("Application not found.")).toBeTruthy();
+});
+
+it("a response the client cannot map falls back to the skeleton and a refetch", async () => {
+  fake.on("PATCH", /^\/applications\/1$/, () => json(200, { ...fake.db.apps[0], status: "archived" }));
+  mount();
+  await openStatus();
+  await userEvent.click(screen.getByRole("radio", { name: "Applied" }));
+  await userEvent.click(update());
+  expect(await screen.findByText("Status updated.")).toBeTruthy();
+  await waitFor(() => expect(fake.callsTo("GET", /^\/applications\/1$/)).toHaveLength(2));
+  await screen.findByRole("list", { name: "Interviews" });
+});
+
+it("keyboard only: arrow keys choose, Enter confirms, focus returns to Change status", async () => {
+  const user = userEvent.setup();
+  mount();
+  await openStatus();
+  (screen.getByRole("radio", { name: "Interviewing" }) as HTMLElement).focus();
+  await user.keyboard("{ArrowUp}{ArrowUp}{ArrowUp}"); // Interviewing -> Screening -> Applied -> Saved
+  expect((screen.getByRole("radio", { name: "Saved" }) as HTMLInputElement).checked).toBe(true);
+  await user.keyboard("{ArrowDown}"); // -> Applied
+  expect(patches()).toHaveLength(0);
+  await user.keyboard("{Enter}");
+  await waitFor(() => expect(patches()).toHaveLength(1));
+  expect(patches()[0].body).toEqual({ status: "applied" });
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Change status" })));
+});
+
+it("Cancel closes without a request", async () => {
+  mount();
+  const dialog = await openStatus();
+  await userEvent.click(screen.getByRole("radio", { name: "Ghosted" }));
+  await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(dialog.hasAttribute("open")).toBe(false);
+  expect(patches()).toHaveLength(0);
+  // reopening starts from the current status again
+  await userEvent.click(screen.getByRole("button", { name: "Change status" }));
+  expect((screen.getByRole("radio", { name: "Interviewing" }) as HTMLInputElement).checked).toBe(true);
 });

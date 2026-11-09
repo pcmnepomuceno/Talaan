@@ -1,8 +1,9 @@
 "use client";
 
-import { type ReactNode, type Ref, useEffect, useId, useRef } from "react";
+import { type ReactNode, type Ref, useEffect, useId, useRef, useState } from "react";
 import { Button } from "./button";
 import { Icon } from "./icon";
+import { STATUSES, type Status, StatusStamp } from "./status-stamp";
 
 // DESIGN.md 6.8 on the native <dialog>: showModal() gives the focus trap, inert page, top layer
 // and Escape. `open` is the source of truth; the parent must clear it in onClose.
@@ -127,6 +128,70 @@ export function DeleteConfirm({
           Cancel
         </Button>
       </div>
+    </Dialog>
+  );
+}
+
+// DESIGN.md 6.8b. Nine radios, one per status, each labelled by its stamp. Choosing only changes the
+// selection (arrow keys move native radios, so one tap per status would send a request per key);
+// "Update status" sends it. The current status is checked and has initial focus; the selection
+// starts from `current` on every open. `busy` disables everything and Escape, like DeleteConfirm.
+export function StatusDialog({
+  open,
+  current,
+  busy = false,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  current: Status;
+  busy?: boolean;
+  onCancel: () => void;
+  onConfirm: (status: Status) => void;
+}) {
+  const [picked, setPicked] = useState(current);
+  // Reset during render when the dialog opens, so the checked radio is right at the first paint
+  // (the Dialog focuses [data-autofocus] in its own effect right after).
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
+    if (open) setPicked(current);
+  }
+  return (
+    <Dialog open={open} onClose={onCancel} busy={busy} title="Change status">
+      <form
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!busy) onConfirm(picked);
+        }}
+      >
+        <fieldset disabled={busy} className="mt-3 min-w-0 border-0 p-0">
+          <legend className="sr-only">Status</legend>
+          {STATUSES.map((s) => (
+            <label key={s} className="flex min-h-11 cursor-pointer items-center gap-3 has-disabled:cursor-not-allowed">
+              <input
+                type="radio"
+                name="status"
+                value={s}
+                checked={picked === s}
+                onChange={() => setPicked(s)}
+                data-autofocus={s === current || undefined}
+                className="size-5 shrink-0 accent-primary"
+              />
+              <StatusStamp value={s} />
+            </label>
+          ))}
+        </fieldset>
+        <div className="mt-6 flex flex-col gap-3">
+          <Button type="submit" className="w-full" disabled={busy}>
+            Update status
+          </Button>
+          <Button variant="secondary" className="w-full" onClick={onCancel} disabled={busy}>
+            Cancel
+          </Button>
+        </div>
+      </form>
     </Dialog>
   );
 }

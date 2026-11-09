@@ -81,6 +81,29 @@ export async function updateApplication(id: number, initial: ApplicationInput, n
   return id;
 }
 
+/**
+ * PATCH `{status}` only (the server fills date_applied for a non-saved status; the client never
+ * sends a date). Caches are cleared as soon as the server has the row, before the response is read.
+ * Resolves to the application the server returned, so the detail can show it at once; null when that
+ * response cannot be mapped (the row is saved all the same, and the caller falls back to a refetch).
+ * Rejects with ApiError, 404 included (caches cleared then too).
+ */
+export async function changeStatus(id: number, status: Status): Promise<Application | null> {
+  let raw: unknown;
+  try {
+    raw = await request<unknown>(`${BASE}/${id}`, { method: "PATCH", body: { status } });
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) clearCaches();
+    throw e;
+  }
+  clearCaches();
+  try {
+    return fromApiApplication(raw);
+  } catch {
+    return null;
+  }
+}
+
 /** 404 means it is already gone, which is what the caller wanted: resolves either way. */
 export async function deleteApplication(id: number): Promise<void> {
   try {
