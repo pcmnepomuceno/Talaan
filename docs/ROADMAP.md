@@ -1,6 +1,6 @@
 # Talaan Roadmap
 
-**Current milestone:** M11 production readiness built on `feature/m11-production-readiness`, in review: client IP behind the Vercel rewrite (proxy secret header), production mode (docs off, refuse insecure config), `python -m app.admin purge` plus a daily GitHub Actions job. F1 to F6 and M8 to M10 merged. Next: F7 deploy (Render + Neon + Vercel), checklist in docs/DEPLOY.md. The duplicate-email leak is only limited (rate limit now, invite code in M9); email verification is the full fix, planned later.
+**Current milestone:** P1 polish (draft).
 
 ## Roadmap
 
@@ -31,7 +31,7 @@ Next.js app in `frontend/`, built from `docs/DESIGN.md`. Each milestone is merge
   - Note for copy and tests: the account stays deleted even if the user later gets a new invite code; signing up again creates a fresh, empty account.
 - F5 (done, in review on `feature/f5-applications`): application list (server-side status filter, Load more), detail (stale-while-revalidate, isolated interviews error), create and edit form, delete. Interviews are read-only on the detail.
 - F6 (done, in review on `feature/f6-interviews`): interviews create, edit and delete (full-screen routes, times in PHT only, no automatic status change), Add interview on the detail, shared `TextAction`.
-- F7 (next): Vercel deploy.
+- F7 (done, 2026-11-09): live on Vercel + Render + Neon (https://talaan-phi.vercel.app); results and gotchas in docs/DEPLOY.md.
 
 ## Clients
 
@@ -56,6 +56,9 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - Frontend e2e scripts (2026-11-09, PR #20 review round 2): `scripts/e2e-*.cjs` do not close the browser when a step throws, so a failed run hangs after the teardown has already run (seen with `e2e-interviews.cjs`). Wrap each run in try/finally that closes the browser.
 - DECISIONS.md (2026-11-09): the F6 entry (2026-11-04) has its last five bullets duplicated ("The backend's PATCH and DELETE are flat" through "Local scripts"). Remove the duplicate in a tiny docs commit; it is a copy error, not a rewrite of the decision.
 - Interview writes clear every cache (2026-11-09): `clearCaches()` also empties the list cache, so at 1280 the list pane briefly shows skeleton rows after an interview delete although the list is unchanged (seen in the F6 review e2e). Scope the clear for interview writes to the detail caches only.
+- Login "waking up" message (2026-11-09, F7): when the API takes more than about 3 seconds to answer, show that the server is waking up. A cold start was measured at 19 seconds (docs/DEPLOY.md section 5).
+- No keep-alive ping that touches the database (2026-11-09, F7): it would burn Neon free compute hours. Check Neon's current free limits before adding any keep-alive; a ping to `/ping` (no DB) only wakes Render.
+- Check Vercel usage once after the first week (2026-11-09, F7): see the last item of docs/DEPLOY.md section 4.
 
 ## Maintenance
 
