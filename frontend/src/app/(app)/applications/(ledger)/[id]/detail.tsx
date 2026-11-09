@@ -9,6 +9,7 @@ import { LoadError } from "@/components/load-error";
 import { DetailRows, InterviewRow, LedgerSheet, LedgerSkeleton } from "@/components/ledger";
 import { NotFoundState } from "@/components/not-found-state";
 import { deleteInterview, parseStatus } from "@/lib/api";
+import { setDetail } from "@/lib/cache";
 import { formatDateTimePHT } from "@/lib/format";
 import type { Interview } from "@/lib/types";
 import { StatusStamp } from "@/components/status-stamp";
@@ -18,7 +19,7 @@ import { useDetail } from "../screen";
 const heading = "mb-2 text-section-title text-text-secondary";
 
 export function ApplicationDetail() {
-  const { state, holdForInterviewDelete, dropInterview, releaseHold } = useDetail();
+  const { state } = useDetail();
   const toast = useToast();
   const status = parseStatus(useSearchParams().get("status"));
   const qs = status ? `?status=${status}` : "";
@@ -48,17 +49,23 @@ export function ApplicationDetail() {
     if (!deleting) return;
     const target = deleting;
     setBusy(true);
-    holdForInterviewDelete(); // the cache clear inside deleteInterview must not blank the page
     try {
       await deleteInterview(target.id); // 404 resolves too: already gone is what we wanted
     } catch {
-      releaseHold();
       toast.error("Couldn't delete the interview. Try again."); // the dialog stays open
       return;
     } finally {
       setBusy(false);
     }
-    dropInterview(target.id);
+    // deleteInterview cleared the caches, which queued a refetch and a reset to "nothing loaded". Those
+    // render later (a scheduler task); this runs first, so that render finds the page minus the row in
+    // the detail cache (the cached/refreshing path) instead of a skeleton. The refetch then replaces it.
+    if (iv.kind === "ready") {
+      setDetail(a.id, {
+        application: a,
+        interviews: { items: iv.items.filter((i) => i.id !== target.id), total: Math.max(0, iv.total - 1) },
+      });
+    }
     setDeleting(null);
     focusAfterDelete.current = true; // read by the effect after this render
     toast.success("Interview deleted.");

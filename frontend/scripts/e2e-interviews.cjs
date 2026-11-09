@@ -203,12 +203,26 @@ withEnv(async ({ base, createInvite }) => {
   const ivGets = [];
   const onGet = (r) => r.method() === "GET" && /\/interviews\?/.test(r.url()) && ivGets.push(r.url());
   page.on("request", onGet);
+  // Skeleton observer: any skeleton row in the detail pane (or anywhere, logged) from the delete click on.
+  await page.evaluate(() => {
+    window.__sk = { detail: 0, any: 0 };
+    const look = () => {
+      for (const el of document.querySelectorAll(".animate-ledger-pulse")) {
+        window.__sk.any++;
+        if (el.closest('section[aria-label="Application detail"]')) window.__sk.detail++;
+      }
+    };
+    window.__skObs = new MutationObserver(look);
+    window.__skObs.observe(document.body, { subtree: true, childList: true, attributes: true });
+  });
   await page.getByRole("button", { name: "Delete interview, Nov 19, 2026, 12:30 AM PHT" }).click();
   await page.getByRole("heading", { name: "Delete this interview?" }).waitFor();
   check("delete dialog names the mode and date", (await page.getByRole("dialog").innerText()).includes("The on-site interview on Nov 19, 2026, 12:30 AM PHT will be removed."));
   await page.getByRole("dialog").getByRole("button", { name: "Delete interview" }).click();
   await page.waitForFunction(() => !document.body.innerText.includes("Nov 19, 2026, 12:30 AM PHT"));
   await page.waitForTimeout(1000);
+  const sk = await page.evaluate(() => (window.__skObs.disconnect(), window.__sk));
+  check("no skeleton in the detail pane from the delete click until after the refetch", sk.detail === 0, JSON.stringify(sk));
   check("focus moved to the Interviews heading", await page.evaluate(() => document.activeElement?.id === "d-interviews"), await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 80)));
   page.off("request", onGet);
   check("toast 'Interview deleted.'", (await toasts()).some((t) => t.includes("Interview deleted.")));

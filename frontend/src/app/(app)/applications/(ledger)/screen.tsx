@@ -25,19 +25,8 @@ export function panes(hasDetail: boolean) {
   };
 }
 
-// The detail state plus the hooks the interview delete needs to keep the page on screen (use-detail.ts).
-type DetailValue = {
-  state: DetailState;
-  holdForInterviewDelete: () => void;
-  dropInterview: (interviewId: number) => void;
-  releaseHold: () => void;
-};
-const DetailContext = createContext<DetailValue>({
-  state: { kind: "loading" },
-  holdForInterviewDelete: () => {},
-  dropInterview: () => {},
-  releaseHold: () => {},
-});
+type DetailValue = { state: DetailState };
+const DetailContext = createContext<DetailValue>({ state: { kind: "loading" } });
 export const useDetail = () => useContext(DetailContext);
 
 export function ApplicationsScreen({ children }: { children: ReactNode }) {
@@ -61,7 +50,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
   }, [focusId, qs, clearFocus]);
 
   const hasDetail = id !== undefined;
-  const { state, setRemoving, markRemoved, holdForInterviewDelete, dropInterview, releaseHold } = useApplicationDetail(id);
+  const { state, setRemoving, markRemoved } = useApplicationDetail(id);
   // Opening another detail makes "N more applications loaded" old news: never fall back to it.
   useEffect(() => clearAnnouncement(), [id, clearAnnouncement]);
   const ready = state.kind === "ready" ? state.application : null;
@@ -215,7 +204,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
               </div>
             </div>
           )}
-          <DetailContext value={{ state, holdForInterviewDelete, dropInterview, releaseHold }}>{children}</DetailContext>
+          <DetailContext value={{ state }}>{children}</DetailContext>
         </section>
       </main>
       {!hasDetail && (
