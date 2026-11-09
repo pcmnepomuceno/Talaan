@@ -1,6 +1,6 @@
 # Talaan Roadmap
 
-**Current milestone:** P1 polish (draft).
+**Current milestone:** P1 polish (in review on `feature/p1-polish`): logo link, status select, Change status on the detail, waking-up line, interview writes clear one detail, status screenshots. Not in this batch: swipe actions, calendar view, demo account, README screenshots.
 
 ## Roadmap
 
@@ -55,8 +55,8 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - ~~F6 review item 10 (2026-11-09): the `DetailContext` value is a new object on every `ApplicationsScreen` render.~~ Done in the second review (PR #20, item 9): the context now holds `DetailState` directly, so no wrapper object is built per render.
 - Frontend e2e scripts (2026-11-09, PR #20 review round 2): `scripts/e2e-*.cjs` do not close the browser when a step throws, so a failed run hangs after the teardown has already run (seen with `e2e-interviews.cjs`). Wrap each run in try/finally that closes the browser.
 - DECISIONS.md (2026-11-09): the F6 entry (2026-11-04) has its last five bullets duplicated ("The backend's PATCH and DELETE are flat" through "Local scripts"). Remove the duplicate in a tiny docs commit; it is a copy error, not a rewrite of the decision.
-- Interview writes clear every cache (2026-11-09): `clearCaches()` also empties the list cache, so at 1280 the list pane briefly shows skeleton rows after an interview delete although the list is unchanged (seen in the F6 review e2e). Scope the clear for interview writes to the detail caches only.
-- Login "waking up" message (2026-11-09, F7): when the API takes more than about 3 seconds to answer, show that the server is waking up. A cold start was measured at 19 seconds (docs/DEPLOY.md section 5).
+- ~~Interview writes clear every cache (2026-11-09): `clearCaches()` also empties the list cache, so at 1280 the list pane briefly shows skeleton rows after an interview delete although the list is unchanged (seen in the F6 review e2e). Scope the clear for interview writes to the detail caches only.~~ Done in P1 (`clearDetail(id)`, DECISIONS.md 2026-11-09 P1).
+- ~~Login "waking up" message (2026-11-09, F7): when the API takes more than about 3 seconds to answer, show that the server is waking up. A cold start was measured at 19 seconds (docs/DEPLOY.md section 5).~~ Done in P1 for login, sign-up and the first list or detail load. Not covered: the edit screens' fresh fetch and the Account `getMe`; add `WakingUp` there if they prove slow.
 - No keep-alive ping that touches the database (2026-11-09, F7): it would burn Neon free compute hours. Check Neon's current free limits before adding any keep-alive; a ping to `/ping` (no DB) only wakes Render.
 - Check Vercel usage once after the first week (2026-11-09, F7): see the last item of docs/DEPLOY.md section 4.
 
