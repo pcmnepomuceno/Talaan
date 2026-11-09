@@ -428,3 +428,34 @@
 - **Date:** 2026-11-09
 - **Edit baseline from the server record.** Amends the F6 bullet "Edit compares like with like": the baseline is still in the form's own shape (PHT rebuilt with +08:00, trimmed), but it is built once from the server record (`toInterviewInput`, like `toApplicationInput`). A stored time the PHT input cannot show makes the edit page say "Couldn't load this interview." instead of opening a form that would fail on Save. A conversion error at submit shows the save banner; Save never does nothing.
 - **Year check only on a changed time.** The API checks 1900-2200 in the offset it was sent in, so a stored instant can read as 2201 or 1899 in PHT. The form checks the year only when the time differs from the value it opened with, so such a row stays editable (a Notes-only edit sends only the notes). Create always checks. Alternative: clamp or rewrite the stored time; rejected, a silent change to data the user did not touch.
+
+---
+
+# Decision: client IP behind the Vercel rewrite (shared secret header)
+
+- **Date:** 2026-11-09
+- **Problem.** The browser reaches the API only through Vercel's `/api/*` rewrite, so the API's socket peer is always Vercel and the per-IP login and signup limits became ONE bucket for everyone. Resolves the 2026-11-03 (F4) blocker; option (a) there.
+- **What Vercel forwards (docs, not yet captured on a live deploy).** For an external rewrite Vercel sends `x-real-ip` and `x-forwarded-for` (the visitor's public IP, overwritten so a client cannot forge them), plus `x-forwarded-host` and `x-forwarded-proto`. Sources: vercel.com/docs/headers/request-headers and vercel.com/docs/routing/rewrites. Render then puts Cloudflare and its load balancer in between; its docs do not say whether it appends to or replaces an incoming `X-Forwarded-For`. So the right-most XFF hop on Render is most likely a shared Vercel egress address, and any left-hand value is attacker-controlled when the `onrender.com` URL is called directly. Not usable as the limiter key.
+- **Chosen.** `frontend/src/proxy.ts` performs the `/api` rewrite itself (`NextResponse.rewrite` with `request.headers`; `next.config` `rewrites()` cannot add request headers, so that block is removed). With `PROXY_SECRET` set it adds `X-Talaan-Client-IP` (from `x-real-ip`) and `X-Talaan-Proxy-Secret`, and it ALWAYS deletes client-sent copies of both. The API (`rate_limit._proxy_header_ip`) trusts the IP header only when `PROXY_SECRET` is configured and the request carries exactly one secret header that matches (`hmac.compare_digest`) and exactly one parseable IP value; otherwise it ignores both headers and falls back, never raising. IPv6 is still bucketed to /64. `PROXY_SECRET` must be at least 32 characters (`openssl rand -hex 32`).
+- **TRUST_PROXY stays, unchanged.** Precedence: valid secret header, then `TRUST_PROXY` (right-most XFF), then the socket. Production sets `PROXY_SECRET` and `TRUST_PROXY=false`. Direct callers of the Render URL carry no secret and share the load-balancer socket bucket; that bucket is separate from every real user's, so they cannot lock Vercel users out. Alternatives rejected: (b) looser per-IP limits (weakens the limits for everyone), (c) another host (not free).
+- **Limit.** Anyone who learns the secret can name any IP. It lives only in Render and Vercel env vars; rotate by changing both. It is not an origin lock: the API still answers requests that skip Vercel (backlog line in ROADMAP).
+- **Evidence.** Local check through `next dev` to an echo backend: the secret and `x-real-ip` arrive as `X-Talaan-Client-IP` and `X-Talaan-Proxy-Secret`; spoofed copies are replaced (with the secret) or removed (without it). The real Vercel and Render header shapes still have to be confirmed in the F7 smoke test.
+
+---
+
+# Decision: production mode (docs off, refuse insecure config)
+
+- **Date:** 2026-11-09
+- `ENVIRONMENT` is `development` (default, also blank) or `production`; anything else fails startup. Production turns off `/docs`, `/redoc` and `/openapi.json` (the Origin check trusts `Sec-Fetch-Site: same-origin`, so Swagger on the API origin could call every write route).
+- `app/main.py` refuses to import in production if `config.production_problems()` is not empty, and lists every problem at once: `COOKIE_SECURE` not true, `BCRYPT_ROUNDS` below 12 (it only warned before), `PROXY_SECRET` missing, `ALLOWED_ORIGINS` unset or blank, or listing a local (`localhost`, `127.0.0.1`, `[::1]`, `*.localhost`) or non-https origin.
+- The check is in `main.py`, not at config import, so `python -m app.admin` and `alembic` still work with only `DATABASE_URL` (the purge workflow and the migration step need that). Alternative: validate at config import; rejected for that reason.
+
+---
+
+# Decision: purge job (admin CLI, GitHub Actions)
+
+- **Date:** 2026-11-09
+- `python -m app.admin purge` deletes `rate_limit_events` older than the longest limiter window (max of the five `*_WINDOW_SECONDS`) and sessions with `expires_at <= now`. This resolves the M11 blocker: both tables were only pruned when the same key or token came back.
+- **Safe beside the API.** `DELETE ... WHERE id IN (SELECT ... ORDER BY id LIMIT 1000 FOR UPDATE SKIP LOCKED)`, one commit per batch, until a batch is short. No table or advisory locks. A row another transaction holds is left for the next run. A test (a second connection holds a row) fails if `SKIP LOCKED` is removed. Rows older than every window cannot change a limiter count.
+- **Invite codes are not purged.** They are created by hand (tiny volume), `list-invites` shows expired and used codes as history, and a used row records which user took the code. Deleting them saves nothing and loses that trail.
+- **Scheduling.** `.github/workflows/purge.yml`: daily at 03:17 Manila plus manual dispatch, using the `DATABASE_URL` repository secret (Neon's direct, unpooled string). Cutoff columns have no index, so a batch scans the table; add one if it ever gets slow (`ponytail:` comment in `app/admin.py`).
