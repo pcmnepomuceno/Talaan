@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { deleteAccount, getMe, login, logout, signup } from "../src/lib/auth";
+import { cacheVersion, getDetail, getList, setDetail, setList } from "../src/lib/cache";
 
 const replaceMock = vi.fn();
 function reply(status: number, body?: unknown) {
@@ -87,4 +88,20 @@ it("never touches web storage", async () => {
   reply(200, { detail: "Logged in" });
   await login("a@example.ph", "Secret1!");
   expect(set).not.toHaveBeenCalled();
+});
+
+// One user's cached rows must never show to the next user in the same tab (NewInterviewScreen even
+// renders its form straight from the cached application).
+it.each([
+  ["login", () => login("a@example.ph", "Secret1!")],
+  ["logout", () => logout()],
+  ["deleteAccount", () => deleteAccount("Secret1!")],
+])("%s clears the applications caches", async (_name, call) => {
+  reply(200, { detail: "ok" });
+  setList(undefined, { items: [], total: 0, nextOffset: 0 });
+  setDetail(1, { application: {} as never, interviews: null });
+  const v = cacheVersion();
+  await call();
+  expect([getList(), getDetail(1)]).toEqual([undefined, undefined]);
+  expect(cacheVersion()).toBe(v + 1);
 });
