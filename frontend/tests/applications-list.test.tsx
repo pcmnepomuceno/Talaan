@@ -369,3 +369,57 @@ it("the message clears itself after it has been read out", async () => {
   act(() => vi.advanceTimersByTime(ANNOUNCE_MS));
   expect(status().textContent).toBe("");
 });
+
+// ---- waking-up line (P1) ----
+const WAKE = "Starting up. This can take up to a minute the first time.";
+const advance = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
+
+it("a first list load pending past 3 s shows the waking-up line, gone when it lands", async () => {
+  setup(3);
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  const real = fake.spy.getMockImplementation()!;
+  fake.spy.mockImplementation(async (input, init) => (await gate, real(input, init)));
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  mount();
+  await advance(2999);
+  expect(screen.queryByText(WAKE)).toBeNull();
+  await advance(1);
+  expect(screen.getByText(WAKE)).toBeTruthy();
+  await act(async () => {
+    release();
+    await gate;
+  });
+  vi.useRealTimers();
+  await screen.findByRole("list", { name: "Applications" });
+  expect(screen.queryByText(WAKE)).toBeNull();
+});
+
+it("it also goes away when the first load fails", async () => {
+  setup(3);
+  let fail!: () => void;
+  const gate = new Promise<void>((r) => (fail = r));
+  fake.on("GET", /^\/applications\?/, async () => (await gate, json(500, { detail: "x" })));
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  mount();
+  await advance(3000);
+  expect(screen.getByText(WAKE)).toBeTruthy();
+  await act(async () => {
+    fail();
+    await gate;
+  });
+  expect(screen.queryByText(WAKE)).toBeNull();
+  expect(screen.getByText("Couldn't load applications.")).toBeTruthy();
+});
+
+it("a cached list refreshing never shows the line", async () => {
+  setup(3);
+  const first = mount();
+  await screen.findByRole("list", { name: "Applications" });
+  first.unmount();
+  fake.on("GET", /^\/applications\?/, () => new Promise<Response>(() => {}));
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  mount();
+  await advance(10_000);
+  expect(screen.queryByText(WAKE)).toBeNull();
+});

@@ -12,6 +12,7 @@ import { LoadError } from "@/components/load-error";
 import { type Filter, StatusFilter } from "@/components/status-filter";
 import { ApplicationRow, LedgerSheet, LedgerSkeleton } from "@/components/ledger";
 import { useToast } from "@/components/toast";
+import { WakingUp } from "@/components/waking-up";
 import { deleteApplication, parseStatus } from "@/lib/api";
 import { type DetailState, useApplicationDetail } from "./use-detail";
 import { useApplicationList } from "./use-list";
@@ -105,6 +106,10 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
       {/* Always mounted, so changes are announced (a region added together with its text often is not). */}
       <div role="status" className="sr-only">
         {hasDetail && state.kind === "loading" ? "Loading application" : view.kind === "loading" ? "Loading applications" : announcement}
+      </div>
+      {/* One line above both panes while the first list or detail load is slow (DESIGN.md 6.12). */}
+      <div className="mx-auto max-w-[640px] px-4 xl:max-w-[1120px] xl:px-6">
+        <WakingUp pending={view.kind === "loading" || (hasDetail && state.kind === "loading")} />
       </div>
       <main
         id="content"

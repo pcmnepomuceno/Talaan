@@ -6,6 +6,7 @@ import { Banner } from "@/components/banner";
 import { Button } from "@/components/button";
 import { PasswordField, TextField } from "@/components/fields";
 import { Wordmark } from "@/components/logo";
+import { WakingUp } from "@/components/waking-up";
 import { SegmentedControl } from "@/components/segmented-control";
 import { SkipLink } from "@/components/skip-link";
 import { getMe, login, signup } from "@/lib/auth";
@@ -50,6 +51,8 @@ export function LoginForm({
     deleted ? "Your account has been deleted." : expired ? "Your session expired. Log in again." : null,
   );
   const [busy, setBusy] = useState(false);
+  // The request itself (busy also stays on while the page navigates after a success).
+  const [requesting, setRequesting] = useState(false);
   const [attempt, setAttempt] = useState(0);
   // Email survives a mode switch. The password is controlled only so a failed attempt can clear it
   // alone; a mode switch (form remount by key) clears it too.
@@ -128,6 +131,7 @@ export function LoginForm({
 
     submitting.current = true;
     setBusy(true);
+    setRequesting(true);
     setErrors({});
     setFormError(null);
     setNotice(null);
@@ -160,6 +164,8 @@ export function LoginForm({
       submitting.current = false;
       setBusy(false);
       return;
+    } finally {
+      setRequesting(false);
     }
     // Success: stay busy while the navigation happens so the form cannot be submitted again.
     router.replace(safeNext(next));
@@ -251,6 +257,7 @@ export function LoginForm({
           <Button type="submit" className="w-full" disabled={busy}>
             {label}
           </Button>
+          <WakingUp pending={requesting} />
         </form>
       </main>
     </>
