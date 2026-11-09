@@ -57,9 +57,12 @@ export function ApplicationDetail() {
     } finally {
       setBusy(false);
     }
-    // deleteInterview cleared the caches, which queued a refetch and a reset to "nothing loaded". Those
-    // render later (a scheduler task); this runs first, so that render finds the page minus the row in
-    // the detail cache (the cached/refreshing path) instead of a skeleton. The refetch then replaces it.
+    // Timing-sensitive: deleteInterview cleared the caches, which queued a refetch and a reset to "nothing
+    // loaded". This cache write must run before React renders that clear, so the render finds the page
+    // minus the row (the cached/refreshing path) instead of a skeleton; the refetch then replaces it. It
+    // works only because the await's continuation runs before React's scheduled render: adding any await
+    // between deleteInterview and setDetail brings back the skeleton flash. The skeleton check in
+    // scripts/e2e-interviews.cjs guards this.
     if (iv.kind === "ready") {
       setDetail(a.id, {
         application: a,
