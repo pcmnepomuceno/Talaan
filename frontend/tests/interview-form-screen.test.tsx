@@ -8,6 +8,22 @@ import { ToastProvider } from "../src/components/toast";
 import { clearCaches } from "../src/lib/cache";
 import { type Fake, installFake, json } from "./helpers/fake-api";
 
+// Lets one test make the submit-time conversion throw (it cannot after validate() passes today).
+const mapFail = vi.hoisted(() => ({ once: false }));
+vi.mock("../src/lib/mappers", async (importOriginal) => {
+  const m = await importOriginal<typeof import("../src/lib/mappers")>();
+  return {
+    ...m,
+    fromInterviewFormValues: (v: Parameters<typeof m.fromInterviewFormValues>[0]) => {
+      if (mapFail.once) {
+        mapFail.once = false;
+        throw new m.MappingError("scheduled_at");
+      }
+      return m.fromInterviewFormValues(v);
+    },
+  };
+});
+
 const replace = vi.fn();
 const locationReplace = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace }) }));
@@ -218,6 +234,28 @@ it("edit: 404 on save (deleted in another tab) shows not-found with a link back"
   await userEvent.click(save());
   expect(await screen.findByRole("heading", { name: "Interview not found." })).toBeTruthy();
   expect(screen.getByRole("link", { name: "Back to application" }).getAttribute("href")).toBe("/applications/1?status=applied");
+});
+
+it("edit: a stored time the form cannot read shows an error instead of the form", async () => {
+  fake.db.interviews[0].scheduled_at = "2026-10-24"; // date only: toPhtInput gives null
+  mountEdit("1");
+  expect(await screen.findByText("Couldn't load this interview.")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /Save interview/ })).toBeNull();
+  expect(screen.getByRole("link", { name: "Back to application" }).getAttribute("href")).toBe("/applications/1");
+});
+
+it("a MappingError on save shows the banner, sends nothing, and never leaves Save stuck", async () => {
+  mountEdit("1");
+  await screen.findByDisplayValue("Mark Rivera");
+  await userEvent.type(field("Interviewer"), "x");
+  mapFail.once = true;
+  await userEvent.click(save());
+  expect(await screen.findByText("Couldn't save the interview. Try again.")).toBeTruthy();
+  expect(fake.calls.filter((c) => c.method === "PATCH")).toHaveLength(0);
+  expect(save().textContent).toContain("Save interview");
+  expect(save().getAttribute("aria-disabled")).toBeNull();
+  await userEvent.click(save()); // and the next try goes through
+  await waitFor(() => expect(replace).toHaveBeenCalledWith("/applications/1"));
 });
 
 it("edit: a load failure offers Retry", async () => {

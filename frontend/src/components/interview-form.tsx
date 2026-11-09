@@ -10,7 +10,10 @@ import {
   EMPTY_INTERVIEW_FORM,
   fromInterviewFormValues,
   type InterviewFormValues,
+  type InterviewInput,
+  MappingError,
   toInterviewFormValues,
+  toInterviewInput,
   toInterviewPatchBody,
 } from "../lib/mappers";
 import { type Interview, INTERVIEW_MODES, OUTCOMES } from "../lib/types";
@@ -35,6 +38,17 @@ export function InterviewForm({ applicationId, interview, qs }: { applicationId:
   const toast = useToast();
   const edit = interview !== undefined;
   const [initial] = useState<InterviewFormValues>(() => (interview ? toInterviewFormValues(interview) : EMPTY_INTERVIEW_FORM));
+  // The edit baseline, built once from the server record. A stored time the PHT input cannot show
+  // makes the form unusable (it would save a time the user never saw), so it shows an error instead.
+  const [base] = useState<InterviewInput | null | "unreadable">(() => {
+    if (!interview) return null;
+    try {
+      return toInterviewInput(interview);
+    } catch (e) {
+      if (e instanceof MappingError) return "unreadable";
+      throw e;
+    }
+  });
   const [values, setValues] = useState<InterviewFormValues>(initial);
   const [errors, setErrors] = useState<Errors>({});
   const [banner, setBanner] = useState<string[]>([]);
@@ -83,9 +97,16 @@ export function InterviewForm({ applicationId, interview, qs }: { applicationId:
       focusFirst(errs);
       return;
     }
-    const input = fromInterviewFormValues(values);
+    let input: InterviewInput;
+    try {
+      input = fromInterviewFormValues(values);
+    } catch (err) {
+      if (!(err instanceof MappingError)) throw err;
+      setBanner(["Couldn't save the interview. Try again."]); // never a silent no-op
+      return;
+    }
     // Compare in the same form on both sides (+08:00 to the minute, trimmed): an untouched field is never sent.
-    const before = interview ? fromInterviewFormValues(initial) : null;
+    const before = base === "unreadable" ? null : base;
     if (before && Object.keys(toInterviewPatchBody(before, input)).length === 0) {
       leave();
       return;
@@ -118,6 +139,22 @@ export function InterviewForm({ applicationId, interview, qs }: { applicationId:
   }
 
   const title = edit ? "Edit interview" : "Add interview";
+
+  if (base === "unreadable") {
+    return (
+      <>
+        <AppBar title={title} backHref={backHref} />
+        <main id="content" tabIndex={-1} className="mx-auto max-w-[640px] px-4 pt-6 pb-24 outline-none md:pb-6">
+          <Banner title="Couldn't load this interview.">
+            <p>Its saved date and time can&apos;t be read.</p>
+            <Button variant="secondary" href={backHref} className="mt-2">
+              Back to application
+            </Button>
+          </Banner>
+        </main>
+      </>
+    );
+  }
 
   if (gone) {
     return (

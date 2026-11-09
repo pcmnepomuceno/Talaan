@@ -248,3 +248,10 @@ export function fromInterviewFormValues(v: InterviewFormValues): InterviewInput 
   const orNull = (s: string) => (s.trim() === "" ? null : s.trim());
   return { scheduled_at: at, mode: v.mode, outcome: v.outcome, interviewer: orNull(v.interviewer), remarks: orNull(v.remarks) };
 }
+
+/**
+ * The server record as the edit form's baseline, in the same shape the form saves (trimmed, time as
+ * "+08:00" to the minute), so an untouched field never differs. Throws MappingError when the stored
+ * time cannot be shown in the PHT input.
+ */
+export const toInterviewInput = (i: Interview): InterviewInput => fromInterviewFormValues(toInterviewFormValues(i));

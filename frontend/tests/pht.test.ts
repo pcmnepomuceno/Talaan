@@ -19,6 +19,11 @@ describe("toPhtInput", () => {
   );
 });
 
+it("no year range inside the converters: 2200-12-31T20:00:00Z round-trips as 2201-01-01T04:00 PHT", () => {
+  expect(toPhtInput("2200-12-31T20:00:00Z")).toBe("2201-01-01T04:00");
+  expect(fromPhtInput("2201-01-01T04:00")).toBe("2201-01-01T04:00:00+08:00");
+});
+
 describe("fromPhtInput", () => {
   it.each([
     ["2026-11-20T23:30", "2026-11-20T23:30:00+08:00"],
