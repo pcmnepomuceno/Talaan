@@ -66,10 +66,10 @@ PROBE = (
 
 
 def boot(**env):
-    """Import app.main in a fresh process (so config is read from env) and hit the doc URLs."""
-    return subprocess.run(
-        [sys.executable, "-c", PROBE], env={**os.environ, **env}, capture_output=True, text=True, check=False,
-    )
+    """Import app.main in a fresh process (so config is read from env) and hit the doc URLs.
+    A value of None removes that variable, even if the parent process has it."""
+    merged = {k: v for k, v in {**os.environ, **env}.items() if v is not None}
+    return subprocess.run([sys.executable, "-c", PROBE], env=merged, capture_output=True, text=True, check=False)
 
 
 def test_production_with_good_config_starts_and_hides_docs():
@@ -78,9 +78,11 @@ def test_production_with_good_config_starts_and_hides_docs():
     assert r.stdout.strip() == "[404, 404, 404, 200]"
 
 
-@pytest.mark.parametrize("env", [{}, {"ENVIRONMENT": ""}, {"ENVIRONMENT": "development"}])
+@pytest.mark.parametrize("env", [{"ENVIRONMENT": None}, {"ENVIRONMENT": ""}, {"ENVIRONMENT": "development"}])
 def test_development_keeps_docs(env):
-    r = boot(**{**PROD_OK, "COOKIE_SECURE": "false", "PROXY_SECRET": "", "ENVIRONMENT": "development", **env})
+    # ENVIRONMENT=None really unsets it (not inherited from PROD_OK or the shell): the default must
+    # be development. .env has no ENVIRONMENT line, so load_dotenv cannot refill it.
+    r = boot(**{**PROD_OK, "COOKIE_SECURE": "false", "PROXY_SECRET": "", **env})
     assert r.returncode == 0, r.stderr
     assert r.stdout.strip() == "[200, 200, 200, 200]"
 
