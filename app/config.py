@@ -47,12 +47,15 @@ if BCRYPT_ROUNDS < DEFAULT_BCRYPT_ROUNDS:
 
 # Rate limiting (app/auth/rate_limit.py). Read at call time, so tests can patch these.
 # Each must be >= 1: a 0 limit would crash the limiter (500 on every login), not disable it.
+# Every *_WINDOW_SECONDS is capped at MAX_WINDOW_SECONDS: `python -m app.admin purge` deletes events
+# older than that without seeing the API's env, so a longer window would silently count too few.
+MAX_WINDOW_SECONDS = 7 * 24 * 3600
 LOGIN_IP_LIMIT = _int("LOGIN_IP_LIMIT", 10, minimum=1)
-LOGIN_IP_WINDOW_SECONDS = _int("LOGIN_IP_WINDOW_SECONDS", 900, minimum=1)
+LOGIN_IP_WINDOW_SECONDS = _int("LOGIN_IP_WINDOW_SECONDS", 900, minimum=1, maximum=MAX_WINDOW_SECONDS)
 LOGIN_EMAIL_LIMIT = _int("LOGIN_EMAIL_LIMIT", 5, minimum=1)
-LOGIN_EMAIL_WINDOW_SECONDS = _int("LOGIN_EMAIL_WINDOW_SECONDS", 900, minimum=1)
+LOGIN_EMAIL_WINDOW_SECONDS = _int("LOGIN_EMAIL_WINDOW_SECONDS", 900, minimum=1, maximum=MAX_WINDOW_SECONDS)
 SIGNUP_IP_LIMIT = _int("SIGNUP_IP_LIMIT", 5, minimum=1)
-SIGNUP_IP_WINDOW_SECONDS = _int("SIGNUP_IP_WINDOW_SECONDS", 3600, minimum=1)
+SIGNUP_IP_WINDOW_SECONDS = _int("SIGNUP_IP_WINDOW_SECONDS", 3600, minimum=1, maximum=MAX_WINDOW_SECONDS)
 
 
 def _bool(name: str, default: bool) -> bool:
@@ -141,9 +144,9 @@ ALLOWED_ORIGINS = parse_origins(os.getenv("ALLOWED_ORIGINS"))
 
 # Account deletion (POST /account/delete): wrong-password budget per user, attempts per IP.
 ACCOUNT_DELETE_USER_LIMIT = _int("ACCOUNT_DELETE_USER_LIMIT", 5, minimum=1)
-ACCOUNT_DELETE_USER_WINDOW_SECONDS = _int("ACCOUNT_DELETE_USER_WINDOW_SECONDS", 900, minimum=1)
+ACCOUNT_DELETE_USER_WINDOW_SECONDS = _int("ACCOUNT_DELETE_USER_WINDOW_SECONDS", 900, minimum=1, maximum=MAX_WINDOW_SECONDS)
 ACCOUNT_DELETE_IP_LIMIT = _int("ACCOUNT_DELETE_IP_LIMIT", 10, minimum=1)
-ACCOUNT_DELETE_IP_WINDOW_SECONDS = _int("ACCOUNT_DELETE_IP_WINDOW_SECONDS", 900, minimum=1)
+ACCOUNT_DELETE_IP_WINDOW_SECONDS = _int("ACCOUNT_DELETE_IP_WINDOW_SECONDS", 900, minimum=1, maximum=MAX_WINDOW_SECONDS)
 
 
 # "development" (default, also blank) or "production". Production hides /docs, /redoc and

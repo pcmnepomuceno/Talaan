@@ -137,7 +137,7 @@ from app.auth.models import RateLimitEvent
 from app.auth.models import Session as SessionModel
 
 NOW = datetime(2026, 11, 9, 12, 0, tzinfo=timezone.utc)
-LONGEST = 3600  # SIGNUP_IP_WINDOW_SECONDS default: the longest of the limiter windows
+LONGEST = config.MAX_WINDOW_SECONDS  # the fixed purge cutoff (7 days), not the env windows
 
 
 @pytest.fixture
@@ -162,18 +162,26 @@ def test_purge_on_empty_tables(db, clock, capsys):
 
 
 def test_purge_removes_events_older_than_the_longest_window_only(db, clock, capsys):
-    # 3600 is exactly the edge: the limiter's own prune uses <=, so purge does too.
-    add_events(db, 10, LONGEST - 1, LONGEST, LONGEST + 1, 99999)
+    # LONGEST is exactly the edge: the limiter's own prune uses <=, so purge does too.
+    add_events(db, 10, LONGEST - 1, LONGEST, LONGEST + 1, LONGEST * 2)
     assert admin.run(db, ["purge"]) == 0
     assert "Purged 3 rate_limit_events" in capsys.readouterr().out
     assert event_ages(db) == [10, LONGEST - 1]
 
 
-def test_purge_uses_the_longest_configured_window(db, clock, monkeypatch):
-    monkeypatch.setattr(config, "LOGIN_EMAIL_WINDOW_SECONDS", 7200)
-    add_events(db, LONGEST + 1, 7200, 7201)
+def test_purge_keeps_six_days_deletes_older_than_seven(db, clock):
+    day = 24 * 3600
+    add_events(db, 6 * day, 7 * day, 7 * day + 1)
     admin.run(db, ["purge"])
-    assert event_ages(db) == [LONGEST + 1]
+    assert event_ages(db) == [6 * day]
+
+
+def test_purge_ignores_the_env_windows(db, clock, monkeypatch):
+    # The purge workflow does not see the API's env; its cutoff must not depend on it.
+    monkeypatch.setattr(config, "LOGIN_EMAIL_WINDOW_SECONDS", 7200)
+    add_events(db, 7201)
+    admin.run(db, ["purge"])
+    assert event_ages(db) == [7201]
 
 
 def test_purge_removes_expired_sessions_only(db, clock, user, capsys):

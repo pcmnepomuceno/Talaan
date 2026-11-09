@@ -45,7 +45,7 @@ def build_parser() -> argparse.ArgumentParser:
     create.add_argument("--expires-in", type=parse_expires_in, default=parse_expires_in(DEFAULT_EXPIRES_IN),
                         metavar="Nd|Nh", help="lifetime, default 14d (1h to 365d)")
 
-    sub.add_parser("purge", help="delete rate-limit events past every window and expired sessions")
+    sub.add_parser("purge", help="delete rate-limit events older than 7 days and expired sessions")
 
     sub.add_parser("list-invites", help="list invites (never shows codes or hashes)")
 
@@ -81,22 +81,16 @@ def _delete_in_batches(db: Session, table: str, condition: str, params: dict) ->
 
 
 def purge(db: Session) -> tuple[int, int]:
-    """(events deleted, sessions deleted). Events older than the longest limiter window are outside
-    every key's window, so removing them cannot change any limiter count. Sessions use the same
+    """(events deleted, sessions deleted). Events older than config.MAX_WINDOW_SECONDS (7 days) are
+    outside every key's window (config refuses any longer window), so removing them cannot change
+    any limiter count. The cutoff is that fixed ceiling, not the API's own *_WINDOW_SECONDS: this
+    runs from GitHub Actions with only DATABASE_URL and never sees the API's env. Sessions use the same
     `expires_at <= now` rule as get_current_user. The cutoff column has no index of its own, so each
     batch scans the table (fine at this size).
     ponytail: add an index on created_at / expires_at if purge gets slow."""
     now = rate_limit.utcnow()
-    longest = max(
-        config.LOGIN_IP_WINDOW_SECONDS,
-        config.LOGIN_EMAIL_WINDOW_SECONDS,
-        config.SIGNUP_IP_WINDOW_SECONDS,
-        config.ACCOUNT_DELETE_USER_WINDOW_SECONDS,
-        config.ACCOUNT_DELETE_IP_WINDOW_SECONDS,
-    )
-    events = _delete_in_batches(
-        db, "rate_limit_events", "created_at <= :cutoff", {"cutoff": now - timedelta(seconds=longest)}
-    )
+    cutoff = now - timedelta(seconds=config.MAX_WINDOW_SECONDS)
+    events = _delete_in_batches(db, "rate_limit_events", "created_at <= :cutoff", {"cutoff": cutoff})
     sessions = _delete_in_batches(db, "sessions", "expires_at <= :now", {"now": now})
     return events, sessions
 

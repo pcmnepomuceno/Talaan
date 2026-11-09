@@ -15,7 +15,7 @@ Generate once: `openssl rand -hex 32` (the proxy secret). Never commit real valu
 | Render | `PROXY_SECRET` | the generated secret (at least 32 characters) |
 | Render | `TRUST_PROXY` | `false` |
 | Render | `BCRYPT_ROUNDS` | `12` (production refuses lower) |
-| Render | `LOGIN_*`, `SIGNUP_*`, `ACCOUNT_DELETE_*` | defaults from `.env.example` unless tuning |
+| Render | `LOGIN_*`, `SIGNUP_*`, `ACCOUNT_DELETE_*` | defaults from `.env.example` unless tuning; each `*_WINDOW_SECONDS` at most 604800 (7 days, the purge cutoff) |
 | Vercel | `BACKEND_URL` | `https://<service>.onrender.com`, no trailing slash. Read per request by `src/proxy.ts`. |
 | Vercel | `PROXY_SECRET` | same value as on Render |
 | GitHub (repo secret) | `DATABASE_URL` | Neon **direct (unpooled)** string, for `.github/workflows/purge.yml` |

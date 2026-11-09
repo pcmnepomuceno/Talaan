@@ -3,6 +3,8 @@ name: Purge
 # Daily cleanup of rate_limit_events and expired sessions (python -m app.admin purge), plus a manual
 # button. Needs the repository secret DATABASE_URL: Neon's DIRECT (unpooled) connection string,
 # postgresql+psycopg2://...?sslmode=require. Without the secret the job fails with a clear message.
+# The event cutoff is the fixed 7-day ceiling (app/config.py MAX_WINDOW_SECONDS; the API refuses a
+# longer *_WINDOW_SECONDS), so this job needs no LOGIN_*/SIGNUP_*/ACCOUNT_DELETE_* env of its own.
 # GitHub pauses scheduled workflows after 60 days without repository activity: re-enable in Actions.
 on:
   schedule:
