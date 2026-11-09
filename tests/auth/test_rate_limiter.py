@@ -174,3 +174,77 @@ def test_lock_ids_order_by_id_and_dedupe_collisions(monkeypatch):
     # Key order would give [5, 1] for (a, b) and [1, 5] for (c, d): a deadlock cycle.
     assert rate_limit.lock_ids(["a", "b"]) == rate_limit.lock_ids(["c", "d"]) == [1, 5]
     assert rate_limit.lock_ids(["b", "c"]) == [1]  # two keys, one lock taken once
+
+
+# --- PROXY_SECRET: client IP from X-Talaan-Client-IP, only with the matching secret ---
+
+SECRET = "s" * 32
+
+
+def _proxied(ip="198.51.100.7", secret=SECRET, ips=None, secrets=None):
+    """Request from the socket peer 203.0.113.9 carrying the proxy headers."""
+    headers = [(b"x-talaan-client-ip", v.encode()) for v in (ips if ips is not None else [ip])]
+    headers += [(b"x-talaan-proxy-secret", v.encode()) for v in (secrets if secrets is not None else [secret])]
+    return Request({"type": "http", "headers": headers, "client": ("203.0.113.9", 1234)})
+
+
+@pytest.fixture
+def proxy_secret(monkeypatch):
+    monkeypatch.setattr(config, "PROXY_SECRET", SECRET, raising=False)
+
+
+def test_header_ip_used_with_matching_secret(proxy_secret):
+    assert rate_limit.client_ip(_proxied()) == "198.51.100.7"
+    assert rate_limit.client_ip(_proxied(ip=" 198.51.100.8 ")) == "198.51.100.8"
+
+
+def test_header_ip_ipv6_bucketed_and_mapped_ipv4_unwrapped(proxy_secret):
+    assert rate_limit.client_ip(_proxied(ip="2001:db8:0:1::5")) == "2001:db8:0:1::/64"
+    assert rate_limit.client_ip(_proxied(ip="::ffff:198.51.100.7")) == "198.51.100.7"
+
+
+@pytest.mark.parametrize("secrets", [[], ["wrong" * 8], [""], [SECRET, SECRET], [SECRET + "x"], [SECRET[:-1]]])
+def test_wrong_missing_or_repeated_secret_falls_back_to_socket(proxy_secret, secrets):
+    assert rate_limit.client_ip(_proxied(secrets=secrets)) == "203.0.113.9"
+
+
+def test_header_ignored_when_no_secret_is_configured(monkeypatch):
+    monkeypatch.setattr(config, "PROXY_SECRET", None, raising=False)
+    assert rate_limit.client_ip(_proxied()) == "203.0.113.9"
+
+
+@pytest.mark.parametrize(
+    "ips",
+    [["1.1.1.1, 2.2.2.2"], ["1.1.1.1", "2.2.2.2"], ["[::1]:80"], ["1.1.1.1:80"], ["garbage"], [""], ["x" * 500], ["1.1.1.1\nforged"], []],
+)
+def test_unusable_header_value_falls_back_to_socket_without_error(proxy_secret, ips):
+    assert rate_limit.client_ip(_proxied(ips=ips)) == "203.0.113.9"
+
+
+def test_valid_secret_beats_trust_proxy(proxy_secret, monkeypatch):
+    monkeypatch.setattr(config, "TRUST_PROXY", True)
+    req = Request({
+        "type": "http", "client": ("203.0.113.9", 1),
+        "headers": [(b"x-forwarded-for", b"9.9.9.9"), (b"x-talaan-client-ip", b"198.51.100.7"),
+                    (b"x-talaan-proxy-secret", SECRET.encode())],
+    })
+    assert rate_limit.client_ip(req) == "198.51.100.7"
+
+
+def test_bad_secret_with_trust_proxy_still_uses_forwarded_for(proxy_secret, monkeypatch):
+    monkeypatch.setattr(config, "TRUST_PROXY", True)
+    req = Request({
+        "type": "http", "client": ("203.0.113.9", 1),
+        "headers": [(b"x-forwarded-for", b"9.9.9.9"), (b"x-talaan-client-ip", b"198.51.100.7"),
+                    (b"x-talaan-proxy-secret", b"nope")],
+    })
+    assert rate_limit.client_ip(req) == "9.9.9.9"
+
+
+def test_unusable_header_with_valid_secret_warns_once(proxy_secret, monkeypatch, caplog):
+    monkeypatch.setattr(rate_limit, "_warned", set())
+    monkeypatch.setattr(rate_limit.logger, "disabled", False)  # alembic fileConfig disables it
+    with caplog.at_level("WARNING", logger="app.auth.rate_limit"):
+        rate_limit.client_ip(_proxied(ip="garbage"))
+        rate_limit.client_ip(_proxied(ip="garbage"))
+    assert len([r for r in caplog.records if "X-Talaan-Client-IP" in r.getMessage()]) == 1

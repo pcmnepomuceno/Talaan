@@ -70,6 +70,25 @@ def _bool(name: str, default: bool) -> bool:
 # Strict like COOKIE_SECURE: a typo fails startup instead of silently meaning false.
 TRUST_PROXY = _bool("TRUST_PROXY", False)
 
+MIN_PROXY_SECRET_LENGTH = 32
+
+
+def _secret(name: str, minimum: int) -> str | None:
+    """A secret from the environment: stripped, blank means unset, shorter than `minimum` is a
+    startup error. The value is never put in the message."""
+    value = (os.getenv(name) or "").strip()
+    if not value:
+        return None
+    if len(value) < minimum:
+        raise ValueError(f"{name} must be at least {minimum} characters (got {len(value)})")
+    return value
+
+
+# Shared secret between the Next proxy (frontend/src/proxy.ts) and this API. Only a request that
+# carries it in X-Talaan-Proxy-Secret may name the client IP in X-Talaan-Client-IP
+# (app/auth/rate_limit.py). Unset: that header is always ignored. Generate: openssl rand -hex 32
+PROXY_SECRET = _secret("PROXY_SECRET", MIN_PROXY_SECRET_LENGTH)
+
 
 # Session cookie Secure flag and `__Host-` name prefix (app/auth/cookies.py). Read at call
 # time. Default true: a plain-http client (curl, Safari on localhost) will not send it back,
