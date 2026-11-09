@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { getApplication, getInterviews, parseId } from "@/lib/api";
 import { cacheVersion, detailStamp, dropDetail, getDetail, onApplicationStored, onCachesCleared, setDetail } from "@/lib/cache";
 import { ApiError } from "@/lib/http";
@@ -48,8 +48,11 @@ export function useApplicationDetail(id: string | undefined) {
   }
 
   const n = id === undefined ? null : parseId(id);
-  const open = useRef(n); // the clear listener below is registered once; it needs the current id
-  useEffect(() => {
+  // The listeners below are registered once and need the current id. A layout effect updates it
+  // inside the commit, so a clear that lands right after a navigation (a promise callback can run
+  // between the commit and passive effects) is never compared with the previous id.
+  const open = useRef(n);
+  useLayoutEffect(() => {
     open.current = n;
   });
 
