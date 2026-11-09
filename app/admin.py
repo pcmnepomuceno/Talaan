@@ -63,8 +63,11 @@ def status(invite: InviteCode) -> str:
 def _delete_in_batches(db: Session, table: str, condition: str, params: dict) -> int:
     """Delete rows matching `condition` (fixed SQL, never user input), BATCH_SIZE at a time, one
     short transaction per batch. FOR UPDATE SKIP LOCKED leaves any row another transaction holds
-    (a login pruning its key, a logout) for the next run, so purge never waits on the API and the
-    API never waits on purge. No table or advisory locks."""
+    (a login pruning its key, a logout) for the next run, so purge itself never waits. The other
+    direction is not free: an API write to a row this batch has locked (the limiter's prune of an
+    old event, a logout or get_current_user deleting an expired session) waits until the batch
+    commits. Each batch is a sequential scan (no index on created_at / expires_at), so that wait
+    grows with table size. No table or advisory locks."""
     total = 0
     while True:
         deleted = db.execute(
