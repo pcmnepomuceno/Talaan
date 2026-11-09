@@ -205,3 +205,29 @@ def test_concurrent_guesses_all_recorded_before_verify_hit_429_at_the_limit(clie
     assert len(verifies) == config.LOGIN_EMAIL_LIMIT
     assert sorted(statuses) == [401] * config.LOGIN_EMAIL_LIMIT + [429]
     assert db.query(RateLimitEvent).filter_by(key=rate_limit.email_key(USER_EMAIL)).count() == 5
+
+
+# --- PROXY_SECRET end to end: per-user buckets behind one shared socket peer ---
+
+PROXY_SECRET = "p" * 32
+
+
+def proxied_login(client, ip, secret=PROXY_SECRET, email="x@example.com"):
+    headers = {"X-Talaan-Client-IP": ip, "X-Talaan-Proxy-Secret": secret}
+    return client.post("/api/v1/login", json={"email": email, "password": BAD}, headers=headers)
+
+
+def test_users_behind_one_proxy_get_separate_ip_buckets_with_the_secret(client, monkeypatch):
+    monkeypatch.setattr(config, "PROXY_SECRET", PROXY_SECRET, raising=False)
+    for i in range(10):
+        assert proxied_login(client, "198.51.100.1", email=f"u{i}@example.com").status_code == 401
+    assert proxied_login(client, "198.51.100.1", email="u99@example.com").status_code == 429
+    assert proxied_login(client, "198.51.100.2", email="u99@example.com").status_code == 401
+
+
+def test_wrong_secret_cannot_choose_the_bucket(client, monkeypatch):
+    monkeypatch.setattr(config, "PROXY_SECRET", PROXY_SECRET, raising=False)
+    # Rotating the header IP with a wrong secret must not dodge the shared socket bucket.
+    for i in range(10):
+        assert proxied_login(client, f"198.51.100.{i}", secret="w" * 32, email=f"u{i}@example.com").status_code == 401
+    assert proxied_login(client, "198.51.100.200", secret="w" * 32, email="u99@example.com").status_code == 429

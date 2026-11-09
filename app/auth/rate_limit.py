@@ -5,6 +5,7 @@ than `window`. Keys never hold a raw email: see `email_key`.
 """
 
 import hashlib
+import hmac
 import ipaddress
 import logging
 import math
@@ -50,10 +51,39 @@ def _strip_port(value: str) -> str:
     return value
 
 
+def _proxy_header_ip(request: Request) -> str | None:
+    """The IP named in X-Talaan-Client-IP, but only when PROXY_SECRET is set and the request
+    carries exactly that secret in exactly one X-Talaan-Proxy-Secret header (constant-time
+    compare). Anything else (no secret configured, wrong, missing or repeated secret, several or
+    unparsable IP values) returns None and the caller falls back; this never raises."""
+    secret = config.PROXY_SECRET
+    if not secret:
+        return None
+    sent = request.headers.getlist("x-talaan-proxy-secret")
+    if len(sent) != 1 or not hmac.compare_digest(sent[0].encode(), secret.encode()):
+        return None
+    values = request.headers.getlist("x-talaan-client-ip")
+    ip = _normalize_ip(values[0]) if len(values) == 1 else "unknown"
+    if ip == "unknown" and "proxy-ip" not in _warned:
+        # The secret matched, so our own proxy sent something unusable: a bug worth seeing.
+        _warned.add("proxy-ip")
+        logger.warning(
+            "PROXY_SECRET: unusable X-Talaan-Client-IP (%d value(s), first %r); using the next "
+            "source; not logged again until restart",
+            len(values),
+            (values[0].strip()[:40] if values else ""),
+        )
+    return None if ip == "unknown" else ip
+
+
 def client_ip(request: Request) -> str:
-    """Socket peer by default. With TRUST_PROXY, the right-most X-Forwarded-For value
+    """A valid proxy secret plus X-Talaan-Client-IP first (see _proxy_header_ip). Otherwise the
+    socket peer by default. With TRUST_PROXY, the right-most X-Forwarded-For value
     (the one our own proxy appended; anything left of it is client-controlled).
     Missing or unparsable addresses share the bucket "unknown", so they are still limited."""
+    proxied = _proxy_header_ip(request)
+    if proxied is not None:
+        return proxied
     if config.TRUST_PROXY:
         hop = ",".join(request.headers.getlist("x-forwarded-for")).split(",")[-1]
         ip = _normalize_ip(_strip_port(hop))

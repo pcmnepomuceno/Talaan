@@ -4,6 +4,7 @@ Reads settings from environment variables (loaded from a local .env file if
 present). Keep real secrets in .env, never commit them — see .env.example.
 """
 
+import ipaddress
 import logging
 import os
 from urllib.parse import urlsplit
@@ -47,12 +48,15 @@ if BCRYPT_ROUNDS < DEFAULT_BCRYPT_ROUNDS:
 
 # Rate limiting (app/auth/rate_limit.py). Read at call time, so tests can patch these.
 # Each must be >= 1: a 0 limit would crash the limiter (500 on every login), not disable it.
+# Every *_WINDOW_SECONDS is capped at MAX_WINDOW_SECONDS: `python -m app.admin purge` deletes events
+# older than that without seeing the API's env, so a longer window would silently count too few.
+MAX_WINDOW_SECONDS = 7 * 24 * 3600
 LOGIN_IP_LIMIT = _int("LOGIN_IP_LIMIT", 10, minimum=1)
-LOGIN_IP_WINDOW_SECONDS = _int("LOGIN_IP_WINDOW_SECONDS", 900, minimum=1)
+LOGIN_IP_WINDOW_SECONDS = _int("LOGIN_IP_WINDOW_SECONDS", 900, minimum=1, maximum=MAX_WINDOW_SECONDS)
 LOGIN_EMAIL_LIMIT = _int("LOGIN_EMAIL_LIMIT", 5, minimum=1)
-LOGIN_EMAIL_WINDOW_SECONDS = _int("LOGIN_EMAIL_WINDOW_SECONDS", 900, minimum=1)
+LOGIN_EMAIL_WINDOW_SECONDS = _int("LOGIN_EMAIL_WINDOW_SECONDS", 900, minimum=1, maximum=MAX_WINDOW_SECONDS)
 SIGNUP_IP_LIMIT = _int("SIGNUP_IP_LIMIT", 5, minimum=1)
-SIGNUP_IP_WINDOW_SECONDS = _int("SIGNUP_IP_WINDOW_SECONDS", 3600, minimum=1)
+SIGNUP_IP_WINDOW_SECONDS = _int("SIGNUP_IP_WINDOW_SECONDS", 3600, minimum=1, maximum=MAX_WINDOW_SECONDS)
 
 
 def _bool(name: str, default: bool) -> bool:
@@ -70,6 +74,25 @@ def _bool(name: str, default: bool) -> bool:
 # Strict like COOKIE_SECURE: a typo fails startup instead of silently meaning false.
 TRUST_PROXY = _bool("TRUST_PROXY", False)
 
+MIN_PROXY_SECRET_LENGTH = 32
+
+
+def _secret(name: str, minimum: int) -> str | None:
+    """A secret from the environment: stripped, blank means unset, shorter than `minimum` is a
+    startup error. The value is never put in the message."""
+    value = (os.getenv(name) or "").strip()
+    if not value:
+        return None
+    if len(value) < minimum:
+        raise ValueError(f"{name} must be at least {minimum} characters (got {len(value)})")
+    return value
+
+
+# Shared secret between the Next proxy (frontend/src/proxy.ts) and this API. Only a request that
+# carries it in X-Talaan-Proxy-Secret may name the client IP in X-Talaan-Client-IP
+# (app/auth/rate_limit.py). Unset: that header is always ignored. Generate: openssl rand -hex 32
+PROXY_SECRET = _secret("PROXY_SECRET", MIN_PROXY_SECRET_LENGTH)
+
 
 # Session cookie Secure flag and `__Host-` name prefix (app/auth/cookies.py). Read at call
 # time. Default true: a plain-http client (curl, Safari on localhost) will not send it back,
@@ -78,6 +101,7 @@ COOKIE_SECURE = _bool("COOKIE_SECURE", True)
 
 
 DEFAULT_PORTS = {"http": 80, "https": 443}
+DEFAULT_ORIGINS = frozenset({"http://localhost:3000"})
 
 
 def _origin(entry: str) -> str:
@@ -114,7 +138,7 @@ def parse_origins(raw: str | None) -> frozenset[str]:
     stripped and normalized by _origin; blanks are dropped; nothing left means the default.
     A wildcard or malformed entry is a startup error, never a fallback."""
     items = {_origin(part.strip()) for part in (raw or "").split(",") if part.strip()}
-    return frozenset(items or {"http://localhost:3000"})
+    return frozenset(items) or DEFAULT_ORIGINS
 
 
 ALLOWED_ORIGINS = parse_origins(os.getenv("ALLOWED_ORIGINS"))
@@ -122,6 +146,53 @@ ALLOWED_ORIGINS = parse_origins(os.getenv("ALLOWED_ORIGINS"))
 
 # Account deletion (POST /account/delete): wrong-password budget per user, attempts per IP.
 ACCOUNT_DELETE_USER_LIMIT = _int("ACCOUNT_DELETE_USER_LIMIT", 5, minimum=1)
-ACCOUNT_DELETE_USER_WINDOW_SECONDS = _int("ACCOUNT_DELETE_USER_WINDOW_SECONDS", 900, minimum=1)
+ACCOUNT_DELETE_USER_WINDOW_SECONDS = _int("ACCOUNT_DELETE_USER_WINDOW_SECONDS", 900, minimum=1, maximum=MAX_WINDOW_SECONDS)
 ACCOUNT_DELETE_IP_LIMIT = _int("ACCOUNT_DELETE_IP_LIMIT", 10, minimum=1)
-ACCOUNT_DELETE_IP_WINDOW_SECONDS = _int("ACCOUNT_DELETE_IP_WINDOW_SECONDS", 900, minimum=1)
+ACCOUNT_DELETE_IP_WINDOW_SECONDS = _int("ACCOUNT_DELETE_IP_WINDOW_SECONDS", 900, minimum=1, maximum=MAX_WINDOW_SECONDS)
+
+
+# "development" (default, also blank) or "production". Production hides /docs, /redoc and
+# /openapi.json and makes app/main.py refuse to start on a dev-grade config (production_problems).
+# Anything else is a startup error, so a typo cannot silently mean "development".
+ENVIRONMENT = (os.getenv("ENVIRONMENT") or "development").strip().lower()
+if ENVIRONMENT not in ("development", "production"):
+    raise ValueError(f"ENVIRONMENT must be development or production, got {ENVIRONMENT!r}")
+PRODUCTION = ENVIRONMENT == "production"
+
+MIN_PRODUCTION_BCRYPT_ROUNDS = DEFAULT_BCRYPT_ROUNDS
+
+
+def _is_local(host: str) -> bool:
+    """localhost, *.localhost, or any loopback/unspecified IP (127.0.0.0/8, 0.0.0.0, ::1, ::,
+    and IPv4-mapped IPv6 forms of those). `host` is urlsplit's hostname: no brackets."""
+    if host == "localhost" or host.endswith(".localhost"):
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False  # a DNS name
+    if ip.version == 6 and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    return ip.is_loopback or ip.is_unspecified
+
+
+def production_problems() -> list[str]:
+    """Every reason this config is unfit for production, as messages naming the variable.
+    Empty list means fine. Called by app/main.py only (not at import), so the admin CLI and
+    alembic keep working with just DATABASE_URL."""
+    problems = []
+    if not COOKIE_SECURE:
+        problems.append("COOKIE_SECURE must be true")
+    if BCRYPT_ROUNDS < MIN_PRODUCTION_BCRYPT_ROUNDS:
+        problems.append(f"BCRYPT_ROUNDS must be at least {MIN_PRODUCTION_BCRYPT_ROUNDS} (got {BCRYPT_ROUNDS})")
+    if not PROXY_SECRET:
+        problems.append("PROXY_SECRET must be set (without it every user shares one rate-limit bucket)")
+    if ALLOWED_ORIGINS == DEFAULT_ORIGINS:  # unset, blank, or just the local default
+        problems.append("ALLOWED_ORIGINS must be set to the frontend's https origin")
+    else:
+        for origin in sorted(ALLOWED_ORIGINS):
+            if _is_local(urlsplit(origin).hostname or ""):
+                problems.append(f"ALLOWED_ORIGINS must not list a local origin ({origin})")
+            elif not origin.startswith("https://"):
+                problems.append(f"ALLOWED_ORIGINS entries must be https ({origin})")
+    return problems

@@ -1,0 +1,43 @@
+name: Purge
+
+# Daily cleanup of rate_limit_events and expired sessions (python -m app.admin purge), plus a manual
+# button. Needs the repository secret DATABASE_URL: Neon's DIRECT (unpooled) connection string,
+# postgresql+psycopg2://...?sslmode=require. Without the secret the job fails with a clear message.
+# The event cutoff is the fixed 7-day ceiling (app/config.py MAX_WINDOW_SECONDS; the API refuses a
+# longer *_WINDOW_SECONDS), so this job needs no LOGIN_*/SIGNUP_*/ACCOUNT_DELETE_* env of its own.
+# GitHub pauses scheduled workflows after 60 days without repository activity: re-enable in Actions.
+on:
+  schedule:
+    - cron: "17 19 * * *" # 03:17 Asia/Manila
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: purge
+  cancel-in-progress: false
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - name: Require the DATABASE_URL secret
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Repository secret DATABASE_URL is not set (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Purge
+        run: python -m app.admin purge

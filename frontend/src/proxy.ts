@@ -9,8 +9,70 @@ import { NextResponse, type NextRequest } from "next/server";
 const COOKIES = ["session_token", "__Host-session_token"];
 const PUBLIC = ["/login", "/design"];
 
+// /api/* is forwarded to the backend HERE (not in next.config rewrites, which cannot add request
+// headers). The browser only talks to the Next origin, so the session cookie is first-party and no
+// CORS is needed. The backend sees Vercel as the socket peer, so with PROXY_SECRET set we also send
+// the visitor's IP (Vercel's x-real-ip, which a client cannot forge) in X-Talaan-Client-IP, next to
+// the secret that makes the backend believe it. Client-sent copies of both are always dropped, so
+// nobody can name their own IP. BACKEND_URL and PROXY_SECRET are read per request (runtime env).
+// Without PROXY_SECRET (local dev) neither header is sent and the backend uses the socket address.
+// x-real-ip is only trustworthy where the platform overwrites it: on Vercel (which sets VERCEL=1
+// itself) or behind a proxy you control (TRUST_X_REAL_IP=true). Anywhere else a client could send
+// its own, so neither header is sent and a once-per-process warning says why.
+const CLIENT_IP_HEADER = "x-talaan-client-ip";
+const PROXY_SECRET_HEADER = "x-talaan-proxy-secret";
+const warned = new Set<string>();
+
+function warnOnce(key: string, message: string) {
+  if (warned.has(key)) return;
+  warned.add(key);
+  console.warn(message);
+}
+
+function realIpTrusted() {
+  return process.env.VERCEL === "1" || /^(1|true)$/i.test(process.env.TRUST_X_REAL_IP?.trim() ?? "");
+}
+
+// The secret only travels over https, or to this machine (local dev). A plain-http BACKEND_URL to
+// another host would put it on the wire in clear text, and whoever read it could name any client IP.
+function secureBackend(url: URL) {
+  const host = url.hostname;
+  return url.protocol === "https:" || host === "localhost" || host === "[::1]" || /^127(\.\d{1,3}){3}$/.test(host);
+}
+
+function forwardToApi(request: NextRequest) {
+  const { pathname, search } = request.nextUrl;
+  const backend = (process.env.BACKEND_URL || "http://localhost:8000").replace(/\/+$/, "");
+  const headers = new Headers(request.headers);
+  headers.delete(CLIENT_IP_HEADER);
+  headers.delete(PROXY_SECRET_HEADER);
+  const secret = process.env.PROXY_SECRET?.trim();
+  const ip = request.headers.get("x-real-ip")?.trim();
+  const target = new URL(`${backend}${pathname}${search}`);
+  if (secret && !secureBackend(target)) {
+    warnOnce(
+      "insecure",
+      `proxy: not sending PROXY_SECRET to ${target.host}: BACKEND_URL must be https:// (or a loopback host). ` +
+        "Client IPs are not being forwarded.",
+    );
+  } else if (secret && !realIpTrusted()) {
+    warnOnce(
+      "untrusted",
+      "proxy: PROXY_SECRET is set but client IPs are not being forwarded (x-real-ip is not trusted here). " +
+        "Set VERCEL=1 (Vercel does this itself) or TRUST_X_REAL_IP=true behind a proxy you control.",
+    );
+  } else if (secret) {
+    // The secret goes even without an IP: the API then logs "unusable X-Talaan-Client-IP" once
+    // instead of silently putting everyone in the socket bucket.
+    headers.set(PROXY_SECRET_HEADER, secret);
+    if (ip) headers.set(CLIENT_IP_HEADER, ip);
+  }
+  return NextResponse.rewrite(target, { request: { headers } });
+}
+
 export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+  if (pathname === "/api" || pathname.startsWith("/api/")) return forwardToApi(request);
   if (PUBLIC.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return NextResponse.next();
   if (COOKIES.some((name) => request.cookies.has(name))) return NextResponse.next();
 
@@ -19,8 +81,8 @@ export function proxy(request: NextRequest) {
   return NextResponse.redirect(login);
 }
 
-// The matcher is the only /api exclusion: /api is the backend (rewritten in next.config.ts) and
-// answers 401 itself, so the proxy never runs there.
+// /api is matched on purpose (forwardToApi above); it needs no cookie guard because the backend
+// answers 401 itself.
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|icon.svg|robots.txt|sitemap.xml).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg|robots.txt|sitemap.xml).*)"],
 };

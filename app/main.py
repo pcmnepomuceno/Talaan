@@ -6,13 +6,20 @@ Run locally with:
 
 from fastapi import FastAPI, Request
 
-from app import health, security
+from app import config, health, security
 from app.applications import router as applications
 from app.auth import router as auth
 from app.interviews import router as interviews
 from app.users import router as users
 
-app = FastAPI(title="Talaan", description="Job application tracker")
+if config.PRODUCTION and (problems := config.production_problems()):
+    # Fail fast at import (uvicorn exits) instead of serving with a dev-grade config.
+    raise RuntimeError("Refusing to start in production: " + "; ".join(problems))
+
+# Production serves no API docs: the Origin check trusts `Sec-Fetch-Site: same-origin`, so Swagger
+# at /docs on the API's own origin could call every write route.
+_docs_off = {"docs_url": None, "redoc_url": None, "openapi_url": None} if config.PRODUCTION else {}
+app = FastAPI(title="Talaan", description="Job application tracker", **_docs_off)
 
 # Registered before no_store so it sits inside it: its 403s still get Cache-Control: no-store.
 app.middleware("http")(security.origin_check)

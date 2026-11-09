@@ -110,3 +110,47 @@ def test_trust_proxy_parsing(value, expected):
         env={**os.environ, "TRUST_PROXY": value}, capture_output=True, text=True, check=False,
     )
     assert r.stdout.strip() == expected, r.stderr
+
+
+def test_proxy_secret_shorter_than_32_fails_startup_naming_the_variable():
+    r = import_config(PROXY_SECRET="x" * 31)
+    assert r.returncode != 0
+    assert "PROXY_SECRET" in r.stderr
+
+
+@pytest.mark.parametrize("value", ["", "   "])
+def test_proxy_secret_blank_means_unset(value):
+    r = subprocess.run(
+        [sys.executable, "-c", "from app import config; print(config.PROXY_SECRET)"],
+        env={**os.environ, "PROXY_SECRET": value}, capture_output=True, text=True, check=False,
+    )
+    assert r.returncode == 0 and r.stdout.strip() == "None"
+
+
+def test_proxy_secret_of_32_is_accepted_and_stripped():
+    r = subprocess.run(
+        [sys.executable, "-c", "from app import config; print(len(config.PROXY_SECRET))"],
+        env={**os.environ, "PROXY_SECRET": " " + "x" * 32 + " "}, capture_output=True, text=True, check=False,
+    )
+    assert r.returncode == 0 and r.stdout.strip() == "32"
+
+
+WINDOW_VARS = [
+    "LOGIN_IP_WINDOW_SECONDS",
+    "LOGIN_EMAIL_WINDOW_SECONDS",
+    "SIGNUP_IP_WINDOW_SECONDS",
+    "ACCOUNT_DELETE_USER_WINDOW_SECONDS",
+    "ACCOUNT_DELETE_IP_WINDOW_SECONDS",
+]
+
+
+@pytest.mark.parametrize("name", WINDOW_VARS)
+def test_window_above_the_seven_day_ceiling_fails_startup_naming_the_variable(name):
+    # purge keeps rate-limit events for 7 days only; a longer window would count too few attempts.
+    r = import_config(**{name: "604801"})
+    assert r.returncode != 0
+    assert f"ValueError: {name} must be <= 604800, got 604801" in r.stderr
+
+
+def test_windows_at_the_ceiling_are_accepted():
+    assert import_config(**dict.fromkeys(WINDOW_VARS, "604800")).returncode == 0
