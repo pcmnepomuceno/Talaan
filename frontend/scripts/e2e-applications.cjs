@@ -212,7 +212,7 @@ withEnv(async ({ base, createInvite }) => {
   const stSk = await page.evaluate(() => (window.__skObs.disconnect(), window.__sk));
   page.off("request", onSt);
   check("status change: no skeleton in the detail pane from confirm until after the refetch", stSk.detail === 0, JSON.stringify(stSk));
-  check("status change: the background refetch happened", stGets.length >= 1, `${stGets.length} GET`);
+  check("status change: no refetch (the PATCH response is the fresh row)", stGets.length === 0, `${stGets.length} GET`);
   check("toast 'Status updated.'", (await toastText()).some((t) => t.includes("Status updated.")));
   const sAfter = await (await page.request.get(`${base}/api/v1/applications/${sid}`)).json();
   check("status change persisted and the server filled date_applied (today, Manila)", sAfter.status === "applied" && sAfter.date_applied === manilaToday, JSON.stringify([sAfter.status, sAfter.date_applied, manilaToday]));
@@ -220,6 +220,119 @@ withEnv(async ({ base, createInvite }) => {
   check("focus is back on Change status", await page.evaluate(() => document.activeElement?.textContent === "Change status"));
   check("list row shows the new status", (await page.getByRole("list", { name: "Applications" }).getByRole("link", { name: /Status Role/ }).innerText()).includes("Applied"));
   await page.request.delete(`${base}/api/v1/applications/${sid}`);
+
+  // 10c. PR #23 review: a status change at 1280 never blanks the list pane. 120 extra rows, Load more
+  // twice, the list pane scrolled down, a row near the bottom opened, then Change status.
+  const seeded = [];
+  for (let i = 1; i <= 120; i++) {
+    const r = await page.request.post(`${base}/api/v1/applications`, { data: { company: `Pane Co ${i}`, job_name: `Pane Role ${i}`, status: "applied", mode_of_work: "remote" } });
+    if (!r.ok()) throw new Error("seed failed " + r.status());
+    seeded.push((await r.json()).id);
+  }
+  const pane = page.locator('section[aria-label="Applications"]');
+  const paneLinks = pane.getByRole("list", { name: "Applications" }).getByRole("link");
+  await page.goto(`${base}/applications`);
+  await page.getByRole("button", { name: "Load more" }).click();
+  await page.waitForFunction(() => document.querySelectorAll('ul[aria-label="Applications"] a').length === 100);
+  await page.getByRole("button", { name: "Load more" }).click();
+  await page.waitForFunction(() => document.querySelectorAll('ul[aria-label="Applications"] a').length === 121);
+  const target = paneLinks.nth(110);
+  const targetHref = await target.getAttribute("href");
+  await target.scrollIntoViewIfNeeded();
+  await target.click();
+  await urlIs(new RegExp(`${targetHref}$`));
+  await page.getByRole("button", { name: "Change status" }).waitFor();
+  await page.getByText("No interviews yet.").waitFor();
+  const scrollBefore = await pane.evaluate((el) => el.scrollTop);
+  check("1280: list pane scrolled down before the change", scrollBefore > 1000, String(scrollBefore));
+  const watchSkeletons = () =>
+    page.evaluate(() => {
+      window.__pane = { list: 0, detail: 0 };
+      const look = () => {
+        for (const el of document.querySelectorAll(".animate-ledger-pulse")) {
+          if (el.closest('section[aria-label="Applications"]')) window.__pane.list++;
+          if (el.closest('section[aria-label="Application detail"]')) window.__pane.detail++;
+        }
+      };
+      window.__paneObs = new MutationObserver(look);
+      window.__paneObs.observe(document.body, { subtree: true, childList: true, attributes: true });
+    });
+  const stopSkeletons = () => page.evaluate(() => (window.__paneObs.disconnect(), window.__pane));
+  const gets = [];
+  const onGet = (r) => r.method() === "GET" && /\/api\/v1\/applications(\?|\/\d+)/.test(r.url()) && gets.push(pathOf(r.url()));
+  await watchSkeletons();
+  page.on("request", onGet);
+  await page.getByRole("button", { name: "Change status" }).click();
+  await page.getByRole("radio", { name: "Offered" }).check();
+  await page.getByRole("button", { name: "Update status" }).click();
+  // .catch: on a list that dropped its loaded pages the row never comes back; the checks below say so.
+  await page.waitForFunction((h) => document.querySelector(`ul[aria-label="Applications"] a[href="${h}"]`)?.textContent.includes("Offered"), targetHref, { timeout: 10000 }).catch(() => {});
+  await page.waitForTimeout(1500);
+  const paneSk = await stopSkeletons();
+  page.off("request", onGet);
+  check("1280 status change (All): no skeleton in the list or detail pane", paneSk.list === 0 && paneSk.detail === 0, JSON.stringify(paneSk));
+  check("1280 status change (All): every loaded page remains (121 rows)", (await paneLinks.count()) === 121);
+  const scrollAfter = await pane.evaluate((el) => el.scrollTop);
+  check("1280 status change (All): list scroll position kept", Math.abs(scrollAfter - scrollBefore) <= 1, `${scrollBefore} -> ${scrollAfter}`);
+  check("1280 status change (All): the row shows the new status", ((await pane.locator(`a[href="${targetHref}"]`).innerText({ timeout: 2000 }).catch(() => "")) || "").includes("Offered"));
+  check("1280 status change (All): no list or detail GET", gets.length === 0, JSON.stringify(gets));
+  check("1280 status change: Change status enabled right away", await page.getByRole("button", { name: "Change status" }).isEnabled());
+
+  // Dialog focus: a slow PATCH that fails. Focus stays in the dialog while busy, then the checked radio.
+  const targetId = targetHref.split("/").pop();
+  await page.route(`**/api/v1/applications/${targetId}`, async (route) => {
+    if (route.request().method() !== "PATCH") return route.fallback();
+    await new Promise((r) => setTimeout(r, 1200));
+    await route.fulfill({ status: 500, contentType: "application/json", body: '{"detail":"Server error"}' });
+  });
+  await page.getByRole("button", { name: "Change status" }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("dialog", { name: "Change status" }).waitFor();
+  await page.keyboard.press("ArrowDown"); // Offered -> Accepted
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(400);
+  const busyFocus = await page.evaluate(() => ({ inDialog: !!document.activeElement?.closest("dialog[open]"), tag: document.activeElement?.tagName, busy: document.querySelector("dialog[open]")?.getAttribute("aria-busy") }));
+  check("dialog busy: focus stays inside the dialog", busyFocus.busy === "true" && busyFocus.inDialog, JSON.stringify(busyFocus));
+  await page.getByText("Talaan isn't responding right now. Try again in a moment.").or(page.getByText("Couldn't change the status. Try again.")).first().waitFor();
+  await page.waitForTimeout(200);
+  const failFocus = await page.evaluate(() => ({ radio: document.activeElement?.matches('dialog[open] input[type="radio"]:checked') ?? false, label: document.activeElement?.closest("label")?.textContent ?? document.activeElement?.tagName }));
+  check("dialog failed save: the checked radio has focus", failFocus.radio, JSON.stringify(failFocus));
+  await page.unroute(`**/api/v1/applications/${targetId}`);
+  await page.keyboard.press("Escape");
+
+  // Filtered view: the row leaves, Load more asks for the server's next unsent row, no gap.
+  await page.goto(`${base}/applications?status=applied`);
+  await page.waitForFunction(() => document.querySelectorAll('ul[aria-label="Applications"] a').length === 50);
+  const first = paneLinks.first();
+  const firstHref = await first.getAttribute("href");
+  await first.click();
+  await urlIs(new RegExp(`${firstHref.replace("?", "\\?")}$`));
+  await page.getByRole("button", { name: "Change status" }).waitFor();
+  await page.getByText("No interviews yet.").waitFor();
+  const offsets = [];
+  const onList = (r) => r.method() === "GET" && /\/api\/v1\/applications\?/.test(r.url()) && offsets.push(new URL(r.url()).searchParams.get("offset"));
+  await watchSkeletons();
+  page.on("request", onList);
+  await page.getByRole("button", { name: "Change status" }).click();
+  await page.getByRole("radio", { name: "Rejected" }).check();
+  await page.getByRole("button", { name: "Update status" }).click();
+  await page.waitForFunction(() => document.querySelectorAll('ul[aria-label="Applications"] a').length === 49, null, { timeout: 10000 }).catch(() => {});
+  await page.waitForTimeout(800);
+  check("1280 status change (filtered): 49 rows held after the row left", (await paneLinks.count()) === 49, String(await paneLinks.count()));
+  const fSk = await stopSkeletons();
+  check("1280 status change (filtered): the row leaves, no skeleton in either pane", fSk.list === 0 && fSk.detail === 0, JSON.stringify(fSk));
+  check("1280 status change (filtered): no list refetch", offsets.length === 0, JSON.stringify(offsets));
+  await page.getByRole("button", { name: "Load more" }).click();
+  await page.waitForFunction(() => document.querySelectorAll('ul[aria-label="Applications"] a').length === 99);
+  await page.getByRole("button", { name: "Load more" }).click();
+  await page.waitForFunction(() => document.querySelectorAll('ul[aria-label="Applications"] a').length === 118);
+  page.off("request", onList);
+  check("filtered Load more offsets follow the held rows (49, then 99)", JSON.stringify(offsets) === '["49","99"]', JSON.stringify(offsets));
+  const apiIds = [];
+  for (const off of [0, 100]) apiIds.push(...(await (await page.request.get(`${base}/api/v1/applications?status=applied&limit=100&offset=${off}`)).json()).items.map((a) => a.id));
+  const shownIds = (await paneLinks.evaluateAll((as) => as.map((a) => a.getAttribute("href")))).map((h) => Number(h.split("?")[0].split("/").pop()));
+  check("filtered list equals the server's set: no row skipped or repeated", JSON.stringify(shownIds) === JSON.stringify(apiIds), `${shownIds.length} vs ${apiIds.length}`);
+  for (const sid2 of seeded) await page.request.delete(`${base}/api/v1/applications/${sid2}`);
 
   // 11. delete -> empty again
   await page.goto(`${base}/applications/${id}?status=offered`);
@@ -273,6 +386,30 @@ withEnv(async ({ base, createInvite }) => {
   check("Load more adds the last 10 and the button disappears", (await page.getByRole("button", { name: "Load more" }).count()) === 0);
   check("announced in the live region", (await toastText()).some((t) => t.includes("10 more applications loaded")));
   check("focus moved to the first new row", await page.evaluate(() => document.activeElement?.tagName === "A" && document.activeElement.closest("ul")?.getAttribute("aria-label") === "Applications"));
+
+  // 13. waking-up line (PR #23 review item 5): first load only, never adds page height at 1280.
+  for (const [w, h] of [[390, 844], [768, 1024], [1280, 900]]) {
+    const p2 = await ctx.newPage();
+    await p2.setViewportSize({ width: w, height: h });
+    await p2.route("**/api/v1/applications?*", async (route) => {
+      await new Promise((r) => setTimeout(r, 4500));
+      await route.fallback();
+    });
+    await p2.goto(`${base}/applications`);
+    await p2.waitForTimeout(1000);
+    const before = await p2.evaluate(() => ({ sh: document.documentElement.scrollHeight, ih: innerHeight }));
+    await p2.waitForTimeout(2600);
+    const during = await p2.evaluate(() => ({
+      sh: document.documentElement.scrollHeight,
+      ih: innerHeight,
+      shown: [...document.querySelectorAll("p[aria-live=polite]")].some((el) => el.textContent.includes("Starting up") && el.offsetParent !== null),
+    }));
+    check(`${w}px: waking-up line shows on a slow first load`, during.shown);
+    if (w >= 1280) check(`${w}px: the line adds no page height (no page scroll at h-dvh)`, during.sh === before.sh && during.sh <= during.ih, JSON.stringify({ before, during }));
+    else console.log(`INFO  ${w}px page height before/with the line: ${before.sh} / ${during.sh} (viewport ${during.ih}); below 1280 the line is in normal flow`);
+    await p2.getByRole("list", { name: "Applications" }).waitFor({ timeout: 15000 });
+    await p2.close();
+  }
 
   check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
   await browser.close().catch(() => {});
