@@ -17,7 +17,7 @@ type Load = { kind: "loading" } | { kind: "missing" } | { kind: "error" } | { ki
 export function EditInterviewScreen({ id, interviewId, qs }: { id: string; interviewId: string; qs: string }) {
   const appId = parseId(id);
   const n = parseId(interviewId);
-  const [load, setLoad] = useState<{ n: number | null; tries: number; result: Load } | null>(null);
+  const [load, setLoad] = useState<{ appId: number; n: number; tries: number; result: Load } | null>(null);
   const [tries, setTries] = useState(0);
   // Empty live region first, text after mount: a region added together with its text is often not announced.
   const [mounted, setMounted] = useState(false);
@@ -33,11 +33,12 @@ export function EditInterviewScreen({ id, interviewId, qs }: { id: string; inter
       (interview) =>
         live &&
         setLoad({
+          appId,
           n,
           tries,
           result: interview && interview.job_application_id === appId ? { kind: "ready", interview } : { kind: "missing" },
         }),
-      () => live && setLoad({ n, tries, result: { kind: "error" } }),
+      () => live && setLoad({ appId, n, tries, result: { kind: "error" } }),
     );
     return () => {
       live = false;
@@ -45,7 +46,9 @@ export function EditInterviewScreen({ id, interviewId, qs }: { id: string; inter
   }, [n, appId, tries]);
 
   const backHref = `/applications/${id}${qs}`;
-  const result: Load = n === null || appId === null ? { kind: "missing" } : load?.n === n && load.tries === tries ? load.result : { kind: "loading" };
+  // Keyed by both ids: a result for the same interview under another application (only [id] changed) is not reused.
+  const fresh = load?.appId === appId && load.n === n && load.tries === tries;
+  const result: Load = n === null || appId === null ? { kind: "missing" } : fresh ? load.result : { kind: "loading" };
 
   return (
     <>

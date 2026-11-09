@@ -6,7 +6,7 @@ import { EditInterviewScreen } from "../src/app/(app)/applications/[id]/intervie
 import { InterviewForm } from "../src/components/interview-form";
 import { ToastProvider } from "../src/components/toast";
 import { clearCaches } from "../src/lib/cache";
-import { type Fake, installFake, json } from "./helpers/fake-api";
+import { type Fake, installFake, json, makeInterview } from "./helpers/fake-api";
 
 // Lets one test make the submit-time conversion throw (it cannot after validate() passes today).
 const mapFail = vi.hoisted(() => ({ once: false }));
@@ -268,6 +268,17 @@ it("edit: a stored time outside 1900-2200 in PHT opens, and a Notes-only edit sa
   expect(screen.queryByText("Enter a year between 1900 and 2200.")).toBeNull();
   expect(fake.callsTo("PATCH", /^\/interviews\/1$/)[0].body).toEqual({ remarks: "Bring the portfolio." });
   expect(await screen.findByText("Interview saved.")).toBeTruthy();
+});
+
+it("edit: when only the application id in the URL changes, the old form never shows under the new application", async () => {
+  fake.db.interviews.push(makeInterview(5, 1, { interviewer: "Lea Cruz" }));
+  const view = mountEdit("5", "1");
+  await screen.findByDisplayValue("Lea Cruz");
+  fake.on("GET", /^\/interviews\/5$/, () => new Promise<Response>(() => {})); // the refetch never answers
+  view.rerender(wrap(<EditInterviewScreen id="2" interviewId="5" qs="" />));
+  expect(screen.queryByDisplayValue("Lea Cruz")).toBeNull();
+  expect(screen.queryByRole("button", { name: /Save interview/ })).toBeNull();
+  expect(document.querySelector("li.animate-ledger-pulse")).toBeTruthy();
 });
 
 it("edit: a load failure offers Retry", async () => {
