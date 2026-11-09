@@ -14,7 +14,7 @@ import {
   updateApplication,
   updateInterview,
 } from "../src/lib/api";
-import { clearCaches, getList, onCachesCleared, setList } from "../src/lib/cache";
+import { clearCaches, getDetail, getList, onCachesCleared, setDetail, setList } from "../src/lib/cache";
 import { ApiError } from "../src/lib/http";
 import { MappingError, toApplicationInput } from "../src/lib/mappers";
 import { type Fake, installFake, json, makeApp } from "./helpers/fake-api";
@@ -148,17 +148,17 @@ it("createInterview: POST nested path, +08:00 body, resolves to the id only", as
 });
 
 it("updateInterview: flat PATCH with only changed fields; resolves to the id", async () => {
-  const id = await updateInterview(1, { ...ivInput }, { ...ivInput, outcome: "good" });
+  const id = await updateInterview(1, 1, { ...ivInput }, { ...ivInput, outcome: "good" });
   expect(id).toBe(1);
   expect(fake.callsTo("PATCH", /^\/interviews\/1$/)[0].body).toEqual({ outcome: "good" });
 });
 
 it("deleteInterview: flat DELETE; 404 is success; other errors throw", async () => {
-  await deleteInterview(1);
+  await deleteInterview(1, 1);
   expect(fake.callsTo("DELETE", /^\/interviews\/1$/)).toHaveLength(1);
-  await expect(deleteInterview(999)).resolves.toBeUndefined();
+  await expect(deleteInterview(1, 999)).resolves.toBeUndefined();
   fake.failNext("DELETE", /^\/interviews\/2$/, 500);
-  await expect(deleteInterview(2)).rejects.toMatchObject({ status: 500 });
+  await expect(deleteInterview(1, 2)).rejects.toMatchObject({ status: 500 });
 });
 
 it("getInterview: 404 is null", async () => {
@@ -172,7 +172,7 @@ it("an accepted interview write clears the caches even when the response does no
   fake.on("POST", /interviews$/, () => json(201, { id: 55, mode: "phone", outcome: null }));
   expect(await createInterview(1, ivInput)).toBe(55);
   fake.on("PATCH", /^\/interviews\/1$/, () => json(200, { id: 1, mode: "phone", outcome: null }));
-  expect(await updateInterview(1, ivInput, { ...ivInput, outcome: "bad" })).toBe(1);
+  expect(await updateInterview(1, 1, ivInput, { ...ivInput, outcome: "bad" })).toBe(1);
   expect(cleared).toHaveBeenCalledTimes(2);
   off();
 });
@@ -181,14 +181,31 @@ it("a failed interview write leaves the caches alone; a 404 clears them", async 
   const entry = { items: [], total: 0, nextOffset: 0 };
   setList(undefined, entry);
   fake.failNext("PATCH", /^\/interviews\/1$/, 500);
-  await updateInterview(1, ivInput, { ...ivInput, outcome: "bad" }).catch(() => {});
+  await updateInterview(1, 1, ivInput, { ...ivInput, outcome: "bad" }).catch(() => {});
   expect(getList()).toBe(entry);
-  await expect(updateInterview(999, ivInput, { ...ivInput, outcome: "bad" })).rejects.toMatchObject({ status: 404 });
+  await expect(updateInterview(1, 999, ivInput, { ...ivInput, outcome: "bad" })).rejects.toMatchObject({ status: 404 });
   expect(getList()).toBeUndefined();
   setList(undefined, entry);
   await expect(createInterview(999, ivInput)).rejects.toMatchObject({ status: 404 });
   expect(getList()).toBeUndefined();
   setList(undefined, entry);
-  await deleteInterview(1);
+  await deleteInterview(1, 999); // already gone: the application may be gone too
   expect(getList()).toBeUndefined();
+});
+
+it.each([
+  ["createInterview", () => createInterview(1, ivInput)],
+  ["updateInterview", () => updateInterview(1, 1, ivInput, { ...ivInput, outcome: "bad" })],
+  ["deleteInterview", () => deleteInterview(1, 1)],
+])("%s clears only that application's detail: lists and other details survive", async (_n, write) => {
+  const entry = { items: [], total: 0, nextOffset: 0 };
+  setList(undefined, entry);
+  setList("applied", entry);
+  setDetail(1, { application: {} as never, interviews: null });
+  setDetail(2, { application: {} as never, interviews: null });
+  await write();
+  expect(getList()).toBe(entry);
+  expect(getList("applied")).toBe(entry);
+  expect(getDetail(1)).toBeUndefined();
+  expect(getDetail(2)).toBeDefined();
 });

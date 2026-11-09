@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getApplication, getInterviews, parseId } from "@/lib/api";
-import { cacheVersion, dropDetail, getDetail, onCachesCleared, setDetail } from "@/lib/cache";
+import { cacheVersion, detailStamp, dropDetail, getDetail, onCachesCleared, setDetail } from "@/lib/cache";
 import { ApiError } from "@/lib/http";
 import type { Page } from "@/lib/mappers";
 import type { Application, Interview } from "@/lib/types";
@@ -48,8 +48,12 @@ export function useApplicationDetail(id: string | undefined) {
   }
 
   const n = id === undefined ? null : parseId(id);
+  const open = useRef(n); // the clear listener below is registered once; it needs the current id
+  useEffect(() => {
+    open.current = n;
+  });
 
-  // A response whose request started before a clearCaches() (a write, login, logout) is stale: it
+  // A response whose request started before a clearCaches() or clearDetail() of its id is stale: it
   // is neither applied nor cached. `live` alone misses one that lands before React re-renders.
   useEffect(() => {
     removing.current = false;
@@ -59,7 +63,8 @@ export function useApplicationDetail(id: string | undefined) {
     if (n === null || n === removed) return;
     let live = true;
     const v = cacheVersion();
-    const current = () => live && cacheVersion() === v;
+    const d = detailStamp(n);
+    const current = () => live && cacheVersion() === v && detailStamp(n) === d;
     getApplication(n).then(
       (a) => {
         if (a === null) dropDetail(n); // gone (or never ours): a revisit must not show the old record
@@ -76,7 +81,8 @@ export function useApplicationDetail(id: string | undefined) {
     if (n === null || n === removed) return;
     let live = true;
     const v = cacheVersion();
-    const current = () => live && cacheVersion() === v;
+    const d = detailStamp(n);
+    const current = () => live && cacheVersion() === v && detailStamp(n) === d;
     getInterviews(n).then(
       (p) => current() && setIvRes(p),
       (e) => {
@@ -109,7 +115,8 @@ export function useApplicationDetail(id: string | undefined) {
   // and refetches: the user sees the skeleton, then fresh data.
   useEffect(
     () =>
-      onCachesCleared(() => {
+      onCachesCleared((cleared) => {
+        if (cleared !== undefined && cleared !== open.current) return; // another application's detail
         if (removing.current) return; // our own delete: this id must not be fetched again
         retryApp();
         retryInterviews();

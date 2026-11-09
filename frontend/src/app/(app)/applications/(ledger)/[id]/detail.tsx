@@ -67,15 +67,15 @@ export function ApplicationDetail() {
     const target = deleting;
     setBusy(true);
     try {
-      await deleteInterview(target.id); // 404 resolves too: already gone is what we wanted
+      await deleteInterview(a.id, target.id); // 404 resolves too: already gone is what we wanted
     } catch {
       toast.error("Couldn't delete the interview. Try again."); // the dialog stays open
       return;
     } finally {
       setBusy(false);
     }
-    // Timing-sensitive: deleteInterview cleared the caches, which queued a refetch and a reset to "nothing
-    // loaded". This cache write must run before React renders that clear, so the render finds the page
+    // Timing-sensitive: deleteInterview cleared this application's detail, which queued a refetch and a
+    // reset to "nothing loaded" (the list is untouched: an interview changes no list field). This cache write must run before React renders that clear, so the render finds the page
     // minus the row (the cached/refreshing path) instead of a skeleton; the refetch then replaces it. It
     // works only because the await's continuation runs before React's scheduled render: adding any await
     // between deleteInterview and setDetail brings back the skeleton flash. The skeleton check in

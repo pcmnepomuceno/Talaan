@@ -62,7 +62,8 @@ export function useApplicationList(status: Status | undefined) {
   });
   const moreBusy = useRef(false);
 
-  useEffect(() => onCachesCleared(() => setTick((n) => n + 1)), []);
+  // Only a full clear refetches: an interview write clears one detail (an id is passed) and no list row changes.
+  useEffect(() => onCachesCleared((id) => id === undefined && setTick((n) => n + 1)), []);
 
   useEffect(() => {
     let live = true;

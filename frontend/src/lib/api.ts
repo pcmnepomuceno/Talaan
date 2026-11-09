@@ -1,7 +1,7 @@
 // Real applications client (F5). Screens import only these functions. Every request goes through
 // request() in http.ts; every response goes through mappers.ts. The three writes clear the
 // in-memory caches themselves (cache.ts), so no screen can forget to.
-import { clearCaches } from "./cache";
+import { clearCaches, clearDetail } from "./cache";
 import { ApiError, request } from "./http";
 import {
   type ApplicationInput,
@@ -126,6 +126,8 @@ export async function getInterview(id: number): Promise<Interview | null> {
 
 // Interview writes follow the F5 rule: caches are cleared as soon as the server has the row, before
 // the response is read, and only the id comes back. Saving never touches the application's status.
+// Only that application's detail is cleared (an interview changes no list field); a 404 clears
+// everything, because the application itself may be gone and the lists stale.
 
 /** Rejects with ApiError(404) when the application is gone. Resolves to the new interview's id. */
 export async function createInterview(applicationId: number, input: InterviewInput): Promise<number> {
@@ -136,28 +138,30 @@ export async function createInterview(applicationId: number, input: InterviewInp
     if (e instanceof ApiError && e.status === 404) clearCaches();
     throw e;
   }
-  clearCaches();
+  clearDetail(applicationId);
   return idOf(raw);
 }
 
-/** Sends only the fields that differ from `initial`. Resolves to `id`; rejects with ApiError(404) when it is gone. */
-export async function updateInterview(id: number, initial: InterviewInput, next: InterviewInput): Promise<number> {
+/** `applicationId` is the interview's parent. Sends only the changed fields. Resolves to `id`; rejects with ApiError(404) when it is gone. */
+export async function updateInterview(applicationId: number, id: number, initial: InterviewInput, next: InterviewInput): Promise<number> {
   try {
     await request<unknown>(`${INTERVIEWS}/${id}`, { method: "PATCH", body: toInterviewPatchBody(initial, next) });
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) clearCaches();
     throw e;
   }
-  clearCaches();
+  clearDetail(applicationId);
   return id;
 }
 
-/** 404 means it is already gone, which is what the caller wanted: resolves either way. */
-export async function deleteInterview(id: number): Promise<void> {
+/** 404 means it is already gone, which is what the caller wanted: resolves either way (and clears everything then). */
+export async function deleteInterview(applicationId: number, id: number): Promise<void> {
   try {
     await request(`${INTERVIEWS}/${id}`, { method: "DELETE" });
   } catch (e) {
     if (!(e instanceof ApiError && e.status === 404)) throw e;
+    clearCaches();
+    return;
   }
-  clearCaches();
+  clearDetail(applicationId);
 }
