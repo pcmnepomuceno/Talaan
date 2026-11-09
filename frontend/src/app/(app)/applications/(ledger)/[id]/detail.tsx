@@ -101,7 +101,8 @@ export function ApplicationDetail() {
           <h3 ref={ivHeading} id="d-interviews" tabIndex={-1} className="text-section-title text-text-secondary outline-none">
             Interviews
           </h3>
-          {iv.kind === "ready" && iv.items.length > 0 && (
+          {/* Loading, failed or non-empty: the create route does not need the list. Empty has its own button. */}
+          {!(iv.kind === "ready" && iv.items.length === 0) && (
             <Button variant="secondary" href={addHref}>
               Add interview
             </Button>

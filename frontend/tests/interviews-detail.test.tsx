@@ -59,11 +59,23 @@ it("the empty state offers the same action", async () => {
   expect(add[0].getAttribute("href")).toBe("/applications/1/interviews/new");
 });
 
-it("no Add interview while interviews are loading or failed", async () => {
+it("Add interview stays in the header when the interviews list failed, keeping the status filter", async () => {
+  search = "status=interviewing";
   fake.failNext("GET", /^\/applications\/1\/interviews/);
   mount();
   await screen.findByText("Couldn't load interviews.");
-  expect(screen.queryByRole("link", { name: "Add interview" })).toBeNull();
+  const add = screen.getAllByRole("link", { name: "Add interview" });
+  expect(add).toHaveLength(1);
+  expect(add[0].getAttribute("href")).toBe("/applications/1/interviews/new?status=interviewing");
+});
+
+it("Add interview stays in the header while the interviews list is loading", async () => {
+  fake.on("GET", /^\/applications\/1\/interviews/, () => new Promise<Response>(() => {}));
+  mount();
+  await screen.findByText("Loading interviews…");
+  const add = screen.getAllByRole("link", { name: "Add interview" });
+  expect(add).toHaveLength(1);
+  expect(add[0].getAttribute("href")).toBe("/applications/1/interviews/new");
 });
 
 it("each row has Edit and Delete whose accessible names include the date; Edit links to the edit route", async () => {
