@@ -248,3 +248,17 @@ def test_unusable_header_with_valid_secret_warns_once(proxy_secret, monkeypatch,
         rate_limit.client_ip(_proxied(ip="garbage"))
         rate_limit.client_ip(_proxied(ip="garbage"))
     assert len([r for r in caplog.records if "X-Talaan-Client-IP" in r.getMessage()]) == 1
+
+
+def test_secret_without_ip_header_warns_once_and_uses_socket(proxy_secret, monkeypatch, caplog):
+    """What the proxy sends when x-real-ip is missing: the secret alone. The bucket is the socket
+    peer, never the shared literal "unknown" while a socket address exists, and the API says so."""
+    monkeypatch.setattr(rate_limit, "_warned", set())
+    monkeypatch.setattr(rate_limit.logger, "disabled", False)  # alembic fileConfig disables it
+    with caplog.at_level("WARNING", logger="app.auth.rate_limit"):
+        assert rate_limit.client_ip(_proxied(ips=[])) == "203.0.113.9"
+        assert rate_limit.client_ip(_proxied(ips=[])) == "203.0.113.9"
+    warnings = [r.getMessage() for r in caplog.records if "X-Talaan-Client-IP" in r.getMessage()]
+    assert len(warnings) == 1 and "0 value(s)" in warnings[0]
+    no_peer = Request({"type": "http", "headers": [(b"x-talaan-proxy-secret", SECRET.encode())], "client": None})
+    assert rate_limit.client_ip(no_peer) == "unknown"

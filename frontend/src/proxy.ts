@@ -27,9 +27,11 @@ function forwardToApi(request: NextRequest) {
   headers.delete(PROXY_SECRET_HEADER);
   const secret = process.env.PROXY_SECRET?.trim();
   const ip = request.headers.get("x-real-ip")?.trim();
-  if (secret && ip) {
-    headers.set(CLIENT_IP_HEADER, ip);
+  if (secret) {
+    // The secret goes even without an IP: the API then logs "unusable X-Talaan-Client-IP" once
+    // instead of silently putting everyone in the socket bucket.
     headers.set(PROXY_SECRET_HEADER, secret);
+    if (ip) headers.set(CLIENT_IP_HEADER, ip);
   }
   return NextResponse.rewrite(new URL(`${backend}${pathname}${search}`), { request: { headers } });
 }

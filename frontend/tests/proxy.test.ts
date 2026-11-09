@@ -109,11 +109,11 @@ describe("api forwarding", () => {
     expect(upstream(res, PROOF)).toBeNull();
   });
 
-  it("sends neither header when there is no x-real-ip (never the secret alone)", () => {
+  it("sends the secret without an IP header when x-real-ip is missing (so the API warns)", () => {
     vi.stubEnv("PROXY_SECRET", SECRET);
     const res = api({ [CLIENT]: "6.6.6.6" });
     expect(upstream(res, CLIENT)).toBeNull();
-    expect(upstream(res, PROOF)).toBeNull();
+    expect(upstream(res, PROOF)).toBe(SECRET);
   });
 
   it("keeps the other request headers (cookie, origin)", () => {
