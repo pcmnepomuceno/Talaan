@@ -19,7 +19,7 @@ import { useDetail } from "../screen";
 const heading = "mb-2 text-section-title text-text-secondary";
 
 export function ApplicationDetail() {
-  const { state } = useDetail();
+  const state = useDetail();
   const toast = useToast();
   const status = parseStatus(useSearchParams().get("status"));
   const qs = status ? `?status=${status}` : "";

@@ -25,8 +25,7 @@ export function panes(hasDetail: boolean) {
   };
 }
 
-type DetailValue = { state: DetailState };
-const DetailContext = createContext<DetailValue>({ state: { kind: "loading" } });
+const DetailContext = createContext<DetailState>({ kind: "loading" });
 export const useDetail = () => useContext(DetailContext);
 
 export function ApplicationsScreen({ children }: { children: ReactNode }) {
@@ -204,7 +203,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
               </div>
             </div>
           )}
-          <DetailContext value={{ state }}>{children}</DetailContext>
+          <DetailContext value={state}>{children}</DetailContext>
         </section>
       </main>
       {!hasDetail && (
