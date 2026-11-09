@@ -1,4 +1,4 @@
-"""Admin CLI: `python -m app.admin {create-invite,list-invites,revoke-invite}`.
+"""Admin CLI: `python -m app.admin {create-invite,list-invites,revoke-invite,purge}`.
 
 Runs against DATABASE_URL. There is deliberately no HTTP endpoint for this. The plaintext
 code is printed once by create-invite; it is not stored, logged, or shown again.
@@ -9,12 +9,15 @@ import re
 import sys
 from datetime import timedelta
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 import app.users.models  # noqa: F401  # registers `users`: the invite FK needs it in a bare CLI process
-from app.auth import invites
+from app import config
+from app.auth import invites, rate_limit
 from app.auth.models import InviteCode
 
+BATCH_SIZE = 1000  # rows per DELETE; tests patch it
 DEFAULT_EXPIRES_IN = "14d"
 MAX_HOURS = 365 * 24
 
@@ -42,6 +45,8 @@ def build_parser() -> argparse.ArgumentParser:
     create.add_argument("--expires-in", type=parse_expires_in, default=parse_expires_in(DEFAULT_EXPIRES_IN),
                         metavar="Nd|Nh", help="lifetime, default 14d (1h to 365d)")
 
+    sub.add_parser("purge", help="delete rate-limit events past every window and expired sessions")
+
     sub.add_parser("list-invites", help="list invites (never shows codes or hashes)")
 
     revoke = sub.add_parser("revoke-invite", help="delete an UNUSED invite")
@@ -53,6 +58,47 @@ def status(invite: InviteCode) -> str:
     if invite.used_at is not None:
         return "used"
     return "expired" if invite.expires_at <= invites.utcnow() else "unused"
+
+
+def _delete_in_batches(db: Session, table: str, condition: str, params: dict) -> int:
+    """Delete rows matching `condition` (fixed SQL, never user input), BATCH_SIZE at a time, one
+    short transaction per batch. FOR UPDATE SKIP LOCKED leaves any row another transaction holds
+    (a login pruning its key, a logout) for the next run, so purge never waits on the API and the
+    API never waits on purge. No table or advisory locks."""
+    total = 0
+    while True:
+        deleted = db.execute(
+            text(
+                f"DELETE FROM {table} WHERE id IN "
+                f"(SELECT id FROM {table} WHERE {condition} ORDER BY id LIMIT :n FOR UPDATE SKIP LOCKED)"
+            ),
+            {**params, "n": BATCH_SIZE},
+        ).rowcount
+        db.commit()
+        total += deleted
+        if deleted < BATCH_SIZE:
+            return total
+
+
+def purge(db: Session) -> tuple[int, int]:
+    """(events deleted, sessions deleted). Events older than the longest limiter window are outside
+    every key's window, so removing them cannot change any limiter count. Sessions use the same
+    `expires_at <= now` rule as get_current_user. The cutoff column has no index of its own, so each
+    batch scans the table (fine at this size).
+    ponytail: add an index on created_at / expires_at if purge gets slow."""
+    now = rate_limit.utcnow()
+    longest = max(
+        config.LOGIN_IP_WINDOW_SECONDS,
+        config.LOGIN_EMAIL_WINDOW_SECONDS,
+        config.SIGNUP_IP_WINDOW_SECONDS,
+        config.ACCOUNT_DELETE_USER_WINDOW_SECONDS,
+        config.ACCOUNT_DELETE_IP_WINDOW_SECONDS,
+    )
+    events = _delete_in_batches(
+        db, "rate_limit_events", "created_at <= :cutoff", {"cutoff": now - timedelta(seconds=longest)}
+    )
+    sessions = _delete_in_batches(db, "sessions", "expires_at <= :now", {"now": now})
+    return events, sessions
 
 
 def run(db: Session, argv: list[str]) -> int:
@@ -67,6 +113,11 @@ def run(db: Session, argv: list[str]) -> int:
         db.commit()
         print(f"Invite {invite.id} created, expires {invite.expires_at.isoformat()}")
         print(f"Code (shown once, not stored): {display}")
+        return 0
+
+    if args.command == "purge":
+        events, sessions = purge(db)
+        print(f"Purged {events} rate_limit_events, {sessions} sessions")
         return 0
 
     if args.command == "list-invites":
