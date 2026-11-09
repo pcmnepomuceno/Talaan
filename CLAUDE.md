@@ -112,7 +112,7 @@ Domain packages (`app/`). Applications and interviews have CRUD. A middleware in
 
     app/main.py, config.py, database.py, health.py, security.py (Origin check)
     app/auth/          router, schemas, models [Session, RateLimitEvent, InviteCode], dependencies, security, cookies, rate_limit, invites
-    app/admin.py       CLI: python -m app.admin {create-invite,list-invites,revoke-invite}
+    app/admin.py       CLI: python -m app.admin {create-invite,list-invites,revoke-invite,purge}
     app/users/         router (/me, /account/delete), schemas, models
     app/applications/  models, schemas, router, dependencies (service planned)
     app/interviews/    models, schemas, router, dependencies (service planned)
