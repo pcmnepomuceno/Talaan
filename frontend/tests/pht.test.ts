@@ -31,6 +31,8 @@ describe("fromPhtInput", () => {
     ["2026-11-20T23:30:59", "2026-11-20T23:30:00+08:00"],
     ["2026-11-20T23:30:59.5", "2026-11-20T23:30:00+08:00"],
     ["2028-02-29T09:00", "2028-02-29T09:00:00+08:00"],
+    ["0050-01-01T10:00", "0050-01-01T10:00:00+08:00"], // Date.UTC would map years 0-99 to 1900-1999
+    ["0099-12-31T23:59", "0099-12-31T23:59:00+08:00"],
   ])("%s -> %s", (input, want) => expect(fromPhtInput(input)).toBe(want));
 
   it.each([[""], [null], ["2026-11-20"], ["2026-11-20T24:00"], ["2026-02-30T10:00"], ["2027-02-29T10:00"], ["2026-13-01T10:00"], ["2026-11-20 10:00"], ["x"]])(
@@ -66,6 +68,7 @@ describe("device timezone does not matter", () => {
     d: fromPhtInput("2026-11-20T23:30"),
     e: fromPhtInput("2026-03-08T02:30"), // a spring-forward gap in Los Angeles
     f: fromPhtInput("2026-04-05T02:30"), // a DST end in Auckland
+    g: fromPhtInput("0050-01-01T10:00"), // a two-digit year
   });
 
   it("gives identical output in UTC, Auckland and Los Angeles", () => {
@@ -79,5 +82,6 @@ describe("device timezone does not matter", () => {
     expect(offsets.size).toBe(3); // the switch really took effect
     expect(new Set(results).size).toBe(1);
     expect(JSON.parse(results[0]).b).toBe("2026-11-21T00:30");
+    expect(JSON.parse(results[0]).g).toBe("0050-01-01T10:00:00+08:00");
   });
 });

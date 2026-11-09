@@ -19,6 +19,7 @@ it("time: badInput, impossible dates, year range", () => {
   expect(validate({ ...ok, scheduled_at: "2026-02-30T10:00" }).scheduled_at).toBe("Enter a valid date and time.");
   expect(validate({ ...ok, scheduled_at: "1899-12-31T23:59" }).scheduled_at).toBe("Enter a year between 1900 and 2200.");
   expect(validate({ ...ok, scheduled_at: "2201-01-01T00:00" }).scheduled_at).toBe("Enter a year between 1900 and 2200.");
+  expect(validate({ ...ok, scheduled_at: "0050-01-01T10:00" }).scheduled_at).toBe("Enter a year between 1900 and 2200.");
   expect(validate({ ...ok, scheduled_at: "1900-01-01T00:00" })).toEqual({});
   expect(validate({ ...ok, scheduled_at: "2200-12-31T23:59" })).toEqual({});
 });

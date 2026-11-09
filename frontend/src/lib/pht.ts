@@ -23,8 +23,12 @@ export function fromPhtInput(local: string | null | undefined): string | null {
   if (!m) return null;
   const [y, mo, d, h, mi] = m.slice(1, 6).map(Number);
   const s = m[6] === undefined ? 0 : Number(m[6]);
-  const t = new Date(Date.UTC(y, mo - 1, d, h, mi, s));
-  // A UTC round trip rejects Feb 30, month 13, hour 24 (Date.UTC rolls them over).
+  // setUTCFullYear, not Date.UTC: Date.UTC maps years 0-99 to 1900-1999, which the check below would
+  // reject as invalid instead of letting validate() give the year-range message.
+  const t = new Date(0);
+  t.setUTCFullYear(y, mo - 1, d);
+  t.setUTCHours(h, mi, s, 0);
+  // A UTC round trip rejects Feb 30, month 13, hour 24 (the setters roll them over).
   if (t.getUTCFullYear() !== y || t.getUTCMonth() !== mo - 1 || t.getUTCDate() !== d || t.getUTCHours() !== h || t.getUTCMinutes() !== mi) {
     return null;
   }
