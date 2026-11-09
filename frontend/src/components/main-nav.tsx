@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon, type IconName } from "./icon";
-import { Wordmark } from "./logo";
+import { LogoLink } from "./logo";
 
 const items: { href: string; label: string; icon: "table_chart" | "manage_accounts" }[] = [
   { href: "/applications", label: "Applications", icon: "table_chart" },
@@ -23,7 +23,7 @@ export function MainNav() {
       className="fixed inset-x-0 bottom-0 z-30 flex h-16 max-md:box-content border-t border-border-subtle bg-surface-card pb-[env(safe-area-inset-bottom)] md:inset-y-0 md:right-auto md:h-auto md:w-22 md:flex-col md:border-t-0 md:border-r md:pb-0 xl:w-60 xl:border-r-0 xl:bg-bar-bg xl:px-5 xl:pt-6"
     >
       <div className="mb-8 hidden xl:block">
-        <Wordmark variant="on-ink" />
+        <LogoLink variant="on-ink" />
       </div>
       <ul className="flex flex-1 md:w-full md:flex-none md:flex-col md:items-center md:gap-2 md:px-1 md:pt-3 xl:items-stretch xl:px-0 xl:pt-0">
         {items.map(({ href, label, icon }) => {

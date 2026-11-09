@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 type Variant = "on-paper" | "on-ink";
 
 // Geometry: DESIGN.md 1.1 (64 x 64 grid). Up to 32px the simplified mark (two lines, stroke 5) is used.
@@ -46,5 +48,19 @@ export function Wordmark({ variant, size = 32 }: { variant: Variant; size?: numb
         Talaan
       </span>
     </span>
+  );
+}
+
+// DESIGN.md 6.7: the app bar and the side nav logo is one link to the unfiltered list. The visible
+// text is just "Talaan", so the label says where it goes. The login band uses Wordmark, not this.
+export function LogoLink({ variant }: { variant: Variant }) {
+  return (
+    <Link
+      href="/applications"
+      aria-label="Talaan, go to applications"
+      className="-mx-1 inline-flex min-h-11 items-center rounded-sm px-1"
+    >
+      <Wordmark variant={variant} />
+    </Link>
   );
 }

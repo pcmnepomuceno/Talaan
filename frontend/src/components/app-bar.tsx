@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
 import { TextAction } from "./button";
 import { Icon } from "./icon";
-import { Wordmark } from "./logo";
+import { LogoLink } from "./logo";
 
 // DESIGN 6.7. Hidden from 1280: desktop has no top bar (the side nav carries the logo).
 const bar =
@@ -19,7 +19,7 @@ export function AppBar({ title, backHref, actions, onBack }: Props) {
   if (title === undefined) {
     return (
       <header className={bar}>
-        <Wordmark variant="on-ink" />
+        <LogoLink variant="on-ink" />
       </header>
     );
   }

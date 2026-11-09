@@ -43,6 +43,11 @@ async function fillLogin(email = "a@example.ph", password = "Secret1!") {
 const submitLogin = () => userEvent.click(screen.getByRole("button", { name: /^Log in|Logging in/ }));
 
 describe("shell", () => {
+  it("the logo on the login band is not a link", () => {
+    render(<LoginForm />);
+    expect(screen.queryByRole("link", { name: "Talaan, go to applications" })).toBeNull();
+  });
+
   it("empty log in shows inline errors, marks fields invalid, focuses the first, never posts", async () => {
     render(<LoginForm />);
     await userEvent.click(screen.getByRole("button", { name: "Log in" }));
