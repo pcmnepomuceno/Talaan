@@ -121,14 +121,17 @@ withEnv(async ({ base, createInvite }) => {
   // 8. list + client-visible server filter
   await page.getByRole("link", { name: /Frontend Engineer/ }).first().waitFor();
   check("list shows the new application", true);
-  await page.getByRole("button", { name: "Offered", exact: true }).click();
+  const statusSelect = page.getByRole("combobox", { name: "Status" });
+  check("filter select starts on All", (await statusSelect.inputValue()) === "all");
+  await statusSelect.selectOption("offered");
   await urlIs(/status=offered/);
   await page.getByText("No applications with this status.").waitFor();
   check("filter: other status shows 'No applications with this status.'", true);
-  await page.getByRole("button", { name: "Applied", exact: true }).click();
+  await statusSelect.selectOption("applied");
   await urlIs(/status=applied/);
   await page.getByRole("link", { name: /Frontend Engineer/ }).first().waitFor();
   check("filter: Applied shows it, ?status= kept in the URL", pathOf(page.url()) === "/applications?status=applied");
+  check("filter select changes the list (Applied row shown, select reads Applied)", (await statusSelect.inputValue()) === "applied");
 
   // 9. edit the status, see it after reload
   await page.getByRole("link", { name: /Frontend Engineer/ }).first().click();

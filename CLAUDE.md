@@ -140,7 +140,7 @@ Routers mount under `/api/v1` (`/api/v1/signup`, `/login`, `/logout`, `/me`).
 - [x] Dockerfile for the API; compose with db (non-root, slim, 1 worker)
 - [ ] Deploy
 - [x] Frontend F1: scaffold, tokens, theme, logo, `/design`, tests, CI job (see ROADMAP.md)
-- [x] Frontend F2a: icon, button, fields, segmented control, stamp, filter tabs, banner; `/design` gallery; RTL tests
+- [x] Frontend F2a: icon, button, fields, segmented control, stamp, filter tabs (replaced by a select in P1), banner; `/design` gallery; RTL tests
 - [x] Frontend F2b: ledger rows, detail/interview rows, dialog + delete confirm, toasts, empty state, skeleton, PHT formatters, API types
 - [x] Frontend F3: app shell, responsive layout, login/applications/detail/account on mock data (`src/lib/api.ts`)
 - [x] Frontend F4: auth wired through Next rewrites (login, sign-up with invite, logout, `proxy.ts` guard, 401 handling, Account screen with real user and two-step delete); see DECISIONS.md 2026-11-03 (F4)

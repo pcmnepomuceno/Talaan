@@ -142,7 +142,7 @@ it("a double click on Load more sends one request", async () => {
   expect(fake.callsTo("GET", /offset=50/)).toHaveLength(1);
 });
 
-it.each(STATUSES)("tab %s requests the server filter and shows only that status", async (s) => {
+it.each(STATUSES)("status %s requests the server filter and shows only that status", async (s) => {
   setup(9, (id) => ({ status: STATUSES[id - 1] }));
   search = `status=${s}`;
   mount();
@@ -151,7 +151,7 @@ it.each(STATUSES)("tab %s requests the server filter and shows only that status"
   expect(fake.calls[0].path).toBe(`/applications?limit=50&offset=0&status=${s}`);
 });
 
-it("empty versus no-match come from total and the active tab", async () => {
+it("empty versus no-match come from total and the active filter", async () => {
   setup(0);
   mount();
   expect(await screen.findByText("No applications yet.")).toBeTruthy();
@@ -159,7 +159,7 @@ it("empty versus no-match come from total and the active tab", async () => {
   expect(fake.calls).toHaveLength(1); // no second request to learn an overall total
 });
 
-it("a status tab with no rows is no-match even when other statuses exist", async () => {
+it("a status filter with no rows is no-match even when other statuses exist", async () => {
   setup(3);
   search = "status=ghosted";
   mount();
@@ -176,7 +176,7 @@ it("Add links carry ?status=", async () => {
   expect(screen.getAllByRole("link", { name: "Add application" })[0].getAttribute("href")).toBe("/applications/new?status=applied");
 });
 
-it("a cached tab shows at once while page 1 refetches, then the fresh rows replace it", async () => {
+it("a cached filter shows at once while page 1 refetches, then the fresh rows replace it", async () => {
   setup(3);
   const first = mount();
   await screen.findByRole("list", { name: "Applications" });
@@ -215,7 +215,7 @@ it("a first-load failure shows Retry, and Retry recovers", async () => {
   expect(await screen.findByRole("list", { name: "Applications" })).toBeTruthy();
 });
 
-it("clearing the caches (a write) empties every tab and refetches the current one", async () => {
+it("clearing the caches (a write) empties every filter and refetches the current one", async () => {
   setup(3);
   mount();
   await screen.findByRole("list", { name: "Applications" });
@@ -269,6 +269,27 @@ it("a Load more response landing in the same tick as a cache clear is neither st
   await waitFor(() => expect(getList()?.items).toHaveLength(50));
   expect(getList()?.items.some((a) => a.id === 500)).toBe(false);
   expect(screen.queryByRole("link", { name: /Company 500/ })).toBeNull();
+});
+
+it("changing the filter while Load more is running drops the late page", async () => {
+  setup(120);
+  const { rerender } = mount();
+  await screen.findByRole("list", { name: "Applications" });
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  fake.on("GET", /offset=50&?$/, async () => (await gate, json(200, { items: [makeApp(500)], total: 120, limit: 50, offset: 50 })));
+  await userEvent.click(screen.getByRole("button", { name: "Load more" }));
+  search = "status=applied";
+  rerender(ui());
+  await waitFor(() => expect(fake.callsTo("GET", /status=applied/)).toHaveLength(1));
+  await act(async () => {
+    release();
+    await gate;
+  });
+  await waitFor(() => expect(rowLinks()).toHaveLength(50));
+  expect(screen.queryByRole("link", { name: /Company 500/ })).toBeNull();
+  expect(getList("applied")?.items.some((a) => a.id === 500)).toBe(false);
+  expect(getList()?.items.some((a) => a.id === 500)).toBe(false);
 });
 
 it("Load more is disabled while a cached tab is refreshing", async () => {
@@ -332,7 +353,7 @@ it("opening a row after Load more never re-announces the old message", async () 
   expect(status().textContent).toBe("");
 });
 
-it("switching tab after Load more never re-announces the old message", async () => {
+it("switching the status filter after Load more never re-announces the old message", async () => {
   const { rerender } = await loadMoreOnce();
   search = "status=applied";
   rerender(ui());

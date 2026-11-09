@@ -7,9 +7,9 @@ import { AppBar, BarAction } from "@/components/app-bar";
 import { Button, TextAction } from "@/components/button";
 import { DeleteConfirm } from "@/components/dialog";
 import { EmptyState } from "@/components/empty-state";
-import { FilterTabs, type Filter } from "@/components/filter-tabs";
 import { Icon } from "@/components/icon";
 import { LoadError } from "@/components/load-error";
+import { type Filter, StatusFilter } from "@/components/status-filter";
 import { ApplicationRow, LedgerSheet, LedgerSkeleton } from "@/components/ledger";
 import { useToast } from "@/components/toast";
 import { deleteApplication, parseStatus } from "@/lib/api";
@@ -120,7 +120,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
             <h1 className="text-section-title text-text-primary">Applications</h1>
             <Button href={`/applications/new${qs}`}>Add application</Button>
           </div>
-          <FilterTabs value={status ?? "all"} onChange={onFilter} />
+          <StatusFilter value={status ?? "all"} onChange={onFilter} />
           <div className="mt-3" ref={listRef}>
             {view.kind === "loading" ? (
               <LedgerSkeleton silent />
