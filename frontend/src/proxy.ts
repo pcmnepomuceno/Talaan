@@ -16,8 +16,22 @@ const PUBLIC = ["/login", "/design"];
 // the secret that makes the backend believe it. Client-sent copies of both are always dropped, so
 // nobody can name their own IP. BACKEND_URL and PROXY_SECRET are read per request (runtime env).
 // Without PROXY_SECRET (local dev) neither header is sent and the backend uses the socket address.
+// x-real-ip is only trustworthy where the platform overwrites it: on Vercel (which sets VERCEL=1
+// itself) or behind a proxy you control (TRUST_X_REAL_IP=true). Anywhere else a client could send
+// its own, so neither header is sent and a once-per-process warning says why.
 const CLIENT_IP_HEADER = "x-talaan-client-ip";
 const PROXY_SECRET_HEADER = "x-talaan-proxy-secret";
+const warned = new Set<string>();
+
+function warnOnce(key: string, message: string) {
+  if (warned.has(key)) return;
+  warned.add(key);
+  console.warn(message);
+}
+
+function realIpTrusted() {
+  return process.env.VERCEL === "1" || /^(1|true)$/i.test(process.env.TRUST_X_REAL_IP?.trim() ?? "");
+}
 
 function forwardToApi(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
@@ -27,7 +41,13 @@ function forwardToApi(request: NextRequest) {
   headers.delete(PROXY_SECRET_HEADER);
   const secret = process.env.PROXY_SECRET?.trim();
   const ip = request.headers.get("x-real-ip")?.trim();
-  if (secret) {
+  if (secret && !realIpTrusted()) {
+    warnOnce(
+      "untrusted",
+      "proxy: PROXY_SECRET is set but client IPs are not being forwarded (x-real-ip is not trusted here). " +
+        "Set VERCEL=1 (Vercel does this itself) or TRUST_X_REAL_IP=true behind a proxy you control.",
+    );
+  } else if (secret) {
     // The secret goes even without an IP: the API then logs "unusable X-Talaan-Client-IP" once
     // instead of silently putting everyone in the socket bucket.
     headers.set(PROXY_SECRET_HEADER, secret);

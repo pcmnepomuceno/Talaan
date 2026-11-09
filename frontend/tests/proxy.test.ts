@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { getRedirectUrl, getRewrittenUrl, unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { config, proxy } from "../src/proxy";
 
 const call = (path: string, cookie?: string) =>
@@ -63,10 +63,24 @@ describe("api forwarding", () => {
   const SECRET = "s".repeat(32);
   const CLIENT = "x-talaan-client-ip";
   const PROOF = "x-talaan-proxy-secret";
-  afterEach(() => vi.unstubAllEnvs());
+  // Vercel sets VERCEL=1 itself; the forwarding tests run as on Vercel unless they say otherwise.
+  beforeEach(() => {
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("TRUST_X_REAL_IP", "");
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
 
-  const api = (headers: Record<string, string> = {}, path = "/api/v1/login?a=1") =>
-    proxy(new NextRequest(`http://localhost:3000${path}`, { headers }));
+  const request = (headers: Record<string, string> = {}, path = "/api/v1/login?a=1") =>
+    new NextRequest(`http://localhost:3000${path}`, { headers });
+  const api = (headers: Record<string, string> = {}, path = "/api/v1/login?a=1") => proxy(request(headers, path));
+  // A fresh copy of the module, so its once-per-process warning flags start clear.
+  const freshProxy = async () => {
+    vi.resetModules();
+    return (await import("../src/proxy")).proxy;
+  };
   // What the backend will receive: Next lists the request headers it forwards in
   // x-middleware-override-headers and prefixes each value with x-middleware-request-.
   const upstream = (res: Response, name: string) =>
@@ -114,6 +128,60 @@ describe("api forwarding", () => {
     const res = api({ [CLIENT]: "6.6.6.6" });
     expect(upstream(res, CLIENT)).toBeNull();
     expect(upstream(res, PROOF)).toBe(SECRET);
+  });
+
+  describe("x-real-ip trust", () => {
+    it("off the platform (VERCEL unset, no opt-in) sends neither header, even with a spoofed x-real-ip", () => {
+      vi.stubEnv("VERCEL", "");
+      vi.stubEnv("PROXY_SECRET", SECRET);
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      const res = api({ "x-real-ip": "6.6.6.6", [CLIENT]: "6.6.6.6", [PROOF]: "guess" });
+      expect(upstream(res, CLIENT)).toBeNull();
+      expect(upstream(res, PROOF)).toBeNull();
+    });
+
+    it("TRUST_X_REAL_IP=true opts in without VERCEL", () => {
+      vi.stubEnv("VERCEL", "");
+      vi.stubEnv("TRUST_X_REAL_IP", "true");
+      vi.stubEnv("PROXY_SECRET", SECRET);
+      const res = api({ "x-real-ip": "198.51.100.7" });
+      expect(upstream(res, CLIENT)).toBe("198.51.100.7");
+      expect(upstream(res, PROOF)).toBe(SECRET);
+    });
+
+    it("TRUST_X_REAL_IP=0 stays off", () => {
+      vi.stubEnv("VERCEL", "");
+      vi.stubEnv("TRUST_X_REAL_IP", "0");
+      vi.stubEnv("PROXY_SECRET", SECRET);
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      const res = api({ "x-real-ip": "198.51.100.7" });
+      expect(upstream(res, CLIENT)).toBeNull();
+      expect(upstream(res, PROOF)).toBeNull();
+    });
+
+    it("warns once per process when the secret is set but x-real-ip is not trusted, never printing the secret", async () => {
+      vi.stubEnv("VERCEL", "");
+      vi.stubEnv("PROXY_SECRET", SECRET);
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const fresh = await freshProxy();
+      fresh(request({ "x-real-ip": "198.51.100.7" }));
+      fresh(request({ "x-real-ip": "198.51.100.8" }));
+      expect(warn).toHaveBeenCalledTimes(1);
+      const message = warn.mock.calls[0].join(" ");
+      expect(message).toMatch(/VERCEL=1/);
+      expect(message).toMatch(/TRUST_X_REAL_IP=true/);
+      expect(message).not.toContain(SECRET);
+    });
+
+    it("does not warn when PROXY_SECRET is unset", async () => {
+      vi.stubEnv("VERCEL", "");
+      vi.stubEnv("PROXY_SECRET", "");
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const fresh = await freshProxy();
+      fresh(request({ "x-real-ip": "198.51.100.7" }));
+      fresh(request());
+      expect(warn).not.toHaveBeenCalled();
+    });
   });
 
   it("keeps the other request headers (cookie, origin)", () => {

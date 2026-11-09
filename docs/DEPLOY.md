@@ -18,6 +18,7 @@ Generate once: `openssl rand -hex 32` (the proxy secret). Never commit real valu
 | Render | `LOGIN_*`, `SIGNUP_*`, `ACCOUNT_DELETE_*` | defaults from `.env.example` unless tuning; each `*_WINDOW_SECONDS` at most 604800 (7 days, the purge cutoff) |
 | Vercel | `BACKEND_URL` | `https://<service>.onrender.com`, no trailing slash. Read per request by `src/proxy.ts`. |
 | Vercel | `PROXY_SECRET` | same value as on Render |
+| Vercel | `TRUST_X_REAL_IP` | leave unset. Vercel sets `VERCEL=1` itself, which is what lets `src/proxy.ts` trust `x-real-ip`. Only another host with a proxy you control that overwrites `x-real-ip` sets `true`. |
 | GitHub (repo secret) | `DATABASE_URL` | Neon **direct (unpooled)** string, for `.github/workflows/purge.yml` |
 
 Start command on Render: `uvicorn app.main:app --host 0.0.0.0 --port $PORT --no-proxy-headers` (the Dockerfile may already do this; check). Rotate `PROXY_SECRET` by changing it on both services; requests between the two changes get their IP from the socket until both are live.
@@ -52,6 +53,7 @@ Startup errors are the check: a wrong production config exits with `Refusing to 
 - [ ] Browser devtools: the cookie is `__Host-session_token`, HttpOnly, Secure, SameSite=Lax; no request goes to `onrender.com` from the browser.
 - [ ] Create, edit and delete an application and an interview.
 - [ ] **Per-visitor rate limits (the M11 fix):** from network A fail a login 10 times for different emails until 429; from network B (phone on mobile data) a login still answers 401, not 429. Also confirm the caps hold from A.
+- [ ] **`VERCEL=1` seen at runtime:** the Vercel function logs show no `PROXY_SECRET is set but client IPs are not being forwarded` warning, and the header capture below shows `X-Talaan-Client-IP` arriving.
 - [ ] **Header capture** (resolves the "medium" confidence in DECISIONS.md 2026-11-09): temporarily log, for one request, `X-Talaan-Client-IP` (present, equals your public IP), `X-Forwarded-For` and the socket peer on Render. Remove the logging after.
 - [ ] A request straight to `onrender.com/api/v1/login` with a made-up `X-Talaan-Client-IP` and no/wrong secret: the bucket key is the socket peer, not the made-up IP.
 - [ ] Caching: Vercel caches external rewrites that return `Cache-Control` (projects created on or after 2026-04-06). `/api/v1` sends `no-store`, so responses should show no `x-vercel-cache: HIT`. Check one.
