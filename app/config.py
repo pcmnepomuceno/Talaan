@@ -144,3 +144,39 @@ ACCOUNT_DELETE_USER_LIMIT = _int("ACCOUNT_DELETE_USER_LIMIT", 5, minimum=1)
 ACCOUNT_DELETE_USER_WINDOW_SECONDS = _int("ACCOUNT_DELETE_USER_WINDOW_SECONDS", 900, minimum=1)
 ACCOUNT_DELETE_IP_LIMIT = _int("ACCOUNT_DELETE_IP_LIMIT", 10, minimum=1)
 ACCOUNT_DELETE_IP_WINDOW_SECONDS = _int("ACCOUNT_DELETE_IP_WINDOW_SECONDS", 900, minimum=1)
+
+
+# "development" (default, also blank) or "production". Production hides /docs, /redoc and
+# /openapi.json and makes app/main.py refuse to start on a dev-grade config (production_problems).
+# Anything else is a startup error, so a typo cannot silently mean "development".
+ENVIRONMENT = (os.getenv("ENVIRONMENT") or "development").strip().lower()
+if ENVIRONMENT not in ("development", "production"):
+    raise ValueError(f"ENVIRONMENT must be development or production, got {ENVIRONMENT!r}")
+PRODUCTION = ENVIRONMENT == "production"
+
+MIN_PRODUCTION_BCRYPT_ROUNDS = DEFAULT_BCRYPT_ROUNDS
+_LOCAL_HOSTS = ("localhost", "127.0.0.1", "[::1]")
+
+
+def production_problems() -> list[str]:
+    """Every reason this config is unfit for production, as messages naming the variable.
+    Empty list means fine. Called by app/main.py only (not at import), so the admin CLI and
+    alembic keep working with just DATABASE_URL."""
+    problems = []
+    if not COOKIE_SECURE:
+        problems.append("COOKIE_SECURE must be true")
+    if BCRYPT_ROUNDS < MIN_PRODUCTION_BCRYPT_ROUNDS:
+        problems.append(f"BCRYPT_ROUNDS must be at least {MIN_PRODUCTION_BCRYPT_ROUNDS} (got {BCRYPT_ROUNDS})")
+    if not PROXY_SECRET:
+        problems.append("PROXY_SECRET must be set (without it every user shares one rate-limit bucket)")
+    if not (os.getenv("ALLOWED_ORIGINS") or "").strip():
+        problems.append("ALLOWED_ORIGINS must be set to the frontend's https origin")
+    else:
+        for origin in sorted(ALLOWED_ORIGINS):
+            host = urlsplit(origin).hostname or ""
+            host = f"[{host}]" if ":" in host else host
+            if host in _LOCAL_HOSTS or host.endswith(".localhost"):
+                problems.append(f"ALLOWED_ORIGINS must not list a local origin ({origin})")
+            elif not origin.startswith("https://"):
+                problems.append(f"ALLOWED_ORIGINS entries must be https ({origin})")
+    return problems
