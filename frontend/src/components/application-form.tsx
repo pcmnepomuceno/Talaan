@@ -68,7 +68,7 @@ export function ApplicationForm({ application, qs }: { application?: Application
   const backHref = edit ? `/applications/${application.id}${qs}` : `/applications${qs}`;
   const dirty = isDirty(initial, values);
 
-  useLeaveGuard(dirty && !done);
+  useLeaveGuard(dirty && !done && !gone);
 
   const set = <K extends FieldName>(key: K, value: FormValues[K]) => {
     setValues((v) => ({ ...v, [key]: value }));

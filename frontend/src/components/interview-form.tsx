@@ -65,7 +65,7 @@ export function InterviewForm({ applicationId, interview, qs }: { applicationId:
 
   const backHref = `/applications/${applicationId}${qs}`;
   const dirty = isDirty(initial, values);
-  useLeaveGuard(dirty && !done);
+  useLeaveGuard(dirty && !done && !gone);
 
   const set = <K extends FieldName>(key: K, value: InterviewFormValues[K]) => {
     setValues((v) => ({ ...v, [key]: value }));

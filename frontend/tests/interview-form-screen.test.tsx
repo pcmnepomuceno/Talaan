@@ -236,6 +236,17 @@ it("edit: 404 on save (deleted in another tab) shows not-found with a link back"
   expect(screen.getByRole("link", { name: "Back to application" }).getAttribute("href")).toBe("/applications/1?status=applied");
 });
 
+it("edit: after a 404 on save the not-found screen does not prompt on reload or close", async () => {
+  mountEdit("1");
+  await screen.findByDisplayValue("Mark Rivera");
+  fake.on("PATCH", /interviews\/1$/, () => json(404, { detail: "Interview not found" }));
+  await userEvent.type(field("Interviewer"), "x");
+  expect(unloadPrevented()).toBe(true);
+  await userEvent.click(save());
+  await screen.findByRole("heading", { name: "Interview not found." });
+  expect(unloadPrevented()).toBe(false);
+});
+
 it("edit: a stored time the form cannot read shows an error instead of the form", async () => {
   fake.db.interviews[0].scheduled_at = "2026-10-24"; // date only: toPhtInput gives null
   mountEdit("1");

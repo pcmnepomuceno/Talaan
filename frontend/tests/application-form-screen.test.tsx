@@ -360,6 +360,17 @@ it("edit reloads correctly: a fresh mount refetches and shows the server's curre
   expect(fake.callsTo("GET", /^\/applications\/1$/)).toHaveLength(2);
 });
 
+it("edit: after a 404 on save the not-found screen does not prompt on reload or close", async () => {
+  mountEdit("1");
+  await screen.findByDisplayValue("Pinagsama Tech");
+  fake.on("PATCH", /./, () => json(404, { detail: "Application not found" }));
+  await userEvent.selectOptions(field("Status"), "offered");
+  expect(unloadPrevented()).toBe(true);
+  await userEvent.click(save());
+  await screen.findByRole("heading", { name: "Application not found." });
+  expect(unloadPrevented()).toBe(false);
+});
+
 it("edit sends only the changed fields, toasts, and replaces to the detail with ?status=", async () => {
   mountEdit("1", "?status=interviewing");
   await screen.findByDisplayValue("Pinagsama Tech");
