@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groupByPhtDay, interviewDeleteMessage } from "../src/lib/interviews";
+import { groupByPhtDay, interviewDeleteMessage, isUpcoming } from "../src/lib/interviews";
 import type { Interview } from "../src/lib/types";
 import { makeInterview } from "./helpers/fake-api";
 
@@ -57,5 +57,15 @@ describe("groupByPhtDay", () => {
 
   it("two rows at the same minute share a group", () => {
     expect(groupByPhtDay([at(1, "2026-11-20T10:00:00+08:00"), at(2, "2026-11-20T10:00:00+08:00")])).toHaveLength(1);
+  });
+});
+
+describe("isUpcoming", () => {
+  const NOW = Date.parse("2026-11-10T12:00:00Z");
+  it("is true at now and after, false before, and false for an unreadable date", () => {
+    expect(isUpcoming({ scheduled_at: "2026-11-10T12:00:00Z" }, NOW)).toBe(true);
+    expect(isUpcoming({ scheduled_at: "2026-11-10T20:00:01+08:00" }, NOW)).toBe(true);
+    expect(isUpcoming({ scheduled_at: "2026-11-10T11:59:59Z" }, NOW)).toBe(false);
+    expect(isUpcoming({ scheduled_at: "nope" }, NOW)).toBe(false);
   });
 });

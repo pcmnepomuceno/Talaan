@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { AppBar } from "@/components/app-bar";
 import { Button } from "@/components/button";
+import { AddToCalendar, CalendarGuide } from "@/components/calendar";
 import { EmptyState } from "@/components/empty-state";
 import { AgendaRow, LedgerSheet, LedgerSkeleton } from "@/components/ledger";
 import { LoadError } from "@/components/load-error";
@@ -47,6 +48,9 @@ export function AgendaScreen() {
       <main id="content" tabIndex={-1} className="mx-auto max-w-[640px] px-4 pt-4 pb-[calc(6rem+env(safe-area-inset-bottom))] outline-none md:pb-24 xl:pt-8">
         <div className="flex min-h-11 flex-wrap items-center justify-between gap-x-3">
           <h1 className="text-section-title text-text-primary">Interviews</h1>
+          <div className="-mr-2">
+            <CalendarGuide />
+          </div>
         </div>
         <WakingUp pending={wakePending} />
         <div className="mt-3 md:max-w-80">
@@ -90,7 +94,7 @@ export function AgendaScreen() {
                     </h2>
                     <LedgerSheet>
                       {g.items.map((i) => (
-                        <AgendaRow key={i.id} interview={i} />
+                        <AgendaRow key={i.id} interview={i} action={when === "upcoming" ? <AddToCalendar interview={i} disabled={view.refreshing} /> : undefined} />
                       ))}
                     </LedgerSheet>
                   </section>

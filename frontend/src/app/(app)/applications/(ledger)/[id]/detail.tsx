@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Button, TextAction } from "@/components/button";
+import { AddToCalendar, CalendarGuide } from "@/components/calendar";
 import { DeleteConfirm, StatusDialog } from "@/components/dialog";
 import { useToast } from "@/components/toast";
 import { LoadError } from "@/components/load-error";
@@ -13,7 +14,7 @@ import { formatDateTimePHT } from "@/lib/format";
 import { ApiError, errorMessage } from "@/lib/http";
 import type { Interview, Status } from "@/lib/types";
 import { StatusStamp } from "@/components/status-stamp";
-import { interviewDeleteMessage, sortInterviewsByDate } from "@/lib/interviews";
+import { interviewDeleteMessage, isUpcoming, sortInterviewsByDate } from "@/lib/interviews";
 import { useDetail } from "../screen";
 
 const heading = "mb-2 text-section-title text-text-secondary";
@@ -66,6 +67,8 @@ export function ApplicationDetail() {
   const { application: a, interviews: iv } = state;
   const when = (i: Interview) => formatDateTimePHT(i.scheduled_at) ?? "date unavailable";
   const addHref = `/applications/${a.id}/interviews/new${qs}`;
+  // The .ics is offered for interviews still ahead only (a file for a past event is no use).
+  const hasUpcoming = iv.kind === "ready" && iv.items.some((i) => isUpcoming(i));
 
   async function confirmDelete() {
     if (!deleting) return;
@@ -168,6 +171,9 @@ export function ApplicationDetail() {
                   interview={i}
                   actions={
                     <>
+                      {isUpcoming(i) && (
+                        <AddToCalendar interview={{ ...i, company: a.company, job_name: a.job_name }} disabled={state.refreshing} />
+                      )}
                       <TextAction
                         href={`/applications/${a.id}/interviews/${i.id}/edit${qs}`}
                         disabled={state.refreshing}
@@ -188,6 +194,11 @@ export function ApplicationDetail() {
                 />
               ))}
             </LedgerSheet>
+            {hasUpcoming && (
+              <div className="mt-1 -ml-2">
+                <CalendarGuide />
+              </div>
+            )}
             {iv.total > iv.items.length && (
               <p className="mt-2 text-caption text-text-muted">
                 Showing the first {iv.items.length} of {iv.total} interviews.

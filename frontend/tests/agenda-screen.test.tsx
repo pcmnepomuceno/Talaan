@@ -284,3 +284,21 @@ it("coming back shows the cached rows at once while page 1 is refetched", async 
   expect(rows()).toHaveLength(1); // no skeleton
   expect(status().textContent).toBe("");
 });
+
+it("Upcoming rows have Add to calendar outside the row link; the guide trigger is in the header", async () => {
+  setup([iv(1, 1, "2099-03-10T14:00:00+08:00")]);
+  mount();
+  await waitFor(() => expect(rows()).toHaveLength(1));
+  const add = screen.getByRole("button", { name: "Add to calendar, Pinagsama Tech, Mar 10, 2099, 2:00 PM PHT" });
+  expect(rows()[0].contains(add)).toBe(false); // no interactive element nested in the link
+  expect(screen.getByRole("button", { name: "How to add this to your calendar" })).toBeTruthy();
+});
+
+it("Past rows have no Add to calendar, and the guide is still there", async () => {
+  search = "when=past";
+  setup([iv(1, 1, "2020-05-04T10:00:00+08:00")]);
+  mount();
+  await waitFor(() => expect(rows()).toHaveLength(1));
+  expect(screen.queryByRole("button", { name: /^Add to calendar/ })).toBeNull();
+  expect(screen.getByRole("button", { name: "How to add this to your calendar" })).toBeTruthy();
+});

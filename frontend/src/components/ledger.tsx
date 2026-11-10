@@ -107,7 +107,7 @@ export function InterviewRow({ interview: i, actions }: { interview: Interview; 
       </div>
       <InterviewMeta interview={i} />
       {i.remarks && <p className={`whitespace-pre-line text-caption text-text-muted ${wrap}`}>{i.remarks}</p>}
-      {actions && <div className="-mx-2 -mb-2 flex items-center">{actions}</div>}
+      {actions && <div className="-mx-2 -mb-2 flex flex-wrap items-center">{actions}</div>}
     </li>
   );
 }

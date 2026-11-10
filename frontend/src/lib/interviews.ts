@@ -32,3 +32,8 @@ export function groupByPhtDay(items: readonly AgendaInterview[]): { day: string;
   groups.delete("");
   return [...groups, ...(unreadable ? [["", unreadable] as const] : [])].map(([day, items]) => ({ day, items }));
 }
+
+/** The interview is at or after this moment (the file for it is still of use). Unreadable dates are not upcoming. */
+export function isUpcoming(i: Pick<Interview, "scheduled_at">, now: number = Date.now()): boolean {
+  return (parse(i.scheduled_at)?.date.getTime() ?? -Infinity) >= now;
+}
