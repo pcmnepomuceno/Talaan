@@ -24,7 +24,13 @@ beforeEach(() => {
   replace.mockClear();
   search = "";
 });
-afterEach(() => vi.restoreAllMocks());
+// Disconnected here as well as in the test, so a timed-out test's observer never runs after cleanup.
+let observer: MutationObserver | null = null;
+afterEach(() => {
+  observer?.disconnect();
+  observer = null;
+  vi.restoreAllMocks();
+});
 
 const mount = () =>
   render(
@@ -159,6 +165,7 @@ it("delete success: the open detail never refetches the deleted id and never say
   const obs = new MutationObserver(() => {
     if (document.body.textContent?.includes("Application not found")) seen.push("not found");
   });
+  observer = obs;
   obs.observe(document.body, { subtree: true, childList: true, characterData: true });
   await userEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
   await userEvent.click(await screen.findByRole("button", { name: "Delete application" }));
