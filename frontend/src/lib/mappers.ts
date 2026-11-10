@@ -8,6 +8,7 @@
 import { fromPhtInput, toPhtInput } from "./pht";
 import {
   type Application,
+  type AgendaInterview,
   type Interview,
   type InterviewMode,
   INTERVIEW_MODES,
@@ -83,6 +84,12 @@ export function fromApiInterview(v: unknown): Interview {
     created_at: str(r, "created_at"),
     updated_at: str(r, "updated_at"),
   };
+}
+
+/** An agenda row: the interview plus its application's company and job title. */
+export function fromApiAgendaInterview(v: unknown): AgendaInterview {
+  const r = obj(v, "interview");
+  return { ...fromApiInterview(v), company: str(r, "company"), job_name: str(r, "job_name") };
 }
 
 export type Page<T> = { items: T[]; total: number };

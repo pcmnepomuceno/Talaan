@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { dateAppliedLabel, formatDate, formatDateTimePHT, formatPeso } from "../src/lib/format";
+import { dateAppliedLabel, formatDate, formatDateTimePHT, formatDayHeading, formatPeso } from "../src/lib/format";
 import { sortInterviewsByDate } from "../src/lib/interviews";
 import type { Interview } from "../src/lib/types";
 
@@ -67,5 +67,21 @@ describe("sortInterviewsByDate", () => {
     vi.stubEnv("TZ", tz);
     const input = [mk(2, "2026-10-24T08:00:00Z"), mk(1, "2026-10-24T14:00:00")];
     expect(sortInterviewsByDate(input).map((i) => i.id)).toEqual([1, 2]);
+  });
+});
+
+describe("formatDayHeading", () => {
+  it("writes the weekday and date of a calendar day, whatever the device zone", () => {
+    for (const tz of ["UTC", "America/Los_Angeles", "Pacific/Kiritimati"]) {
+      vi.stubEnv("TZ", tz);
+      expect(formatDayHeading("2026-11-10")).toBe("Tuesday, Nov 10, 2026");
+      expect(formatDayHeading("2026-12-31")).toBe("Thursday, Dec 31, 2026");
+    }
+    vi.unstubAllEnvs();
+  });
+
+  it("is null for an empty or impossible day", () => {
+    expect(formatDayHeading("")).toBeNull();
+    expect(formatDayHeading("2026-02-30")).toBeNull();
   });
 });

@@ -107,6 +107,22 @@ export function installFake(initial = seed()) {
       const limit = Number(url.searchParams.get("limit") ?? 20);
       return json(200, { items: rows.slice(0, limit), total: rows.length, limit, offset: 0 });
     }
+    if (p === "/interviews" && c.method === "GET") {
+      // The agenda: every interview with its application's names; upcoming (>= now) oldest first, past newest first.
+      const when = url.searchParams.get("when");
+      const limit = Number(url.searchParams.get("limit") ?? 20);
+      const offset = Number(url.searchParams.get("offset") ?? 0);
+      const now = Date.now();
+      const dir = when === "past" ? -1 : 1;
+      const rows = db.interviews
+        .filter((i) => (when === "past" ? Date.parse(i.scheduled_at) < now : Date.parse(i.scheduled_at) >= now))
+        .sort((a, b) => dir * (Date.parse(a.scheduled_at) - Date.parse(b.scheduled_at) || a.id - b.id))
+        .flatMap((i) => {
+          const a = db.apps.find((x) => x.id === i.job_application_id);
+          return a ? [{ ...i, company: a.company, job_name: a.job_name }] : [];
+        });
+      return json(200, { items: rows.slice(offset, offset + limit), total: rows.length, limit, offset });
+    }
     if ((m = p.match(/^\/interviews\/(\d+)$/))) {
       const row = db.interviews.find((i) => i.id === Number(m![1]));
       if (!row) return json(404, { detail: "Interview not found" });

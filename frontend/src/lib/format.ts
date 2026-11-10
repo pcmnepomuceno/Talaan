@@ -50,6 +50,14 @@ export function formatDate(value: string | null | undefined): string | null {
   return DAY[p.zone].format(p.date);
 }
 
+const DAY_HEADING = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", weekday: "long", year: "numeric", month: "short", day: "numeric" });
+
+/** "2026-11-10" (a calendar day, as groupByPhtDay yields) -> "Tuesday, Nov 10, 2026". null when empty or not a real day. */
+export function formatDayHeading(day: string): string | null {
+  if (!DATE_ONLY.test(day) || !onCalendar(day)) return null;
+  return DAY_HEADING.format(new Date(`${day}T00:00:00Z`));
+}
+
 export function formatDateTimePHT(value: string | null | undefined): string | null {
   const p = parse(value);
   if (!p) return null;
