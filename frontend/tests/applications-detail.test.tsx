@@ -325,6 +325,48 @@ it("review round 3, finding 5: after a no-answer save, a failed reload and Retry
   expect(screen.queryByRole("dialog", { name: "Change status" })).toBeNull();
 });
 
+it("review round 3, finding 8a: the timeout lands while a 200 body is read: the save is known, caches cleared, \"Status updated.\"", async () => {
+  fake.on("PATCH", /^\/applications\/1$/, () => {
+    Object.assign(fake.db.apps[0], { status: "applied" }); // the server committed
+    const res = json(200, fake.db.apps[0]);
+    res.json = () => Promise.reject(new DOMException("signal timed out", "TimeoutError"));
+    return res;
+  });
+  mount();
+  await openStatus();
+  await userEvent.click(screen.getByRole("radio", { name: "Applied" }));
+  await userEvent.click(update());
+  await waitFor(() => expect(fake.callsTo("GET", /^\/applications\/1$/)).toHaveLength(2)); // cleared, refetched
+  await screen.findByRole("list", { name: "Interviews" });
+  expect(getDetail(1)?.application.status).toBe("applied");
+  expect(pageText("Applied").length).toBeGreaterThan(0);
+  expect(screen.queryByRole("dialog", { name: "Change status" })).toBeNull();
+  expect(screen.getByText("Status updated.")).toBeTruthy();
+  expect(screen.queryByText("Talaan isn't responding right now. Try again in a moment.")).toBeNull();
+});
+
+// Controls for 8a: only a 2xx whose body read was aborted counts as saved.
+const noAnswerToast = "Talaan isn't responding right now. Try again in a moment.";
+it("8a control: a 2xx that is not JSON (a proxy page) is still no answer: \"isn't responding\", dialog open", async () => {
+  fake.on("PATCH", /^\/applications\/1$/, () => new Response("<html>proxy</html>", { status: 200, headers: { "Content-Type": "text/html" } }));
+  mount();
+  await openStatus();
+  await userEvent.click(screen.getByRole("radio", { name: "Applied" }));
+  await userEvent.click(update());
+  expect(await screen.findByText(noAnswerToast)).toBeTruthy();
+  expect(screen.queryByText("Status updated.")).toBeNull();
+});
+
+it("8a control: an abort before any response is still no answer: \"isn't responding\"", async () => {
+  fake.on("PATCH", /^\/applications\/1$/, () => Promise.reject(new DOMException("signal timed out", "TimeoutError")));
+  mount();
+  await openStatus();
+  await userEvent.click(screen.getByRole("radio", { name: "Applied" }));
+  await userEvent.click(update());
+  expect(await screen.findByText(noAnswerToast)).toBeTruthy();
+  expect(screen.queryByText("Status updated.")).toBeNull();
+});
+
 it("a 404 on save shows the not-found view", async () => {
   mount();
   await openStatus();

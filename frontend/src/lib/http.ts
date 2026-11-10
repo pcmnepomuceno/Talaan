@@ -10,6 +10,8 @@ export class ApiError extends Error {
     readonly detail: string,
     readonly fieldErrors: FieldErrors = {},
     readonly retryAfterSeconds: number | null = null,
+    // The HTTP status was 2xx but reading the body was aborted (a timeout included): the server answered.
+    readonly httpOk = false,
   ) {
     super(detail);
     this.name = "ApiError";
@@ -84,8 +86,10 @@ export async function request<T = void>(path: string, opts: Options = {}): Promi
     // `undefined` as data. Status 0 gives the retryable "isn't responding" message.
     try {
       return (await res.json()) as T;
-    } catch {
-      throw new ApiError(0, "Unexpected response");
+    } catch (e) {
+      const name = (e as { name?: unknown } | null)?.name; // a DOMException is not always an Error (jsdom)
+      const aborted = name === "AbortError" || name === "TimeoutError";
+      throw new ApiError(0, "Unexpected response", {}, null, aborted);
     }
   }
 

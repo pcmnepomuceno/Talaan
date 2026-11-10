@@ -104,7 +104,8 @@ const NO_ANSWER = new Set([502, 503, 504]);
  * sends a date). `from` is the status on screen before the change. The server's row is written into
  * every cache in one step (storeApplication: the lists are patched, the detail swapped, nothing is
  * refetched); the caches are the result, so nothing is returned. When that response cannot be
- * mapped, the row is saved all the same: the caches are cleared instead (skeleton, then a refetch).
+ * mapped, or its body read is cut off by the timeout, the row is saved all the same: the caches are
+ * cleared instead (skeleton, then a refetch).
  * Rejects with ApiError: a 404 or no answer clears the caches first. No answer is status 0 (network
  * error, a 60 s timeout included) or a gateway 502/503/504: the proxy gave up, the backend may not have.
  */
@@ -121,6 +122,12 @@ export async function changeStatus(id: number, status: Status, from: Status): Pr
     }
     storeApplication(row, from);
   } catch (e) {
+    // A 2xx whose body read was cut off (the timeout landed mid-body): the server saved the change, so
+    // this is the unmappable-response case above: clear the caches and resolve.
+    if (e instanceof ApiError && e.httpOk) {
+      clearCaches();
+      return;
+    }
     // No answer (network error, timeout or a gateway 502/503/504): the server may have committed, so
     // nothing cached is trusted. A 500 or 4xx is the API's own answer and is taken as not committed.
     if (e instanceof ApiError && (e.status === 0 || NO_ANSWER.has(e.status))) clearCaches();

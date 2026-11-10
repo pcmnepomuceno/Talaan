@@ -249,6 +249,20 @@ it("changeStatus: a 500 rejects and leaves every cache as it was", async () => {
   expect(moveState()).toEqual({ moving: 0, waiters: 0 });
 });
 
+it("8a control: a GET whose 200 body read is aborted rejects as before: ApiError(0, \"Unexpected response\"), caches untouched", async () => {
+  cached();
+  const before = [getList(), getList("applied"), getDetail(1)];
+  fake.on("GET", /^\/applications\/1$/, () => {
+    const res = json(200, makeApp(1));
+    res.json = () => Promise.reject(new DOMException("signal timed out", "TimeoutError"));
+    return res;
+  });
+  const e = await getApplication(1).catch((x: unknown) => x);
+  expect(e).toBeInstanceOf(ApiError);
+  expect(e).toMatchObject({ status: 0, detail: "Unexpected response" });
+  expect([getList(), getList("applied"), getDetail(1)]).toEqual(before);
+});
+
 it.each([502, 503, 504])("changeStatus: a gateway %i is no answer (the backend may still commit): every cache is cleared", async (code) => {
   cached();
   const v = cacheVersion();
