@@ -38,6 +38,8 @@ const slowPatch = (g: { p: Promise<void> }) =>
     return json(200, row);
   });
 const flush = () => new Promise((r) => setTimeout(r, 0));
+/** Lets a late duplicate request (a re-issue fired twice) reach the fake before GETs are counted. */
+const settle = () => act(() => new Promise<void>((r) => setTimeout(r, 50)));
 
 it("finding 1: a page 1 answered before a status change never lands on the patched cache", async () => {
   install(desc(3, 1).map((id) => makeApp(id)));
@@ -58,6 +60,8 @@ it("finding 1: a page 1 answered before a status change never lands on the patch
   await waitFor(() => expect(result.current.view.kind === "ready" && result.current.view.refreshFailed).toBe(true));
   const v = result.current.view;
   expect(v.kind === "ready" && ids(v.items)).toEqual([3, 1]);
+  await settle();
+  expect(fake.callsTo("GET", /status=applied/)).toHaveLength(2); // the stale page 1, then one restart
 });
 
 it("finding 2: a Load more answered after the commit but landing before the PATCH response is not patched twice", async () => {
@@ -120,6 +124,8 @@ it("finding 2: a page 1 answered after the commit but landing before the PATCH r
   await waitFor(() => expect(result.current.view.kind === "ready" && !result.current.view.refreshing).toBe(true));
   expect(getList("applied")?.total).toBe(51);
   expect(ids(getList("applied")?.items)).toEqual(desc(51, 2));
+  await settle();
+  expect(fake.callsTo("GET", /status=applied/)).toHaveLength(2); // the stale page 1, then one restart
 });
 
 it("finding 3: when the list on screen is dropped by a status change it refetches, and Load more still works", async () => {
@@ -165,6 +171,9 @@ it("finding 6: a Load more in flight on All during a status change is re-issued,
   const v = result.current.view;
   expect(v.kind === "ready" && v.items.find((a) => a.id === 100)?.status).toBe("offered");
   expect(v.kind === "ready" && v.more).toBe("idle");
+  await settle();
+  expect(fake.callsTo("GET", /offset=50/)).toHaveLength(2); // the stale Load more, then one re-issue
+  expect(fake.callsTo("GET", /offset=0/)).toHaveLength(1); // page 1 was patched, never refetched
 });
 
 // ---- the status-write window itself ----
@@ -185,10 +194,12 @@ it("a PATCH that fails (500) still ends the window: a stale Load more is re-issu
     more.release();
     await loading;
   });
-  expect(fake.callsTo("GET", /offset=50/)).toHaveLength(2); // the stale page, then the re-issue
   const v = result.current.view;
   expect(v.kind === "ready" && ids(v.items)).toEqual(desc(120, 21));
   expect(v.kind === "ready" && v.items.every((a) => a.status === "applied")).toBe(true);
+  await settle();
+  expect(fake.callsTo("GET", /offset=50/)).toHaveLength(2); // the stale page, then the re-issue
+  expect(fake.callsTo("GET", /offset=0/)).toHaveLength(1);
 });
 
 it("a PATCH with no answer (network error) ends the window and clears the caches: the outcome is unknown", async () => {
