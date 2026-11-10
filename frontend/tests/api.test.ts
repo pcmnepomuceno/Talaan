@@ -15,7 +15,7 @@ import {
   updateApplication,
   updateInterview,
 } from "../src/lib/api";
-import { cacheVersion, clearCaches, getDetail, getList, moveState, onApplicationStored, onCachesCleared, setDetail, setList } from "../src/lib/cache";
+import { cacheVersion, clearCaches, getDetail, getList, listsSettled, onApplicationStored, onCachesCleared, setDetail, setList } from "../src/lib/cache";
 import { ApiError } from "../src/lib/http";
 import { MappingError, toApplicationInput } from "../src/lib/mappers";
 import { type Fake, installFake, json, makeApp } from "./helpers/fake-api";
@@ -212,6 +212,13 @@ it.each([
 });
 
 // ---- changeStatus: the fallbacks (PR #23 review round 2, finding 8) ----
+/** True while a status write is in flight: listsSettled() does not resolve within one macrotask. */
+const windowOpen = async () => {
+  let done = false;
+  void listsSettled().then(() => (done = true));
+  await new Promise((r) => setTimeout(r, 0));
+  return !done;
+};
 const cached = () => {
   setList(undefined, { items: [makeApp(1)], total: 1, nextOffset: 1 });
   setList("applied", { items: [makeApp(1)], total: 1, nextOffset: 1 });
@@ -228,7 +235,7 @@ it("changeStatus: an accepted PATCH whose response does not map clears every cac
   expect([getList(), getList("applied"), getDetail(1)]).toEqual([undefined, undefined, undefined]);
   expect(cacheVersion()).toBe(v + 1);
   expect(stored).not.toHaveBeenCalled();
-  expect(moveState()).toEqual({ moving: 0, waiters: 0 });
+  expect(await windowOpen()).toBe(false);
   off();
 });
 
@@ -237,7 +244,7 @@ it("changeStatus: a 404 rejects with it and clears every cache", async () => {
   fake.on("PATCH", /^\/applications\/1$/, () => json(404, { detail: "Application not found." }));
   await expect(changeStatus(1, "offered", "applied")).rejects.toMatchObject({ status: 404 });
   expect([getList(), getList("applied"), getDetail(1)]).toEqual([undefined, undefined, undefined]);
-  expect(moveState()).toEqual({ moving: 0, waiters: 0 });
+  expect(await windowOpen()).toBe(false);
 });
 
 it("changeStatus: a 500 rejects and leaves every cache as it was", async () => {
@@ -246,7 +253,7 @@ it("changeStatus: a 500 rejects and leaves every cache as it was", async () => {
   fake.failNext("PATCH", /^\/applications\/1$/);
   await expect(changeStatus(1, "offered", "applied")).rejects.toMatchObject({ status: 500 });
   expect([getList(), getList("applied"), getDetail(1)]).toEqual(before);
-  expect(moveState()).toEqual({ moving: 0, waiters: 0 });
+  expect(await windowOpen()).toBe(false);
 });
 
 it("8a control: a GET whose 200 body read is aborted rejects as before: ApiError(0, \"Unexpected response\"), caches untouched", async () => {
@@ -270,7 +277,7 @@ it.each([502, 503, 504])("changeStatus: a gateway %i is no answer (the backend m
   await expect(changeStatus(1, "offered", "applied")).rejects.toMatchObject({ status: code });
   expect([getList(), getList("applied"), getDetail(1)]).toEqual([undefined, undefined, undefined]);
   expect(cacheVersion()).toBe(v + 1);
-  expect(moveState()).toEqual({ moving: 0, waiters: 0 });
+  expect(await windowOpen()).toBe(false);
 });
 
 it.each([400, 422])("changeStatus: a %i rejects and leaves every cache as it was", async (code) => {

@@ -71,7 +71,9 @@ export function clearCaches() {
 // last change to the lists (listStamp unchanged) and no status write is in flight when it lands. A
 // page the server answered after the commit but that lands before the PATCH response would otherwise
 // get the change applied twice by patchList. A refused page is re-issued once the writes end.
-let listEpoch = 0; // bumped by clearCaches(), storeApplication() and beginMove()
+// listEpoch is bumped by clearCaches() and storeApplication(). Not by beginMove(): a page landing during the PATCH
+// is refused by `moving`, and a PATCH that fails (4xx/500) changed nothing, so an earlier page is still good.
+let listEpoch = 0;
 let moving = 0; // status writes in flight
 const settled = new Set<() => void>();
 
@@ -80,8 +82,6 @@ export const listStamp = () => listEpoch;
 export const listFresh = (stamp: number) => stamp === listEpoch && moving === 0;
 /** Resolves once no status write is in flight (at once when none is). */
 export const listsSettled = () => (moving === 0 ? Promise.resolve() : new Promise<void>((r) => settled.add(r)));
-/** Tests only. */
-export const moveState = () => ({ moving, waiters: settled.size });
 
 /**
  * clearCaches() plus the end of every status window, for login, logout and account deletion only.
@@ -98,7 +98,6 @@ export function resetCaches() {
 /** Call before a status PATCH is sent; endMove() in its `finally`. */
 export function beginMove() {
   moving++;
-  listEpoch++;
 }
 export function endMove() {
   moving = Math.max(0, moving - 1);

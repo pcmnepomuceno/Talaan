@@ -7,7 +7,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useApplicationList } from "../src/app/(app)/applications/(ledger)/use-list";
 import { changeStatus, STATUS_TIMEOUT_MS } from "../src/lib/api";
 import { login } from "../src/lib/auth";
-import { clearCaches, getList, listsSettled, moveState, setList, storeApplication } from "../src/lib/cache";
+import { clearCaches, getList, listsSettled, setList, storeApplication } from "../src/lib/cache";
 import type { Application } from "../src/lib/types";
 import { type Fake, installFake, json, makeApp } from "./helpers/fake-api";
 
@@ -38,6 +38,13 @@ const slowPatch = (g: { p: Promise<void> }) =>
     return json(200, row);
   });
 const flush = () => new Promise((r) => setTimeout(r, 0));
+/** True while a status write is in flight: listsSettled() does not resolve within one macrotask. */
+const windowOpen = async () => {
+  let done = false;
+  void listsSettled().then(() => (done = true));
+  await new Promise((r) => setTimeout(r, 0));
+  return !done;
+};
 /** Lets a late duplicate request (a re-issue fired twice) reach the fake before GETs are counted. */
 const settle = () => act(() => new Promise<void>((r) => setTimeout(r, 50)));
 
@@ -178,7 +185,7 @@ it("finding 6: a Load more in flight on All during a status change is re-issued,
 
 // ---- the status-write window itself ----
 
-it("a PATCH that fails (500) still ends the window: a stale Load more is re-issued and lands on unchanged data", async () => {
+it("a PATCH that fails (500) changed nothing: a Load more sent before it lands once, with no re-issue", async () => {
   install(desc(120, 1).map((id) => makeApp(id)));
   const { result } = renderHook(() => useApplicationList(undefined));
   await waitFor(() => expect(result.current.view.kind).toBe("ready"));
@@ -189,7 +196,7 @@ it("a PATCH that fails (500) still ends the window: a stale Load more is re-issu
   await waitFor(() => expect(fake.callsTo("GET", /offset=50/)).toHaveLength(1)); // sent before the PATCH
   fake.failNext("PATCH", /^\/applications\/\d+$/);
   await act(() => expect(changeStatus(100, "offered", "applied")).rejects.toMatchObject({ status: 500 }));
-  expect(moveState()).toEqual({ moving: 0, waiters: 0 });
+  expect(await windowOpen()).toBe(false);
   await act(async () => {
     more.release();
     await loading;
@@ -198,7 +205,7 @@ it("a PATCH that fails (500) still ends the window: a stale Load more is re-issu
   expect(v.kind === "ready" && ids(v.items)).toEqual(desc(120, 21));
   expect(v.kind === "ready" && v.items.every((a) => a.status === "applied")).toBe(true);
   await settle();
-  expect(fake.callsTo("GET", /offset=50/)).toHaveLength(2); // the stale page, then the re-issue
+  expect(fake.callsTo("GET", /offset=50/)).toHaveLength(1); // nothing changed on the server: stored as is
   expect(fake.callsTo("GET", /offset=0/)).toHaveLength(1);
 });
 
@@ -209,7 +216,7 @@ it("a PATCH with no answer (network error) ends the window and clears the caches
   fake.on("PATCH", /^\/applications\/\d+$/, () => Promise.reject(new TypeError("fetch failed")));
   const gets = fake.callsTo("GET", /status=applied/).length;
   await act(() => expect(changeStatus(2, "offered", "applied")).rejects.toMatchObject({ status: 0 }));
-  expect(moveState()).toEqual({ moving: 0, waiters: 0 });
+  expect(await windowOpen()).toBe(false);
   await waitFor(() => expect(fake.callsTo("GET", /status=applied/).length).toBe(gets + 1));
   await waitFor(() => {
     const v = result.current.view;
@@ -225,10 +232,10 @@ it("a status PATCH is abandoned after STATUS_TIMEOUT_MS: no answer, so the windo
   fake.spy.mockImplementationOnce((_input, init) => new Promise((_r, reject) => init!.signal!.addEventListener("abort", () => reject(ctl.signal.reason))));
   const saving = changeStatus(2, "offered", "applied");
   expect(timeout).toHaveBeenCalledWith(STATUS_TIMEOUT_MS);
-  expect(moveState().moving).toBe(1);
+  expect(await windowOpen()).toBe(true);
   ctl.abort(new DOMException("timed out", "TimeoutError"));
   await expect(saving).rejects.toMatchObject({ status: 0 });
-  expect(moveState()).toEqual({ moving: 0, waiters: 0 });
+  expect(await windowOpen()).toBe(false);
   expect(getList("applied")).toBeUndefined();
 });
 
@@ -240,18 +247,18 @@ it("two overlapping status changes: lists settle only after both end", async () 
   const first = changeStatus(1, "offered", "applied");
   slowPatch(b);
   const second = changeStatus(2, "offered", "applied");
-  expect(moveState().moving).toBe(2);
+  expect(await windowOpen()).toBe(true);
   let settled = false;
   void listsSettled().then(() => (settled = true));
   a.release();
   await first;
   await flush();
-  expect(moveState().moving).toBe(1);
+  expect(await windowOpen()).toBe(true);
   expect(settled).toBe(false);
   b.release();
   await second;
   await flush();
-  expect(moveState()).toEqual({ moving: 0, waiters: 0 });
+  expect(await windowOpen()).toBe(false);
   expect(settled).toBe(true);
 });
 
@@ -270,13 +277,13 @@ it("the list unmounting while a stale Load more waits for the window: no re-issu
   more.release();
   await more.p;
   await flush(); // the page landed during the write: stale, now waiting on listsSettled
-  expect(moveState()).toEqual({ moving: 1, waiters: 1 });
+  expect(await windowOpen()).toBe(true); // the PATCH is in flight; the stale page waits on it
   unmount();
   patch.release();
   await saving;
   await loading;
   await flush();
-  expect(moveState()).toEqual({ moving: 0, waiters: 0 });
+  expect(await windowOpen()).toBe(false);
   expect(fake.callsTo("GET", /offset=50/)).toHaveLength(1); // never re-issued after unmount
   expect(errors).not.toHaveBeenCalled();
 });
