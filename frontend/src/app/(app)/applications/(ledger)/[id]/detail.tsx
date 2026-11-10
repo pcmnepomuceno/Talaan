@@ -192,7 +192,7 @@ export function ApplicationDetail() {
         )}
       </section>
       <StatusDialog
-        open={changing && !state.refreshing}
+        open={changing}
         current={a.status}
         busy={statusBusy}
         onCancel={() => setChanging(false)}

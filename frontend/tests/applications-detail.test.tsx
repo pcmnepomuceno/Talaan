@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import ApplicationDetailPage from "../src/app/(app)/applications/(ledger)/[id]/page";
 import { ApplicationsScreen } from "../src/app/(app)/applications/(ledger)/screen";
 import { ToastProvider } from "../src/components/toast";
-import { clearCaches, getDetail } from "../src/lib/cache";
+import { useApplicationDetail } from "../src/app/(app)/applications/(ledger)/use-detail";
+import { clearCaches, getDetail, replaceDetail, storeApplication } from "../src/lib/cache";
+import type { Application } from "../src/lib/types";
 import { type Fake, installFake, json, makeInterview } from "./helpers/fake-api";
 
 const replace = vi.fn();
@@ -358,4 +360,45 @@ it("Cancel closes without a request", async () => {
   // reopening starts from the current status again
   await userEvent.click(screen.getByRole("button", { name: "Change status" }));
   expect((screen.getByRole("radio", { name: "Interviewing" }) as HTMLInputElement).checked).toBe(true);
+});
+
+// ---- review round 2, finding 7: a status change and an in-flight detail request ----
+
+it("finding 7: an application request that started before a status change never replaces the server's new row", async () => {
+  const first = mount();
+  await screen.findByRole("list", { name: "Interviews" });
+  first.unmount(); // the detail is cached now
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  const old = { ...fake.db.apps[0] }; // answered before the change
+  fake.on("GET", /^\/applications\/1$/, async () => (await gate, json(200, old)));
+  const { result } = renderHook(() => useApplicationDetail("1"));
+  await waitFor(() => expect(result.current.state.kind === "ready" && result.current.state.interviews.kind).toBe("ready"));
+  const next = { ...old, status: old.status === "offered" ? "rejected" : "offered" } as Application;
+  await act(async () => {
+    storeApplication(next, old.status);
+    release();
+    await gate;
+    await new Promise((r) => setTimeout(r, 0));
+  });
+  const s = result.current.state;
+  expect(s.kind === "ready" && s.application.status).toBe(next.status);
+  expect(getDetail(1)?.application.status).toBe(next.status);
+});
+
+it("finding 7: a detail refresh starting while the status PATCH is in flight does not close the busy dialog", async () => {
+  mount();
+  const dialog = await openStatus();
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  fake.on("PATCH", /^\/applications\/1$/, async () => (await gate, json(200, { ...fake.db.apps[0], status: "offered" })));
+  await userEvent.click(within(dialog).getByRole("radio", { name: "Offered" }));
+  await userEvent.click(update());
+  act(() => replaceDetail(1, getDetail(1)!)); // a background refresh mid-PATCH (content stays)
+  expect(dialog.isConnected && dialog.hasAttribute("open")).toBe(true);
+  await act(async () => {
+    release();
+    await gate;
+  });
+  await screen.findByText("Status updated.");
 });

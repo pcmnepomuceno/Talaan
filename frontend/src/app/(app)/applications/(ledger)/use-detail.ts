@@ -62,12 +62,16 @@ export function useApplicationDetail(id: string | undefined) {
     removing.current = false;
   }, [n]);
 
+  // Bumped by a status change of the open id: an application request that started before it is stale.
+  // Not detailStamp, which would also drop a valid interviews request with nothing to re-issue it.
+  const stores = useRef(0);
   useEffect(() => {
     if (n === null || n === removed) return;
     let live = true;
     const v = cacheVersion();
     const d = detailStamp(n);
-    const current = () => live && cacheVersion() === v && detailStamp(n) === d;
+    const st = stores.current;
+    const current = () => live && cacheVersion() === v && detailStamp(n) === d && stores.current === st;
     getApplication(n).then(
       (a) => {
         if (a === null) dropDetail(n); // gone (or never ours): a revisit must not show the old record
@@ -129,7 +133,15 @@ export function useApplicationDetail(id: string | undefined) {
   );
   // A status change (storeApplication) hands over the server's row: it is the fresh application, and
   // a status cannot change interviews, so nothing is refetched and the actions stay enabled.
-  useEffect(() => onApplicationStored((row) => row.id === open.current && setAppRes({ a: row })), []);
+  useEffect(
+    () =>
+      onApplicationStored((row) => {
+        if (row.id !== open.current) return;
+        stores.current++;
+        setAppRes({ a: row });
+      }),
+    [],
+  );
   /** Call before the DELETE request, with false again if it fails. */
   const setRemoving = useCallback((on: boolean) => {
     removing.current = on;
