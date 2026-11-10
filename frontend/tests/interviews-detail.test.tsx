@@ -26,7 +26,14 @@ beforeEach(() => {
   search = "";
   paramId = "1";
 });
-afterEach(() => vi.restoreAllMocks());
+// The observer outlives a test that times out (RTL unmounts first): disconnect it here, and query
+// without throwing inside its callback, so a timeout never turns into an unhandled error.
+let observer: MutationObserver | null = null;
+afterEach(() => {
+  observer?.disconnect();
+  observer = null;
+  vi.restoreAllMocks();
+});
 
 const ui = () => (
   <ToastProvider>
@@ -39,7 +46,7 @@ const mount = () => render(ui());
 const list = () => screen.findByRole("list", { name: "Interviews" });
 const DATE1 = "Oct 24, 2026, 2:00 PM PHT"; // seed interview 1
 const ivDialog = () => [...document.querySelectorAll("dialog")].find((d) => d.textContent?.includes("Delete this interview?"))!;
-const skeleton = () => screen.getByRole("region", { name: "Application detail" }).querySelector("li.animate-ledger-pulse");
+const skeleton = () => screen.queryByRole("region", { name: "Application detail" })?.querySelector("li.animate-ledger-pulse");
 
 it("Add interview is in the Interviews header and goes to the new-interview route, keeping the status filter", async () => {
   search = "status=interviewing";
@@ -111,6 +118,7 @@ it("delete: the dialog names the date and mode; confirming removes the row at on
     if (!screen.queryByRole("list", { name: "Interviews" })) bad.push("list gone");
     if (!document.body.textContent?.includes("Frontend Engineer")) bad.push("page gone");
   });
+  observer = obs;
   obs.observe(document.body, { subtree: true, childList: true, characterData: true });
   await userEvent.click(screen.getByRole("button", { name: "Delete interview" }));
   // gone while the refetch is still pending
