@@ -63,6 +63,9 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - `scripts/e2e-auth.cjs` (2026-11-10): start its stack through `local-env.cjs` like the other e2e scripts (free ports, `_test` database, teardown with proof the dev database was untouched), and fix its header and any docs that mention `test-env.sh`, which does not exist.
 - `DeleteConfirm` (2026-11-10, PR #23 review): `busy` sets `disabled` on the focused confirm button, which drops focus to `<body>`; a failed delete leaves the open dialog with no focus. Use the StatusDialog approach (aria-disabled, focus back on failure).
 - Waking-up line (2026-11-10): shown only before the first data in a tab. If the free-tier API sleeps again mid-session, a later slow reload gets no explanation. Accepted for now.
+- PR #23 review round 3, finding 1 (2026-11-10): optimistic concurrency for PATCH, an `updated_at` precondition (409 on mismatch). A status PATCH the server saves after the client's 60 s timeout lands after the refetch, so the screen keeps the old status, and a retry can lose to the late save. Deferred: it needs a backend contract change; the client alone cannot close the window.
+- PR #23 review round 3, finding 3 (2026-11-10): during a status PATCH refuse only the lists it can change (`all`, the old and the new status) instead of every list. Today an unrelated page 1 can sit on the skeleton for up to 60 s on a cold backend. Deferred: latency on cold starts only, never wrong data.
+- PR #23 review round 3, finding 9 (2026-11-10): a per-id application stamp in `cache.ts`, bumped by `storeApplication`, to replace the three tokens that guard the application request in `use-detail.ts` (`cacheVersion`, `detailStamp`, a hook-local counter). Deferred: a refactor with no behavior change.
 
 ## Maintenance
 
