@@ -77,3 +77,17 @@ class InterviewPage(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class AgendaItem(InterviewRead):
+    """An interview plus its application's name fields, so the agenda needs no per-row request."""
+
+    company: str
+    job_name: str
+
+
+class AgendaPage(BaseModel):
+    items: list[AgendaItem]
+    total: int
+    limit: int
+    offset: int
