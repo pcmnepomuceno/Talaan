@@ -313,6 +313,18 @@ it("a failed save keeps the dialog open, shows an error, and writes nothing to t
   expect(screen.queryByText("Status updated.")).toBeNull();
 });
 
+it("review round 3, finding 5: after a no-answer save, a failed reload and Retry, the dialog does not reopen by itself", async () => {
+  mount();
+  await openStatus();
+  fake.failNext("PATCH", /^\/applications\/1$/, 504); // no answer: every cache is cleared
+  fake.failNext("GET", /^\/applications\/1$/); // and the reload fails once
+  await userEvent.click(screen.getByRole("radio", { name: "Applied" }));
+  await userEvent.click(update());
+  await userEvent.click(await screen.findByRole("button", { name: "Retry" }));
+  await screen.findByRole("list", { name: "Interviews" });
+  expect(screen.queryByRole("dialog", { name: "Change status" })).toBeNull();
+});
+
 it("a 404 on save shows the not-found view", async () => {
   mount();
   await openStatus();

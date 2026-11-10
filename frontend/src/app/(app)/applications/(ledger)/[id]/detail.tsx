@@ -44,6 +44,11 @@ export function ApplicationDetail() {
   const savingStatus = useRef(false); // a ref: two clicks in one tick both see the same stale state
   const focusAfterStatus = useRef(false);
   const statusBtn = useRef<HTMLButtonElement>(null);
+  // A cache clear (a no-answer or unmappable save, a 404, any write elsewhere) drops this component to
+  // the skeleton without unmounting it, so `changing` would survive into a later load and reopen the
+  // dialog unasked. Anything but a ready detail closes it (adjusted during render, React's pattern for
+  // state derived from props). A replaceDetail() keeps "ready", so the dialog stays open then.
+  if (changing && state.kind !== "ready") setChanging(false);
   useEffect(() => {
     if (!focusAfterStatus.current) return;
     if (state.kind === "error" || state.kind === "missing") focusAfterStatus.current = false;
