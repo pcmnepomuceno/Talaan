@@ -99,11 +99,11 @@ export async function updateApplication(id: number, initial: ApplicationInput, n
  * PATCH `{status}` only (the server fills date_applied for a non-saved status; the client never
  * sends a date). `from` is the status on screen before the change. The server's row is written into
  * every cache in one step (storeApplication: the lists are patched, the detail swapped, nothing is
- * refetched), and returned. When that response cannot be mapped, the row is saved all the same:
- * the caches are cleared instead and null is returned (skeleton, then a refetch).
+ * refetched); the caches are the result, so nothing is returned. When that response cannot be
+ * mapped, the row is saved all the same: the caches are cleared instead (skeleton, then a refetch).
  * Rejects with ApiError: a 404 or no answer (status 0, a 60 s timeout included) clears the caches first.
  */
-export async function changeStatus(id: number, status: Status, from: Status): Promise<Application | null> {
+export async function changeStatus(id: number, status: Status, from: Status): Promise<void> {
   beginMove(); // list pages landing until endMove() may straddle the commit: they are re-issued
   try {
     const raw = await patchApplication(id, { status }, AbortSignal.timeout(STATUS_TIMEOUT_MS));
@@ -112,10 +112,9 @@ export async function changeStatus(id: number, status: Status, from: Status): Pr
       row = fromApiApplication(raw);
     } catch {
       clearCaches();
-      return null;
+      return;
     }
     storeApplication(row, from);
-    return row;
   } catch (e) {
     // No answer (network error or timeout): the server may have committed, so nothing cached is trusted.
     if (e instanceof ApiError && e.status === 0) clearCaches();

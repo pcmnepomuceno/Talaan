@@ -29,9 +29,8 @@ vi.mock("../src/lib/api", async (importOriginal) => {
       await tick();
     },
     changeStatus: async (...a: Parameters<typeof real.changeStatus>) => {
-      const r = await real.changeStatus(...a);
+      await real.changeStatus(...a);
       await tick();
-      return r;
     },
   };
 });

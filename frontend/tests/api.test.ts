@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
+  changeStatus,
   createApplication,
   createInterview,
   deleteApplication,
@@ -14,7 +15,7 @@ import {
   updateApplication,
   updateInterview,
 } from "../src/lib/api";
-import { clearCaches, getDetail, getList, onCachesCleared, setDetail, setList } from "../src/lib/cache";
+import { cacheVersion, clearCaches, getDetail, getList, moveState, onApplicationStored, onCachesCleared, setDetail, setList } from "../src/lib/cache";
 import { ApiError } from "../src/lib/http";
 import { MappingError, toApplicationInput } from "../src/lib/mappers";
 import { type Fake, installFake, json, makeApp } from "./helpers/fake-api";
@@ -208,4 +209,50 @@ it.each([
   expect(getList("applied")).toBe(entry);
   expect(getDetail(1)).toBeUndefined();
   expect(getDetail(2)).toBeDefined();
+});
+
+// ---- changeStatus: the fallbacks (PR #23 review round 2, finding 8) ----
+const cached = () => {
+  setList(undefined, { items: [makeApp(1)], total: 1, nextOffset: 1 });
+  setList("applied", { items: [makeApp(1)], total: 1, nextOffset: 1 });
+  setDetail(1, { application: makeApp(1), interviews: { items: [], total: 0 } });
+};
+
+it("changeStatus: an accepted PATCH whose response does not map clears every cache and patches nothing", async () => {
+  cached();
+  const stored = vi.fn();
+  const off = onApplicationStored(stored);
+  const v = cacheVersion();
+  fake.on("PATCH", /^\/applications\/1$/, () => json(200, { ...makeApp(1), status: "hired" }));
+  await expect(changeStatus(1, "offered", "applied")).resolves.toBeUndefined();
+  expect([getList(), getList("applied"), getDetail(1)]).toEqual([undefined, undefined, undefined]);
+  expect(cacheVersion()).toBe(v + 1);
+  expect(stored).not.toHaveBeenCalled();
+  expect(moveState()).toEqual({ moving: 0, waiters: 0 });
+  off();
+});
+
+it("changeStatus: a 404 rejects with it and clears every cache", async () => {
+  cached();
+  fake.on("PATCH", /^\/applications\/1$/, () => json(404, { detail: "Application not found." }));
+  await expect(changeStatus(1, "offered", "applied")).rejects.toMatchObject({ status: 404 });
+  expect([getList(), getList("applied"), getDetail(1)]).toEqual([undefined, undefined, undefined]);
+  expect(moveState()).toEqual({ moving: 0, waiters: 0 });
+});
+
+it("changeStatus: a 500 rejects and leaves every cache as it was", async () => {
+  cached();
+  const before = [getList(), getList("applied"), getDetail(1)];
+  fake.failNext("PATCH", /^\/applications\/1$/);
+  await expect(changeStatus(1, "offered", "applied")).rejects.toMatchObject({ status: 500 });
+  expect([getList(), getList("applied"), getDetail(1)]).toEqual(before);
+  expect(moveState()).toEqual({ moving: 0, waiters: 0 });
+});
+
+it("changeStatus: success patches the caches and resolves to nothing (the caches are the result)", async () => {
+  cached();
+  await expect(changeStatus(1, "offered", "applied")).resolves.toBeUndefined();
+  expect(getList()?.items[0].status).toBe("offered");
+  expect(getList("applied")).toEqual({ items: [], total: 0, nextOffset: 0 });
+  expect(getDetail(1)?.application.status).toBe("offered");
 });
