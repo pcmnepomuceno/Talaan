@@ -402,3 +402,26 @@ it("finding 7: a detail refresh starting while the status PATCH is in flight doe
   });
   await screen.findByText("Status updated.");
 });
+
+it("an interviews request in flight during a status change is still applied (a status cannot change interviews)", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  const page = { items: [makeInterview(900, 1)], total: 1, limit: 100, offset: 0 };
+  fake.on("GET", /^\/applications\/1\/interviews/, async () => (await gate, json(200, page)));
+  const { result } = renderHook(() => useApplicationDetail("1"));
+  await waitFor(() => expect(result.current.state.kind === "ready" && !result.current.state.refreshing).toBe(true));
+  expect(result.current.state.kind === "ready" && result.current.state.interviews.kind).toBe("loading");
+  const row = { ...fake.db.apps[0], status: "rejected" } as Application;
+  act(() => storeApplication(row, fake.db.apps[0].status));
+  await act(async () => {
+    release();
+    await gate;
+  });
+  await waitFor(() => {
+    const s = result.current.state;
+    expect(s.kind === "ready" && s.interviews.kind === "ready" && s.interviews.items.map((i) => i.id)).toEqual([900]);
+  });
+  const s = result.current.state;
+  expect(s.kind === "ready" && s.application.status).toBe("rejected");
+  expect(fake.callsTo("GET", /^\/applications\/1\/interviews/)).toHaveLength(1); // not refetched
+});
