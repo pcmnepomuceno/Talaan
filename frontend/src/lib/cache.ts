@@ -7,8 +7,9 @@
 //     changes nothing a list row shows, so the lists and every other detail stay valid.
 //   - replaceDetail(id, entry): like clearDetail, but the entry is replaced in the same step, so the
 //     detail never shows a skeleton while it refetches (interview delete).
-//   - storeApplication(row, from): a status change. Every list and the detail are patched exactly
-//     from the server's row; nothing is dropped or refetched.
+//   - storeApplication(row, from): a status change. Every list and the detail are patched from the
+//     server's row; only a list whose result cannot be known is dropped (patchList). The list stamp
+//     moves, and changeStatus brackets the PATCH with beginMove()/endMove() (see listFresh).
 // Each of these sets the new state before notifying listeners, in one synchronous call, so no
 // caller has to win a race against React's next render.
 import type { Application, Interview } from "./types";
@@ -22,8 +23,8 @@ const lists = new Map<string, ListEntry>();
 const details = new Map<number, DetailEntry>();
 // An id is passed when only that application's detail was cleared; undefined means everything was.
 const listeners = new Set<(id?: number) => void>();
-let version = 0; // bumped by clearCaches() only: guards in-flight list responses
-const detailBumps = new Map<number, number>(); // per id, bumped by clearDetail(): guards in-flight detail responses
+let version = 0; // bumped by clearCaches() only: guards in-flight detail responses (lists: listStamp)
+const detailBumps = new Map<number, number>(); // per id, bumped by clearDetail() and replaceDetail(): guards in-flight detail responses
 
 export const listKey = (status?: string) => status ?? "all";
 // Set by the first list or detail the server sent in this tab and never reset (a clear included):
@@ -46,7 +47,7 @@ export const setDetail = (id: number, entry: DetailEntry) => {
 export const dropDetail = (id: number) => void details.delete(id);
 
 export const cacheVersion = () => version;
-/** Changes whenever this id's detail is cleared by clearDetail(). Pair it with cacheVersion(). */
+/** Changes whenever this id's detail is cleared or replaced (clearDetail, replaceDetail). Pair it with cacheVersion(). */
 export const detailStamp = (id: number) => detailBumps.get(id) ?? 0;
 
 /** Calls `fn` after every clear: with the id after clearDetail(id), with nothing after clearCaches(). */
@@ -95,7 +96,8 @@ export function endMove() {
 
 // ---- status change: exact patch from the server's row (no clear, no refetch) ----
 // The list order is created_at desc, id desc (the API's ORDER BY), which a status never changes, so a
-// status change only moves the row in or out of the filtered lists. Every list is patched exactly.
+// status change only moves the row in or out of the filtered lists. Each list is patched from its own
+// rows, or dropped when its result cannot be known.
 
 /** a sorts before b in the list order; null when created_at cannot be compared exactly. */
 function sortsBefore(a: Application, b: Application): boolean | null {

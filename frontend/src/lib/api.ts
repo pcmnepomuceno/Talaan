@@ -2,8 +2,9 @@
 // request() in http.ts; every response goes through mappers.ts. Every write updates the in-memory
 // caches itself (cache.ts), so no screen can forget to. The rules:
 //   - create, edit, delete of an application: clearCaches()
-//   - status change: storeApplication(row) patches every cache from the server's row (no refetch);
-//     clearCaches() when that response cannot be mapped
+//   - status change: storeApplication(row, from) patches every cache from the server's row (no
+//     refetch), inside beginMove()/endMove() so no list page can straddle the PATCH; clearCaches()
+//     when that response cannot be mapped, on a 404, or with no answer (network error, 60 s timeout)
 //   - interview create and edit: clearDetail(applicationId)
 //   - interview delete: replaceDetail(applicationId, page minus the row) (the detail still refetches)
 //   - any 404 on a write: clearCaches() (the row, or its application, may be gone)
