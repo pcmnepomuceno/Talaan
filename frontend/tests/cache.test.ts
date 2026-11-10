@@ -81,7 +81,7 @@ it("replaceDetail swaps the entry before listeners run, bumps only that id's sta
 
 // ---- status change: patchList (PR #23 review item 1) ----
 // makeApp(n) is created n minutes after a fixed time, so a higher id is newer (listed first).
-const app = (id: number, status: "applied" | "offered" | "saved", rest = {}) => makeApp(id, { status, ...rest });
+const app = (id: number, status: "applied" | "offered" | "saved" | "screening" | "interviewing", rest = {}) => makeApp(id, { status, ...rest });
 const ids = (e: { items: { id: number }[] } | undefined) => e?.items.map((a) => a.id);
 
 it("patchList, all: replaces a held row in place (order, total and cursor unchanged); a row it does not hold changes nothing", () => {
@@ -100,11 +100,11 @@ it("patchList, old status holding the row: removed, total - 1, nextOffset - 1", 
   expect([out.total, out.nextOffset]).toEqual([9, 2]);
 });
 
-it("patchList, old status not holding the row (beyond the cursor): total - 1, nextOffset unchanged", () => {
+it("patchList, old status not holding the row: an incomplete list is dropped (the server count may already exclude it); a complete one is unchanged", () => {
   const e = { items: [app(30, "applied"), app(29, "applied")], total: 10, nextOffset: 2 };
-  const out = patchList("applied", e, app(5, "offered"), "applied")!;
-  expect(ids(out)).toEqual([30, 29]);
-  expect([out.total, out.nextOffset]).toEqual([9, 2]);
+  expect(patchList("applied", e, app(5, "offered"), "applied")).toBeUndefined();
+  const complete = { items: [app(30, "applied"), app(29, "applied")], total: 2, nextOffset: 2 };
+  expect(patchList("applied", complete, app(5, "offered"), "applied")).toBe(complete);
 });
 
 it("patchList, new status, complete list: inserted at its sorted place, ties on created_at ordered by id desc", () => {
@@ -119,14 +119,42 @@ it("patchList, new status, complete list: inserted at its sorted place, ties on 
   expect([last.total, last.nextOffset]).toEqual([5, 5]);
 });
 
-it("patchList, new status, more pages: inside the held range inserted (+1/+1); after the last held row only total + 1", () => {
+it("patchList, new status, more pages: inside the held range inserted (+1/+1); after the last held row the list is dropped", () => {
   const e = { items: [app(9, "offered"), app(7, "offered")], total: 6, nextOffset: 2 };
   const inside = patchList("offered", e, app(8, "offered"), "applied")!;
   expect(ids(inside)).toEqual([9, 8, 7]);
   expect([inside.total, inside.nextOffset]).toEqual([7, 3]);
-  const outside = patchList("offered", e, app(3, "offered"), "applied")!;
-  expect(ids(outside)).toEqual([9, 7]);
-  expect([outside.total, outside.nextOffset]).toEqual([7, 2]);
+  // Beyond the cursor: whether `total` already counts it cannot be known, so nothing is guessed.
+  expect(patchList("offered", e, app(3, "offered"), "applied")).toBeUndefined();
+});
+
+it("patchList, new status already holding the row: replaced in place, no count change (never inserted twice)", () => {
+  const e = { items: [app(9, "offered"), app(8, "offered", { company: "Old" }), app(7, "offered")], total: 6, nextOffset: 3 };
+  const out = patchList("offered", e, app(8, "offered"), "applied")!;
+  expect(ids(out)).toEqual([9, 8, 7]);
+  expect(out.items[1].company).toBe("Company 8");
+  expect([out.total, out.nextOffset]).toEqual([6, 3]);
+});
+
+it("finding 4: a status list holding the row under another status loses it, whatever `from` says", () => {
+  setList("applied", { items: [app(8, "applied"), app(7, "applied"), app(6, "applied")], total: 3, nextOffset: 3 });
+  // Another tab moved 7 to screening; this tab's detail says screening and changes it to interviewing.
+  storeApplication(app(7, "interviewing"), "screening");
+  expect(ids(getList("applied"))).toEqual([8, 6]);
+  expect([getList("applied")!.total, getList("applied")!.nextOffset]).toEqual([2, 2]);
+});
+
+it("patchList applied twice changes no count twice", () => {
+  const lists = {
+    all: { items: [app(9, "applied"), app(8, "applied")], total: 2, nextOffset: 2 },
+    applied: { items: [app(9, "applied"), app(8, "applied")], total: 2, nextOffset: 2 },
+    offered: { items: [app(10, "offered")], total: 1, nextOffset: 1 },
+  };
+  const row = app(8, "offered");
+  for (const [key, e] of Object.entries(lists)) {
+    const once = patchList(key, e, row, "applied")!;
+    expect(patchList(key, once, row, "applied")).toEqual(once);
+  }
 });
 
 it("patchList, new status: a created_at that cannot be ordered exactly drops that list instead of guessing", () => {

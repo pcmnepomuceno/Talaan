@@ -106,37 +106,44 @@ function sortsBefore(a: Application, b: Application): boolean | null {
 }
 
 /**
- * One list after `row` changed from `oldStatus` to `row.status`. Returns `entry` itself when nothing
- * changes, and undefined when the row's place cannot be found exactly (drop that list; it refetches
- * when viewed). `nextOffset` is the server offset of the next unsent row, so it moves with every row
- * removed or inserted before it.
+ * One list after the server returned `row` for a status change from `oldStatus`. Derived from the
+ * list's own rows, so a second application changes nothing. Returns `entry` itself when nothing
+ * changes, and undefined when the result cannot be known exactly (drop that list; it refetches).
+ * `nextOffset` is the server offset of the next unsent row, so it moves with every row removed or
+ * inserted before it.
+ *   - all: a held row is replaced in place (order, total and cursor never depend on status).
+ *   - a status list holding the row under another status: removed, total - 1, nextOffset - 1,
+ *     whatever `oldStatus` says (another tab may have moved it already).
+ *   - the row's new status: replaced if held; inserted at its sorted place inside the held rows or
+ *     into a complete list (+1/+1); beyond the cursor of an incomplete list, dropped.
+ *   - `oldStatus` not holding the row: unchanged when complete; dropped when incomplete (the row
+ *     may sit beyond the cursor, and whether `total` still counts it cannot be known).
  */
 export function patchList(key: string, entry: ListEntry, row: Application, oldStatus: string): ListEntry | undefined {
   const i = entry.items.findIndex((a) => a.id === row.id);
-  if (key === listKey()) {
-    if (i === -1) return entry;
-    return { ...entry, items: entry.items.map((a) => (a.id === row.id ? row : a)) };
-  }
-  if (key === row.status && i !== -1) return { ...entry, items: entry.items.map((a) => (a.id === row.id ? row : a)) };
-  if (key === oldStatus) {
-    // Held: it was among the rows sent, so the cursor moves back one. Not held: it was beyond the cursor.
-    if (i === -1) return { ...entry, total: Math.max(0, entry.total - 1) };
+  const replaced = () => ({ ...entry, items: entry.items.map((a) => (a.id === row.id ? row : a)) });
+  const complete = entry.nextOffset >= entry.total;
+  if (key === listKey()) return i === -1 ? entry : replaced();
+  if (i !== -1) {
+    if (key === row.status) return replaced();
     return { items: entry.items.filter((a) => a.id !== row.id), total: Math.max(0, entry.total - 1), nextOffset: Math.max(0, entry.nextOffset - 1) };
   }
-  if (key !== row.status) return entry;
-  // The row joins this list. Its place among the held rows (or after all of them):
-  let at = entry.items.length;
-  for (let j = 0; j < entry.items.length; j++) {
-    const before = sortsBefore(row, entry.items[j]);
-    if (before === null) return undefined;
-    if (before) {
-      at = j;
-      break;
+  if (key === row.status) {
+    // The row joins this list. Its place among the held rows (or after all of them):
+    let at = entry.items.length;
+    for (let j = 0; j < entry.items.length; j++) {
+      const before = sortsBefore(row, entry.items[j]);
+      if (before === null) return undefined;
+      if (before) {
+        at = j;
+        break;
+      }
     }
+    if (at === entry.items.length && !complete) return undefined;
+    return { items: [...entry.items.slice(0, at), row, ...entry.items.slice(at)], total: entry.total + 1, nextOffset: entry.nextOffset + 1 };
   }
-  // After every held row: shown now only when the list is complete; otherwise a later page sends it.
-  if (at === entry.items.length && entry.nextOffset < entry.total) return { ...entry, total: entry.total + 1 };
-  return { items: [...entry.items.slice(0, at), row, ...entry.items.slice(at)], total: entry.total + 1, nextOffset: entry.nextOffset + 1 };
+  if (key === oldStatus && !complete) return undefined;
+  return entry;
 }
 
 const stored = new Set<(row: Application) => void>();
