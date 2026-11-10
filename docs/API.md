@@ -21,6 +21,7 @@ Contract first. Applications (milestone 3) and interviews (milestone 4) CRUD are
 | GET/PATCH/DELETE | `/applications/{id}` | 200 / 200 / 204 |
 | GET | `/applications/{id}/interviews` | paginated |
 | POST | `/applications/{id}/interviews` | 201 |
+| GET | `/interviews` | agenda: the caller's interviews across all applications; `?when=upcoming\|past` (required), paginated |
 | GET/PATCH/DELETE | `/interviews/{id}` | ownership via parent application |
 | GET | `/health` | root (unversioned); DB check (`SELECT 1`); 503 on DB failure |
 | GET | `/ping` | root (unversioned); no DB; for uptime pinger |
@@ -88,6 +89,9 @@ Partial update. An omitted field is unchanged. `null` clears a nullable field; `
 - `scheduled_at` must carry a timezone offset (naive is 422), years 1900-2200; past dates are allowed. Postgres stores the instant, not the sent offset, so the response shows the same instant in UTC (`...Z`).
 - `interviewer`: trimmed, 1-200 chars, nullable; a whitespace-only value is 422 (send `null` for none). `remarks`: max 5000, nullable. `outcome` defaults to `pending`.
 - PATCH: `null` clears `interviewer` and `remarks` only; `null` on `scheduled_at`, `mode` or `outcome` is 422.
+
+### Agenda: `GET /interviews?when=upcoming|past&limit=&offset=`
+Every interview under the caller's applications (another user's never appear, in rows or in `total`). `when` is required; a missing or unknown value is 422, as are `limit` outside 1-100 and a negative or out-of-range `offset` (defaults 20 and 0, like `GET /applications`). `upcoming` is `scheduled_at >= now`, ordered `scheduled_at` ascending then `id` ascending; `past` is `scheduled_at < now`, ordered `scheduled_at` descending then `id` descending. Body: `{"items", "total", "limit", "offset"}` where each item has the interview fields of `GET /interviews/{id}` plus `company` and `job_name` of its application, so the client needs no per-row request. No migration: the query uses the existing `created_by` and `job_application_id` indexes (DECISIONS.md, F8).
 
 ## Saved jobs
 New `application_status` value `saved` (first in order) and nullable `date_applied`, via a new migration (DECISIONS.md, 2026-10-20). When a row is not `saved` and `date_applied` is empty (create or PATCH), the server sets it to today in Asia/Manila; a client-sent date always wins. Moving back to `saved` keeps the date. Quick-add and the browser extension create `saved` rows.
