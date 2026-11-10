@@ -22,6 +22,7 @@ type Options = {
   // A 401 means the session is dead: send the user to /login?expired=1&next=<here>. Login, signup,
   // logout and the login page's own /me probe turn this off (a 401 there is an answer, not expiry).
   redirectOn401?: boolean;
+  signal?: AbortSignal; // an abort (a timeout included) is a network error: ApiError(0)
 };
 
 export const FALLBACK_NEXT = "/applications";
@@ -63,7 +64,7 @@ function fieldErrorsFrom(detail: unknown): FieldErrors {
 }
 
 export async function request<T = void>(path: string, opts: Options = {}): Promise<T> {
-  const { method = "GET", body, redirectOn401 = true } = opts;
+  const { method = "GET", body, redirectOn401 = true, signal } = opts;
   let res: Response;
   try {
     res = await fetch(path, {
@@ -71,6 +72,7 @@ export async function request<T = void>(path: string, opts: Options = {}): Promi
       credentials: "same-origin",
       headers: body === undefined ? { Accept: "application/json" } : { Accept: "application/json", "Content-Type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal,
     });
   } catch {
     throw new ApiError(0, "Network error");

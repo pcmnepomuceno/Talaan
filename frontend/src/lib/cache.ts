@@ -59,7 +59,38 @@ export function clearCaches() {
   lists.clear();
   details.clear();
   version++;
+  listEpoch++;
   for (const fn of [...listeners]) fn();
+}
+
+// ---- list responses and status writes ----
+// A list page may be stored only when it cannot straddle a status PATCH: it was requested after the
+// last change to the lists (listStamp unchanged) and no status write is in flight when it lands. A
+// page the server answered after the commit but that lands before the PATCH response would otherwise
+// get the change applied twice by patchList. A refused page is re-issued once the writes end.
+let listEpoch = 0; // bumped by clearCaches(), storeApplication() and beginMove()
+let moving = 0; // status writes in flight
+const settled = new Set<() => void>();
+
+export const listStamp = () => listEpoch;
+/** A list response requested at `stamp` may be stored now. */
+export const listFresh = (stamp: number) => stamp === listEpoch && moving === 0;
+/** Resolves once no status write is in flight (at once when none is). */
+export const listsSettled = () => (moving === 0 ? Promise.resolve() : new Promise<void>((r) => settled.add(r)));
+/** Tests only. */
+export const moveState = () => ({ moving, waiters: settled.size });
+
+/** Call before a status PATCH is sent; endMove() in its `finally`. */
+export function beginMove() {
+  moving++;
+  listEpoch++;
+}
+export function endMove() {
+  moving = Math.max(0, moving - 1);
+  if (moving > 0) return;
+  const waiters = [...settled];
+  settled.clear();
+  for (const r of waiters) r();
 }
 
 // ---- status change: exact patch from the server's row (no clear, no refetch) ----
@@ -119,9 +150,11 @@ export function onApplicationStored(fn: (row: Application) => void) {
  * A status change the server confirmed: patch every cached list and the cached detail with the
  * server's row, then notify, in one synchronous step. Nothing is cleared: the version and the detail
  * stamps stay, because a status change cannot alter interviews (an in-flight interviews request is
- * still valid) and the screens take the row from the cache, not from a refetch.
+ * still valid) and the screens take the row from the cache, not from a refetch. The list stamp moves,
+ * so a list page requested before this point is re-issued instead of stored over the patch.
  */
 export function storeApplication(row: Application, oldStatus: string) {
+  listEpoch++;
   for (const [key, entry] of [...lists]) {
     const next = patchList(key, entry, row, oldStatus);
     if (next === undefined) lists.delete(key);

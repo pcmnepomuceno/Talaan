@@ -7,7 +7,7 @@
 //   - interview create and edit: clearDetail(applicationId)
 //   - interview delete: replaceDetail(applicationId, page minus the row) (the detail still refetches)
 //   - any 404 on a write: clearCaches() (the row, or its application, may be gone)
-import { clearCaches, clearDetail, getDetail, replaceDetail, storeApplication } from "./cache";
+import { beginMove, clearCaches, clearDetail, endMove, getDetail, replaceDetail, storeApplication } from "./cache";
 import { ApiError, request } from "./http";
 import {
   type ApplicationInput,
@@ -26,6 +26,8 @@ import { type Application, type Interview, STATUSES, type Status } from "./types
 
 export const PAGE_SIZE = 50;
 export const INTERVIEWS_LIMIT = 100;
+/** A status PATCH that has not answered by then is abandoned (cold start measured at 19 s). */
+export const STATUS_TIMEOUT_MS = 60_000;
 const BASE = "/api/v1/applications";
 const INTERVIEWS = "/api/v1/interviews"; // flat: GET/PATCH/DELETE by interview id
 
@@ -77,9 +79,9 @@ export async function createApplication(input: ApplicationInput): Promise<number
 }
 
 /** The one application PATCH. A 404 clears every cache (the row is gone) and rethrows. */
-async function patchApplication(id: number, body: unknown): Promise<unknown> {
+async function patchApplication(id: number, body: unknown, signal?: AbortSignal): Promise<unknown> {
   try {
-    return await request<unknown>(`${BASE}/${id}`, { method: "PATCH", body });
+    return await request<unknown>(`${BASE}/${id}`, { method: "PATCH", body, signal });
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) clearCaches();
     throw e;
@@ -99,19 +101,28 @@ export async function updateApplication(id: number, initial: ApplicationInput, n
  * every cache in one step (storeApplication: the lists are patched, the detail swapped, nothing is
  * refetched), and returned. When that response cannot be mapped, the row is saved all the same:
  * the caches are cleared instead and null is returned (skeleton, then a refetch).
- * Rejects with ApiError, 404 included (caches cleared then).
+ * Rejects with ApiError: a 404 or no answer (status 0, a 60 s timeout included) clears the caches first.
  */
 export async function changeStatus(id: number, status: Status, from: Status): Promise<Application | null> {
-  const raw = await patchApplication(id, { status });
-  let row: Application;
+  beginMove(); // list pages landing until endMove() may straddle the commit: they are re-issued
   try {
-    row = fromApiApplication(raw);
-  } catch {
-    clearCaches();
-    return null;
+    const raw = await patchApplication(id, { status }, AbortSignal.timeout(STATUS_TIMEOUT_MS));
+    let row: Application;
+    try {
+      row = fromApiApplication(raw);
+    } catch {
+      clearCaches();
+      return null;
+    }
+    storeApplication(row, from);
+    return row;
+  } catch (e) {
+    // No answer (network error or timeout): the server may have committed, so nothing cached is trusted.
+    if (e instanceof ApiError && e.status === 0) clearCaches();
+    throw e;
+  } finally {
+    endMove();
   }
-  storeApplication(row, from);
-  return row;
 }
 
 /** 404 means it is already gone, which is what the caller wanted: resolves either way. */

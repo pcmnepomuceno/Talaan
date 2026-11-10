@@ -144,7 +144,7 @@ it("a fully loaded list for the new status gets the row at its sorted place, wit
   expect(rowIds()).toEqual([6, 5, 4, 2]);
 });
 
-it("a Load more in flight during a status change is dropped (its offset is stale) and offered again from the patched cursor", async () => {
+it("a Load more in flight during a status change is re-issued from the patched cursor (no gap, no second click)", async () => {
   install(Array.from({ length: 60 }, (_, i) => makeApp(i + 1, { status: "applied" })));
   search = "status=applied";
   paramId = "60";
@@ -164,9 +164,7 @@ it("a Load more in flight during a status change is dropped (its offset is stale
     release();
     await gate;
   });
-  await waitFor(() => expect(loadMore().textContent).toBe("Load more"));
-  expect(rowIds()).toHaveLength(49); // the stale page was not appended
-  await userEvent.click(loadMore());
+  // The stale page was not appended; the same Load more asked again from offset 49.
   await waitFor(() => expect(rowIds()).toHaveLength(59));
   expect(listGets().at(-1)!.path).toContain("offset=49");
   expect(rowIds()).toEqual(fake.db.apps.filter((a) => a.status === "applied").map((a) => a.id).sort((a, b) => b - a));
