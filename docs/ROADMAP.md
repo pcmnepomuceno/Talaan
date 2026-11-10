@@ -1,6 +1,6 @@
 # Talaan Roadmap
 
-**Current milestone:** P1 polish (draft).
+**Current milestone:** P1 polish (in review on `feature/p1-polish`): logo link, status select, Change status on the detail, waking-up line, interview writes clear one detail, status screenshots. Not in this batch: swipe actions, calendar view, demo account, README screenshots.
 
 ## Roadmap
 
@@ -55,10 +55,17 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - ~~F6 review item 10 (2026-11-09): the `DetailContext` value is a new object on every `ApplicationsScreen` render.~~ Done in the second review (PR #20, item 9): the context now holds `DetailState` directly, so no wrapper object is built per render.
 - Frontend e2e scripts (2026-11-09, PR #20 review round 2): `scripts/e2e-*.cjs` do not close the browser when a step throws, so a failed run hangs after the teardown has already run (seen with `e2e-interviews.cjs`). Wrap each run in try/finally that closes the browser.
 - DECISIONS.md (2026-11-09): the F6 entry (2026-11-04) has its last five bullets duplicated ("The backend's PATCH and DELETE are flat" through "Local scripts"). Remove the duplicate in a tiny docs commit; it is a copy error, not a rewrite of the decision.
-- Interview writes clear every cache (2026-11-09): `clearCaches()` also empties the list cache, so at 1280 the list pane briefly shows skeleton rows after an interview delete although the list is unchanged (seen in the F6 review e2e). Scope the clear for interview writes to the detail caches only.
-- Login "waking up" message (2026-11-09, F7): when the API takes more than about 3 seconds to answer, show that the server is waking up. A cold start was measured at 19 seconds (docs/DEPLOY.md section 5).
+- ~~Interview writes clear every cache (2026-11-09): `clearCaches()` also empties the list cache, so at 1280 the list pane briefly shows skeleton rows after an interview delete although the list is unchanged (seen in the F6 review e2e). Scope the clear for interview writes to the detail caches only.~~ Done in P1 (`clearDetail(id)`, DECISIONS.md 2026-11-09 P1).
+- ~~Login "waking up" message (2026-11-09, F7): when the API takes more than about 3 seconds to answer, show that the server is waking up. A cold start was measured at 19 seconds (docs/DEPLOY.md section 5).~~ Done in P1 for login, sign-up and the first list or detail load. Not covered: the edit screens' fresh fetch and the Account `getMe`; add `WakingUp` there if they prove slow.
 - No keep-alive ping that touches the database (2026-11-09, F7): it would burn Neon free compute hours. Check Neon's current free limits before adding any keep-alive; a ping to `/ping` (no DB) only wakes Render.
 - Check Vercel usage once after the first week (2026-11-09, F7): see the last item of docs/DEPLOY.md section 4.
+- PR #23 review item 8 (2026-11-10): Change status blocks a double submit four times (the `savingStatus` ref, `statusBusy`, the `if (!busy)` in StatusDialog's onSubmit, and aria-disabled controls). Since the busy controls use aria-disabled instead of `disabled`, the onSubmit check is the one that blocks Enter; the ref covers two clicks in one tick. Fold the rest into those two.
+- `scripts/e2e-auth.cjs` (2026-11-10): start its stack through `local-env.cjs` like the other e2e scripts (free ports, `_test` database, teardown with proof the dev database was untouched), and fix its header and any docs that mention `test-env.sh`, which does not exist.
+- `DeleteConfirm` (2026-11-10, PR #23 review): `busy` sets `disabled` on the focused confirm button, which drops focus to `<body>`; a failed delete leaves the open dialog with no focus. Use the StatusDialog approach (aria-disabled, focus back on failure).
+- Waking-up line (2026-11-10): shown only before the first data in a tab. If the free-tier API sleeps again mid-session, a later slow reload gets no explanation. Accepted for now.
+- PR #23 review round 3, finding 1 (2026-11-10): optimistic concurrency for PATCH, an `updated_at` precondition (409 on mismatch). A status PATCH the server saves after the client's 60 s timeout lands after the refetch, so the screen keeps the old status, and a retry can lose to the late save. Deferred: it needs a backend contract change; the client alone cannot close the window.
+- PR #23 review round 3, finding 3 (2026-11-10): during a status PATCH refuse only the lists it can change (`all`, the old and the new status) instead of every list. Today an unrelated page 1 can sit on the skeleton for up to 60 s on a cold backend. Deferred: latency on cold starts only, never wrong data.
+- PR #23 review round 3, finding 9 (2026-11-10): a per-id application stamp in `cache.ts`, bumped by `storeApplication`, to replace the three tokens that guard the application request in `use-detail.ts` (`cacheVersion`, `detailStamp`, a hook-local counter). Deferred: a refactor with no behavior change.
 
 ## Maintenance
 

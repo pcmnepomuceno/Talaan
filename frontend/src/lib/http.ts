@@ -10,6 +10,8 @@ export class ApiError extends Error {
     readonly detail: string,
     readonly fieldErrors: FieldErrors = {},
     readonly retryAfterSeconds: number | null = null,
+    // The HTTP status was 2xx but reading the body was aborted (a timeout included): the server answered.
+    readonly httpOk = false,
   ) {
     super(detail);
     this.name = "ApiError";
@@ -22,6 +24,7 @@ type Options = {
   // A 401 means the session is dead: send the user to /login?expired=1&next=<here>. Login, signup,
   // logout and the login page's own /me probe turn this off (a 401 there is an answer, not expiry).
   redirectOn401?: boolean;
+  signal?: AbortSignal; // an abort (a timeout included) is a network error: ApiError(0)
 };
 
 export const FALLBACK_NEXT = "/applications";
@@ -63,7 +66,7 @@ function fieldErrorsFrom(detail: unknown): FieldErrors {
 }
 
 export async function request<T = void>(path: string, opts: Options = {}): Promise<T> {
-  const { method = "GET", body, redirectOn401 = true } = opts;
+  const { method = "GET", body, redirectOn401 = true, signal } = opts;
   let res: Response;
   try {
     res = await fetch(path, {
@@ -71,6 +74,7 @@ export async function request<T = void>(path: string, opts: Options = {}): Promi
       credentials: "same-origin",
       headers: body === undefined ? { Accept: "application/json" } : { Accept: "application/json", "Content-Type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal,
     });
   } catch {
     throw new ApiError(0, "Network error");
@@ -82,8 +86,10 @@ export async function request<T = void>(path: string, opts: Options = {}): Promi
     // `undefined` as data. Status 0 gives the retryable "isn't responding" message.
     try {
       return (await res.json()) as T;
-    } catch {
-      throw new ApiError(0, "Unexpected response");
+    } catch (e) {
+      const name = (e as { name?: unknown } | null)?.name; // a DOMException is not always an Error (jsdom)
+      const aborted = name === "AbortError" || name === "TimeoutError";
+      throw new ApiError(0, "Unexpected response", {}, null, aborted);
     }
   }
 
@@ -101,7 +107,9 @@ export async function request<T = void>(path: string, opts: Options = {}): Promi
     const here = window.location.pathname + window.location.search;
     leaving = true;
     window.location.replace(`/login?expired=1&next=${encodeURIComponent(here)}`);
-    // Never settles: the page is being replaced, so the caller must not flash an error state.
+    // Never settles: the page is being replaced, so the caller must not flash an error state. The
+    // caller's `finally` never runs either: a status window it opened (beginMove) stays open until
+    // resetCaches(), which login, logout and account deletion call.
     return new Promise<T>(() => {});
   }
   throw error;

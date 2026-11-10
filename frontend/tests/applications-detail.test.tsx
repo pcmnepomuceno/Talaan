@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import ApplicationDetailPage from "../src/app/(app)/applications/(ledger)/[id]/page";
 import { ApplicationsScreen } from "../src/app/(app)/applications/(ledger)/screen";
 import { ToastProvider } from "../src/components/toast";
-import { clearCaches, getDetail } from "../src/lib/cache";
+import { useApplicationDetail } from "../src/app/(app)/applications/(ledger)/use-detail";
+import { clearCaches, getDetail, replaceDetail, storeApplication } from "../src/lib/cache";
+import type { Application } from "../src/lib/types";
 import { type Fake, installFake, json, makeInterview } from "./helpers/fake-api";
 
 const replace = vi.fn();
@@ -24,7 +26,13 @@ beforeEach(() => {
   replace.mockClear();
   search = "";
 });
-afterEach(() => vi.restoreAllMocks());
+// Disconnected here as well as in the test, so a timed-out test's observer never runs after cleanup.
+let observer: MutationObserver | null = null;
+afterEach(() => {
+  observer?.disconnect();
+  observer = null;
+  vi.restoreAllMocks();
+});
 
 const mount = () =>
   render(
@@ -159,6 +167,7 @@ it("delete success: the open detail never refetches the deleted id and never say
   const obs = new MutationObserver(() => {
     if (document.body.textContent?.includes("Application not found")) seen.push("not found");
   });
+  observer = obs;
   obs.observe(document.body, { subtree: true, childList: true, characterData: true });
   await userEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
   await userEvent.click(await screen.findByRole("button", { name: "Delete application" }));
@@ -200,4 +209,273 @@ it("a mapping error (unknown status from the API) is the generic load error, not
   fake.on("GET", /^\/applications\/1$/, () => json(200, { ...fake.db.apps[0], status: "hired" }));
   mount();
   expect(await screen.findByText("Couldn't load this application.")).toBeTruthy();
+});
+
+// ---- Change status (P1) ----
+const openStatus = async () => {
+  await screen.findByRole("list", { name: "Interviews" });
+  await userEvent.click(screen.getByRole("button", { name: "Change status" }));
+  return screen.getByRole("dialog", { name: "Change status" });
+};
+const update = () => screen.getByRole("button", { name: "Update status" });
+const skeletons = () => document.querySelectorAll(".animate-ledger-pulse").length;
+// The dialog (and the status filter) also list every status; the page's own stamp is outside them.
+const pageText = (t: string) => screen.queryAllByText(t).filter((el) => !el.closest("dialog, select"));
+const patches = () => fake.callsTo("PATCH", /^\/applications\/1$/);
+const SERVER_ROW = { status: "applied", date_applied: "2026-11-09" };
+
+it("Change status opens a radio group of the nine statuses with the current one checked", async () => {
+  mount();
+  const dialog = await openStatus();
+  const radios = within(dialog).getAllByRole("radio") as HTMLInputElement[];
+  expect(radios.map((r) => r.closest("label")!.textContent)).toEqual([
+    "Saved", "Applied", "Screening", "Interviewing", "Offered", "Accepted", "Rejected", "Withdrawn", "Ghosted",
+  ]);
+  expect(radios.filter((r) => r.checked).map((r) => r.closest("label")!.textContent)).toEqual(["Interviewing"]);
+  expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeTruthy();
+});
+
+it("confirming sends only {status}, toasts, and shows the new status", async () => {
+  mount();
+  await openStatus();
+  await userEvent.click(screen.getByRole("radio", { name: "Applied" }));
+  expect(patches()).toHaveLength(0); // choosing alone sends nothing
+  await userEvent.click(update());
+  await waitFor(() => expect(patches()).toHaveLength(1));
+  expect(patches()[0].body).toEqual({ status: "applied" });
+  expect(await screen.findByText("Status updated.")).toBeTruthy();
+  await waitFor(() => expect(pageText("Applied").length).toBeGreaterThan(0));
+  expect(pageText("Interviewing")).toHaveLength(0);
+});
+
+it("the server's row shows at once: no skeleton, new stamp, filled date, no refetch, actions enabled", async () => {
+  Object.assign(fake.db.apps[0], { status: "saved", date_applied: null });
+  mount();
+  await screen.findByRole("list", { name: "Interviews" });
+  expect(pageText("Nov 9, 2026")).toHaveLength(0);
+  fake.on("PATCH", /^\/applications\/1$/, () => json(200, { ...fake.db.apps[0], ...SERVER_ROW }));
+  const gets = fake.callsTo("GET", /^\/applications\/1(\/|$)/).length;
+  await openStatus();
+  await userEvent.click(screen.getByRole("radio", { name: "Applied" }));
+  await userEvent.click(update());
+  await waitFor(() => expect(pageText("Applied").length).toBeGreaterThan(0));
+  expect(pageText("Nov 9, 2026").length).toBeGreaterThan(0); // the date the server filled in
+  expect(skeletons()).toBe(0);
+  expect(screen.queryByText("Loading application")).toBeNull();
+  expect(screen.getByRole("list", { name: "Interviews" })).toBeTruthy();
+  // The PATCH response is the fresh row and a status cannot change interviews: nothing is refetched.
+  await new Promise((r) => setTimeout(r, 30));
+  expect(fake.callsTo("GET", /^\/applications\/1(\/|$)/)).toHaveLength(gets);
+  expect(detailSection().getAttribute("aria-busy")).toBeNull();
+  expect((screen.getByRole("button", { name: "Change status" }) as HTMLButtonElement).disabled).toBe(false);
+  for (const b of actions()) expect(b.getAttribute("aria-disabled")).toBeNull();
+});
+
+it("the same status sends nothing and says nothing", async () => {
+  mount();
+  const dialog = await openStatus();
+  await userEvent.click(update());
+  expect(patches()).toHaveLength(0);
+  expect(dialog.hasAttribute("open")).toBe(false);
+  expect(screen.queryByText("Status updated.")).toBeNull();
+});
+
+it("a double activation sends one request, and both buttons are aria-disabled while it runs", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  fake.on("PATCH", /^\/applications\/1$/, async () => (await gate, json(200, { ...fake.db.apps[0], ...SERVER_ROW })));
+  mount();
+  await openStatus();
+  await userEvent.click(screen.getByRole("radio", { name: "Applied" }));
+  const btn = update();
+  await act(async () => {
+    btn.click();
+    btn.click();
+  });
+  expect(patches()).toHaveLength(1);
+  expect(update().getAttribute("aria-disabled")).toBe("true");
+  expect(screen.getByRole("button", { name: "Cancel" }).getAttribute("aria-disabled")).toBe("true");
+  release();
+  expect(await screen.findByText("Status updated.")).toBeTruthy();
+});
+
+it("a failed save keeps the dialog open, shows an error, and writes nothing to the cache", async () => {
+  fake.failNext("PATCH", /^\/applications\/1$/);
+  mount();
+  const dialog = await openStatus();
+  await userEvent.click(screen.getByRole("radio", { name: "Applied" }));
+  await userEvent.click(update());
+  expect(await screen.findByText("Talaan isn't responding right now. Try again in a moment.")).toBeTruthy();
+  expect(dialog.hasAttribute("open")).toBe(true);
+  expect(getDetail(1)?.application.status).toBe("interviewing");
+  expect(fake.callsTo("GET", /^\/applications\/1$/)).toHaveLength(1); // no refetch: nothing was cleared
+  expect(update().getAttribute("aria-disabled")).toBeNull(); // can retry
+  expect(screen.queryByText("Status updated.")).toBeNull();
+});
+
+it("review round 3, finding 5: after a no-answer save, a failed reload and Retry, the dialog does not reopen by itself", async () => {
+  mount();
+  await openStatus();
+  fake.failNext("PATCH", /^\/applications\/1$/, 504); // no answer: every cache is cleared
+  fake.failNext("GET", /^\/applications\/1$/); // and the reload fails once
+  await userEvent.click(screen.getByRole("radio", { name: "Applied" }));
+  await userEvent.click(update());
+  await userEvent.click(await screen.findByRole("button", { name: "Retry" }));
+  await screen.findByRole("list", { name: "Interviews" });
+  expect(screen.queryByRole("dialog", { name: "Change status" })).toBeNull();
+});
+
+it("review round 3, finding 8a: the timeout lands while a 200 body is read: the save is known, caches cleared, \"Status updated.\"", async () => {
+  fake.on("PATCH", /^\/applications\/1$/, () => {
+    Object.assign(fake.db.apps[0], { status: "applied" }); // the server committed
+    const res = json(200, fake.db.apps[0]);
+    res.json = () => Promise.reject(new DOMException("signal timed out", "TimeoutError"));
+    return res;
+  });
+  mount();
+  await openStatus();
+  await userEvent.click(screen.getByRole("radio", { name: "Applied" }));
+  await userEvent.click(update());
+  await waitFor(() => expect(fake.callsTo("GET", /^\/applications\/1$/)).toHaveLength(2)); // cleared, refetched
+  await screen.findByRole("list", { name: "Interviews" });
+  expect(getDetail(1)?.application.status).toBe("applied");
+  expect(pageText("Applied").length).toBeGreaterThan(0);
+  expect(screen.queryByRole("dialog", { name: "Change status" })).toBeNull();
+  expect(screen.getByText("Status updated.")).toBeTruthy();
+  expect(screen.queryByText("Talaan isn't responding right now. Try again in a moment.")).toBeNull();
+});
+
+// Controls for 8a: only a 2xx whose body read was aborted counts as saved.
+const noAnswerToast = "Talaan isn't responding right now. Try again in a moment.";
+it("8a control: a 2xx that is not JSON (a proxy page) is still no answer: \"isn't responding\", dialog open", async () => {
+  fake.on("PATCH", /^\/applications\/1$/, () => new Response("<html>proxy</html>", { status: 200, headers: { "Content-Type": "text/html" } }));
+  mount();
+  await openStatus();
+  await userEvent.click(screen.getByRole("radio", { name: "Applied" }));
+  await userEvent.click(update());
+  expect(await screen.findByText(noAnswerToast)).toBeTruthy();
+  expect(screen.queryByText("Status updated.")).toBeNull();
+});
+
+it("8a control: an abort before any response is still no answer: \"isn't responding\"", async () => {
+  fake.on("PATCH", /^\/applications\/1$/, () => Promise.reject(new DOMException("signal timed out", "TimeoutError")));
+  mount();
+  await openStatus();
+  await userEvent.click(screen.getByRole("radio", { name: "Applied" }));
+  await userEvent.click(update());
+  expect(await screen.findByText(noAnswerToast)).toBeTruthy();
+  expect(screen.queryByText("Status updated.")).toBeNull();
+});
+
+it("a 404 on save shows the not-found view", async () => {
+  mount();
+  await openStatus();
+  fake.on("PATCH", /^\/applications\/1$/, () => json(404, { detail: "Application not found." }));
+  fake.on("GET", /^\/applications\/1$/, () => json(404, { detail: "Application not found." }));
+  fake.on("GET", /^\/applications\/1\/interviews/, () => json(404, { detail: "Application not found." }));
+  await userEvent.click(screen.getByRole("radio", { name: "Applied" }));
+  await userEvent.click(update());
+  expect(await screen.findByText("Application not found.")).toBeTruthy();
+});
+
+it("a response the client cannot map falls back to the skeleton and a refetch", async () => {
+  fake.on("PATCH", /^\/applications\/1$/, () => json(200, { ...fake.db.apps[0], status: "archived" }));
+  mount();
+  await openStatus();
+  await userEvent.click(screen.getByRole("radio", { name: "Applied" }));
+  await userEvent.click(update());
+  expect(await screen.findByText("Status updated.")).toBeTruthy();
+  await waitFor(() => expect(fake.callsTo("GET", /^\/applications\/1$/)).toHaveLength(2));
+  await screen.findByRole("list", { name: "Interviews" });
+});
+
+it("keyboard only: arrow keys choose, Enter confirms, focus returns to Change status", async () => {
+  const user = userEvent.setup();
+  mount();
+  await openStatus();
+  (screen.getByRole("radio", { name: "Interviewing" }) as HTMLElement).focus();
+  await user.keyboard("{ArrowUp}{ArrowUp}{ArrowUp}"); // Interviewing -> Screening -> Applied -> Saved
+  expect((screen.getByRole("radio", { name: "Saved" }) as HTMLInputElement).checked).toBe(true);
+  await user.keyboard("{ArrowDown}"); // -> Applied
+  expect(patches()).toHaveLength(0);
+  await user.keyboard("{Enter}");
+  await waitFor(() => expect(patches()).toHaveLength(1));
+  expect(patches()[0].body).toEqual({ status: "applied" });
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Change status" })));
+});
+
+it("Cancel closes without a request", async () => {
+  mount();
+  const dialog = await openStatus();
+  await userEvent.click(screen.getByRole("radio", { name: "Ghosted" }));
+  await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(dialog.hasAttribute("open")).toBe(false);
+  expect(patches()).toHaveLength(0);
+  // reopening starts from the current status again
+  await userEvent.click(screen.getByRole("button", { name: "Change status" }));
+  expect((screen.getByRole("radio", { name: "Interviewing" }) as HTMLInputElement).checked).toBe(true);
+});
+
+// ---- review round 2, finding 7: a status change and an in-flight detail request ----
+
+it("finding 7: an application request that started before a status change never replaces the server's new row", async () => {
+  const first = mount();
+  await screen.findByRole("list", { name: "Interviews" });
+  first.unmount(); // the detail is cached now
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  const old = { ...fake.db.apps[0] }; // answered before the change
+  fake.on("GET", /^\/applications\/1$/, async () => (await gate, json(200, old)));
+  const { result } = renderHook(() => useApplicationDetail("1"));
+  await waitFor(() => expect(result.current.state.kind === "ready" && result.current.state.interviews.kind).toBe("ready"));
+  const next = { ...old, status: old.status === "offered" ? "rejected" : "offered" } as Application;
+  await act(async () => {
+    storeApplication(next, old.status);
+    release();
+    await gate;
+    await new Promise((r) => setTimeout(r, 0));
+  });
+  const s = result.current.state;
+  expect(s.kind === "ready" && s.application.status).toBe(next.status);
+  expect(getDetail(1)?.application.status).toBe(next.status);
+});
+
+it("finding 7: a detail refresh starting while the status PATCH is in flight does not close the busy dialog", async () => {
+  mount();
+  const dialog = await openStatus();
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  fake.on("PATCH", /^\/applications\/1$/, async () => (await gate, json(200, { ...fake.db.apps[0], status: "offered" })));
+  await userEvent.click(within(dialog).getByRole("radio", { name: "Offered" }));
+  await userEvent.click(update());
+  act(() => replaceDetail(1, getDetail(1)!)); // a background refresh mid-PATCH (content stays)
+  expect(dialog.isConnected && dialog.hasAttribute("open")).toBe(true);
+  await act(async () => {
+    release();
+    await gate;
+  });
+  await screen.findByText("Status updated.");
+});
+
+it("an interviews request in flight during a status change is still applied (a status cannot change interviews)", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  const page = { items: [makeInterview(900, 1)], total: 1, limit: 100, offset: 0 };
+  fake.on("GET", /^\/applications\/1\/interviews/, async () => (await gate, json(200, page)));
+  const { result } = renderHook(() => useApplicationDetail("1"));
+  await waitFor(() => expect(result.current.state.kind === "ready" && !result.current.state.refreshing).toBe(true));
+  expect(result.current.state.kind === "ready" && result.current.state.interviews.kind).toBe("loading");
+  const row = { ...fake.db.apps[0], status: "rejected" } as Application;
+  act(() => storeApplication(row, fake.db.apps[0].status));
+  await act(async () => {
+    release();
+    await gate;
+  });
+  await waitFor(() => {
+    const s = result.current.state;
+    expect(s.kind === "ready" && s.interviews.kind === "ready" && s.interviews.items.map((i) => i.id)).toEqual([900]);
+  });
+  const s = result.current.state;
+  expect(s.kind === "ready" && s.application.status).toBe("rejected");
+  expect(fake.callsTo("GET", /^\/applications\/1\/interviews/)).toHaveLength(1); // not refetched
 });

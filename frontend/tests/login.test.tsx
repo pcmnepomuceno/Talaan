@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LoginForm } from "../src/app/login/login-form";
@@ -43,6 +43,11 @@ async function fillLogin(email = "a@example.ph", password = "Secret1!") {
 const submitLogin = () => userEvent.click(screen.getByRole("button", { name: /^Log in|Logging in/ }));
 
 describe("shell", () => {
+  it("the logo on the login band is not a link", () => {
+    render(<LoginForm />);
+    expect(screen.queryByRole("link", { name: "Talaan, go to applications" })).toBeNull();
+  });
+
   it("empty log in shows inline errors, marks fields invalid, focuses the first, never posts", async () => {
     render(<LoginForm />);
     await userEvent.click(screen.getByRole("button", { name: "Log in" }));
@@ -382,5 +387,39 @@ describe("create account", () => {
     expect(calls(SIGNUP)).toHaveLength(1);
     d.resolve(json(400, { detail: "Invalid or expired invite code." }));
     await screen.findByText("Invalid or expired invite code.");
+  });
+});
+
+describe("waking-up line", () => {
+  const TEXT = "Starting up. This can take up to a minute the first time.";
+  afterEach(() => vi.useRealTimers());
+  async function submitSlow() {
+    const d = deferred();
+    handlers[LOGIN] = () => d.promise;
+    render(<LoginForm />);
+    await fillLogin();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] }); // after typing: user-event needs real timers
+    await act(async () => screen.getByRole("button", { name: "Log in" }).click());
+    return { d };
+  }
+  const advance = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
+
+  it("appears at 3 s of a pending login, not before, and goes away on success", async () => {
+    const { d } = await submitSlow();
+    await advance(2999);
+    expect(screen.queryByText(TEXT)).toBeNull();
+    await advance(1);
+    expect(screen.getByText(TEXT)).toBeTruthy();
+    await act(async () => d.resolve(json(200, { detail: "Logged in" })));
+    expect(screen.queryByText(TEXT)).toBeNull();
+  });
+
+  it("goes away when the login fails", async () => {
+    const { d } = await submitSlow();
+    await advance(3000);
+    expect(screen.getByText(TEXT)).toBeTruthy();
+    await act(async () => d.resolve(json(401, { detail: "Invalid credentials" })));
+    expect(screen.queryByText(TEXT)).toBeNull();
+    expect(screen.getByText("Invalid email or password.")).toBeTruthy();
   });
 });

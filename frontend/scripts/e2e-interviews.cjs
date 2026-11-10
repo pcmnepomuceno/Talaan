@@ -44,6 +44,16 @@ withEnv(async ({ base, createInvite }) => {
   const urlIs = (re) => page.waitForURL(re, { timeout: 15000 });
   const toasts = () => page.locator('[role="status"]').allInnerTexts();
   const nf = () => page.evaluate(() => window.__nf);
+  // An interview write changes no list field, so the list pane must never show skeleton rows after one
+  // (1280: both panes mounted). watch() before the write, stop() after the detail is back and settled.
+  const watchListSkeleton = () =>
+    page.evaluate(() => {
+      window.__lsk = 0;
+      const look = () => (window.__lsk += document.querySelectorAll('section[aria-label="Applications"] .animate-ledger-pulse').length);
+      window.__lskObs = new MutationObserver(look);
+      window.__lskObs.observe(document.body, { subtree: true, childList: true, attributes: true });
+    });
+  const stopListSkeleton = () => page.evaluate(() => (window.__lskObs.disconnect(), window.__lsk));
   const ivTexts = () => page.getByRole("list", { name: "Interviews" }).locator("> li").allInnerTexts();
   const time = (label = /Date and time/) => page.getByLabel(label);
 
@@ -89,9 +99,13 @@ withEnv(async ({ base, createInvite }) => {
   await page.getByLabel("Interviewer").fill("  Ana Santos 🎯  ");
   await page.getByLabel("Notes", { exact: true }).fill("Portfolio walkthrough.\n日本語");
   await page.evaluate(() => (window.__nf.length = 0));
+  await watchListSkeleton();
   await page.getByRole("button", { name: "Save interview" }).click();
   await urlIs(new RegExp(`/applications/${id}$`));
   await page.getByRole("list", { name: "Interviews" }).waitFor();
+  await page.getByRole("list", { name: "Applications" }).waitFor();
+  await page.waitForTimeout(1000); // the background refetches have landed
+  check("no list-pane skeleton after creating an interview", (await stopListSkeleton()) === 0);
   check("toast 'Interview saved.'", (await toasts()).some((t) => t.includes("Interview saved.")));
   check('"not found" never flashed around the first save', (await nf()).length === 0, JSON.stringify(await nf()));
   check("detail shows the same wall-clock time (11:30 PM PHT)", (await ivTexts())[0].includes("Nov 20, 2026, 11:30 PM PHT"), (await ivTexts())[0].split("\n")[0]);
@@ -117,9 +131,13 @@ withEnv(async ({ base, createInvite }) => {
   const patches = [];
   const onReq = (r) => r.method() === "PATCH" && patches.push(r.postData());
   page.on("request", onReq);
+  await watchListSkeleton();
   await page.getByRole("button", { name: "Save interview" }).click();
   await urlIs(new RegExp(`/applications/${id}$`));
   await page.getByRole("list", { name: "Interviews" }).waitFor();
+  await page.getByRole("list", { name: "Applications" }).waitFor();
+  await page.waitForTimeout(1000);
+  check("no list-pane skeleton after editing an interview", (await stopListSkeleton()) === 0);
   page.off("request", onReq);
   check("edit sent only the changed field", patches.length === 1 && patches[0] === '{"outcome":"good"}', JSON.stringify(patches));
   check('"not found" never flashed around the edit save', (await nf()).length === 0, JSON.stringify(await nf()));
@@ -205,11 +223,12 @@ withEnv(async ({ base, createInvite }) => {
   page.on("request", onGet);
   // Skeleton observer: any skeleton row in the detail pane (or anywhere, logged) from the delete click on.
   await page.evaluate(() => {
-    window.__sk = { detail: 0, any: 0 };
+    window.__sk = { detail: 0, list: 0, any: 0 };
     const look = () => {
       for (const el of document.querySelectorAll(".animate-ledger-pulse")) {
         window.__sk.any++;
         if (el.closest('section[aria-label="Application detail"]')) window.__sk.detail++;
+        if (el.closest('section[aria-label="Applications"]')) window.__sk.list++;
       }
     };
     window.__skObs = new MutationObserver(look);
@@ -223,6 +242,7 @@ withEnv(async ({ base, createInvite }) => {
   await page.waitForTimeout(1000);
   const sk = await page.evaluate(() => (window.__skObs.disconnect(), window.__sk));
   check("no skeleton in the detail pane from the delete click until after the refetch", sk.detail === 0, JSON.stringify(sk));
+  check("no skeleton in the list pane after deleting an interview (1280)", sk.list === 0, JSON.stringify(sk));
   check("focus moved to the Interviews heading", await page.evaluate(() => document.activeElement?.id === "d-interviews"), await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 80)));
   page.off("request", onGet);
   check("toast 'Interview deleted.'", (await toasts()).some((t) => t.includes("Interview deleted.")));

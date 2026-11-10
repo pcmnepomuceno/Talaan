@@ -49,27 +49,47 @@ it("shows the skeleton, then rows newest first", async () => {
   expect(screen.queryByText("Loading applications")).toBeNull();
 });
 
-it("filters by ?status= and marks the tab pressed", async () => {
+const statusSelect = () => screen.getByRole("combobox", { name: "Status" }) as HTMLSelectElement;
+
+it("filters by ?status= and shows it selected", async () => {
   search = "status=offered";
   screenUnderTest();
   expect(await rows()).toHaveLength(1);
-  expect(screen.getByRole("button", { name: "Offered" }).getAttribute("aria-pressed")).toBe("true");
+  expect(statusSelect().value).toBe("offered");
 });
 
-it("invalid status falls back to all", async () => {
+it("invalid status falls back to all, selected and unfiltered", async () => {
   search = "status=bogus";
   screenUnderTest();
   expect(await rows()).toHaveLength(5);
-  expect(screen.getByRole("button", { name: "All" }).getAttribute("aria-pressed")).toBe("true");
+  expect(statusSelect().value).toBe("all");
+  expect(fake.calls[0].path).toBe("/applications?limit=50&offset=0");
 });
 
-it("clicking a tab replaces the URL", async () => {
+it("the select offers All and the nine statuses, label only", async () => {
   screenUnderTest();
   await rows();
-  await userEvent.click(screen.getByRole("button", { name: "Applied" }));
+  expect([...statusSelect().options].map((o) => o.textContent)).toEqual([
+    "All", "Saved", "Applied", "Screening", "Interviewing", "Offered", "Accepted", "Rejected", "Withdrawn", "Ghosted",
+  ]);
+  expect(statusSelect().value).toBe("all");
+});
+
+it("choosing a status replaces the URL, and All clears it", async () => {
+  screenUnderTest();
+  await rows();
+  await userEvent.selectOptions(statusSelect(), "applied");
   expect(replace).toHaveBeenCalledWith("/applications?status=applied");
-  await userEvent.click(screen.getByRole("button", { name: "All" }));
+  await userEvent.selectOptions(statusSelect(), "all");
   expect(replace).toHaveBeenLastCalledWith("/applications");
+});
+
+it("the select keeps the open detail when the filter changes", async () => {
+  params = { id: "1" };
+  screenUnderTest();
+  await screen.findByRole("list", { name: "Interviews" });
+  await userEvent.selectOptions(statusSelect(), "offered");
+  expect(replace).toHaveBeenCalledWith("/applications/1?status=offered");
 });
 
 it("row links keep the filter", async () => {

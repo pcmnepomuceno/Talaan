@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import ApplicationDetailPage from "../src/app/(app)/applications/(ledger)/[id]/page";
 import { ApplicationsScreen } from "../src/app/(app)/applications/(ledger)/screen";
 import { ToastProvider } from "../src/components/toast";
-import { clearCaches } from "../src/lib/cache";
+import { clearCaches, getList } from "../src/lib/cache";
 import { type Fake, installFake, json, makeInterview } from "./helpers/fake-api";
 
 const replace = vi.fn();
@@ -26,7 +26,14 @@ beforeEach(() => {
   search = "";
   paramId = "1";
 });
-afterEach(() => vi.restoreAllMocks());
+// The observer outlives a test that times out (RTL unmounts first): disconnect it here, and query
+// without throwing inside its callback, so a timeout never turns into an unhandled error.
+let observer: MutationObserver | null = null;
+afterEach(() => {
+  observer?.disconnect();
+  observer = null;
+  vi.restoreAllMocks();
+});
 
 const ui = () => (
   <ToastProvider>
@@ -39,7 +46,7 @@ const mount = () => render(ui());
 const list = () => screen.findByRole("list", { name: "Interviews" });
 const DATE1 = "Oct 24, 2026, 2:00 PM PHT"; // seed interview 1
 const ivDialog = () => [...document.querySelectorAll("dialog")].find((d) => d.textContent?.includes("Delete this interview?"))!;
-const skeleton = () => screen.getByRole("region", { name: "Application detail" }).querySelector("li.animate-ledger-pulse");
+const skeleton = () => screen.queryByRole("region", { name: "Application detail" })?.querySelector("li.animate-ledger-pulse");
 
 it("Add interview is in the Interviews header and goes to the new-interview route, keeping the status filter", async () => {
   search = "status=interviewing";
@@ -89,9 +96,13 @@ it("each row has Edit and Delete whose accessible names include the date; Edit l
   expect(edit.textContent).toBe("Edit"); // visible label first, inside the accessible name
 });
 
+const listSkeleton = () => document.querySelector('section[aria-label="Applications"] .animate-ledger-pulse');
+
 it("delete: the dialog names the date and mode; confirming removes the row at once, no skeleton, no not-found, and refetches", async () => {
   mount();
   await list();
+  await screen.findByRole("list", { name: "Applications" });
+  const listGets = fake.callsTo("GET", /^\/applications\?/).length;
   await userEvent.click(screen.getByRole("button", { name: `Delete interview, ${DATE1}` }));
   expect(await screen.findByRole("heading", { name: "Delete this interview?" })).toBeTruthy();
   expect(ivDialog().textContent).toContain(`The online interview on ${DATE1} will be removed. This cannot be undone.`);
@@ -103,9 +114,11 @@ it("delete: the dialog names the date and mode; confirming removes the row at on
   const obs = new MutationObserver(() => {
     if (document.body.textContent?.includes("not found")) bad.push("not found");
     if (skeleton()) bad.push("skeleton");
+    if (listSkeleton()) bad.push("list skeleton"); // an interview write changes no list field
     if (!screen.queryByRole("list", { name: "Interviews" })) bad.push("list gone");
     if (!document.body.textContent?.includes("Frontend Engineer")) bad.push("page gone");
   });
+  observer = obs;
   obs.observe(document.body, { subtree: true, childList: true, characterData: true });
   await userEvent.click(screen.getByRole("button", { name: "Delete interview" }));
   // gone while the refetch is still pending
@@ -117,6 +130,8 @@ it("delete: the dialog names the date and mode; confirming removes the row at on
   await new Promise((r) => setTimeout(r, 50));
   obs.disconnect();
   expect(bad).toEqual([]);
+  expect(fake.callsTo("GET", /^\/applications\?/)).toHaveLength(listGets); // the list was not refetched
+  expect(getList()).toBeDefined(); // and its cache entry survived
   expect(fake.db.interviews.some((i) => i.id === 1)).toBe(false);
   expect(fake.callsTo("DELETE", /^\/interviews\/1$/)).toHaveLength(1);
 });

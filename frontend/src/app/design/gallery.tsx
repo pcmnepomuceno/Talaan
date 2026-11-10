@@ -17,7 +17,7 @@ import {
 } from "@/lib/types";
 import { Button } from "@/components/button";
 import { PasswordField, Select, Textarea, TextField } from "@/components/fields";
-import { type Filter, FilterTabs } from "@/components/filter-tabs";
+import { type Filter, StatusFilter } from "@/components/status-filter";
 import { Icon, iconNames } from "@/components/icon";
 import { SegmentedControl } from "@/components/segmented-control";
 import { OUTCOMES, STATUSES, StatusStamp, stampLabel } from "@/components/status-stamp";
@@ -170,8 +170,8 @@ export function Gallery() {
         </div>
       </Block>
 
-      <Block title="Filter tabs">
-        <FilterTabs value={filter} onChange={setFilter} />
+      <Block title="Status filter">
+        <StatusFilter value={filter} onChange={setFilter} />
       </Block>
 
       <Block title="Ledger sheet (select a row)">

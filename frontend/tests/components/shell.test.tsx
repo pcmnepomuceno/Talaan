@@ -12,7 +12,27 @@ const current = () => screen.getAllByRole("link").filter((l) => l.getAttribute("
 it("nav has exactly Applications and Account, labelled", () => {
   render(<MainNav />);
   const nav = screen.getByRole("navigation", { name: "Main" });
-  expect(within(nav).getAllByRole("link").map((l) => l.textContent)).toEqual(["Applications", "Account"]);
+  expect(within(within(nav).getByRole("list")).getAllByRole("link").map((l) => l.textContent)).toEqual(["Applications", "Account"]);
+});
+
+const LOGO = "Talaan, go to applications";
+
+it("main bar logo and wordmark are one link to the applications list", () => {
+  render(<AppBar />);
+  const link = within(screen.getByRole("banner")).getByRole("link", { name: LOGO });
+  expect(link.getAttribute("href")).toBe("/applications");
+  expect(link.textContent).toBe("Talaan");
+});
+
+it("side nav logo links to the applications list", () => {
+  render(<MainNav />);
+  const link = within(screen.getByRole("navigation", { name: "Main" })).getByRole("link", { name: LOGO });
+  expect(link.getAttribute("href")).toBe("/applications");
+});
+
+it("inner bar has no logo link", () => {
+  render(<AppBar title="Account" backHref="/applications" />);
+  expect(screen.queryByRole("link", { name: LOGO })).toBeNull();
 });
 
 it.each([

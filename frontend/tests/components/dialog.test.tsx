@@ -3,7 +3,7 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { expect, it, vi } from "vitest";
-import { DeleteConfirm } from "../../src/components/dialog";
+import { DeleteConfirm, StatusDialog } from "../../src/components/dialog";
 import { Dialog } from "../../src/components/dialog";
 
 function Demo({ onConfirm = () => {} }: { onConfirm?: () => void }) {
@@ -222,4 +222,41 @@ it("a second dialog opened on top: Escape closes only the top one", async () => 
   await userEvent.keyboard("{Escape}");
   expect(screen.getAllByRole("dialog").map((d) => d.getAttribute("aria-labelledby") && d.textContent)).toHaveLength(1);
   expect(screen.getByRole("dialog", { name: "First" })).toBeTruthy();
+});
+
+// ---- StatusDialog busy (PR #23 review item 2) ----
+function statusUi(busy: boolean, onConfirm = vi.fn(), onCancel = vi.fn()) {
+  return <StatusDialog open current="interviewing" busy={busy} onCancel={onCancel} onConfirm={onConfirm} />;
+}
+
+it("StatusDialog busy: focus stays on the focused control, nothing is disabled, and input is ignored", async () => {
+  const onConfirm = vi.fn();
+  const onCancel = vi.fn();
+  const { rerender } = render(statusUi(false, onConfirm, onCancel));
+  const applied = screen.getByRole("radio", { name: "Applied" }) as HTMLInputElement;
+  await userEvent.click(applied);
+  rerender(statusUi(true, onConfirm, onCancel));
+  expect(document.activeElement).toBe(applied);
+  const dialog = screen.getByRole("dialog", { name: "Change status" });
+  // `disabled` drops focus to <body> in browsers; the busy state uses aria-disabled instead.
+  expect(dialog.querySelectorAll(":disabled")).toHaveLength(0);
+  for (const r of screen.getAllByRole("radio")) expect(r.getAttribute("aria-disabled")).toBe("true");
+  expect(screen.getByRole("button", { name: "Update status" }).getAttribute("aria-disabled")).toBe("true");
+  expect(screen.getByRole("button", { name: "Cancel" }).getAttribute("aria-disabled")).toBe("true");
+  await userEvent.click(screen.getByRole("radio", { name: "Ghosted" }));
+  expect(applied.checked).toBe(true);
+  await userEvent.click(screen.getByRole("button", { name: "Update status" }));
+  await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(onConfirm).not.toHaveBeenCalled();
+  expect(onCancel).not.toHaveBeenCalled();
+});
+
+it("StatusDialog: when busy ends with the dialog still open (a failed save), the checked radio has focus", async () => {
+  const { rerender } = render(statusUi(false));
+  await userEvent.click(screen.getByRole("radio", { name: "Applied" }));
+  const update = screen.getByRole("button", { name: "Update status" });
+  update.focus();
+  rerender(statusUi(true));
+  rerender(statusUi(false));
+  expect(document.activeElement).toBe(screen.getByRole("radio", { name: "Applied" }));
 });

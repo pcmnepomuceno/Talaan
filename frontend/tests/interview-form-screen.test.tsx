@@ -6,7 +6,7 @@ import { EditInterviewScreen } from "../src/app/(app)/applications/[id]/intervie
 import NewInterviewPage from "../src/app/(app)/applications/[id]/interviews/new/page";
 import { InterviewForm } from "../src/components/interview-form";
 import { ToastProvider } from "../src/components/toast";
-import { clearCaches, setDetail } from "../src/lib/cache";
+import { clearCaches, getDetail, getList, setDetail, setList } from "../src/lib/cache";
 import { type Fake, installFake, json, makeInterview } from "./helpers/fake-api";
 
 // Lets one test make the submit-time conversion throw (it cannot after validate() passes today).
@@ -385,4 +385,33 @@ it("new route with the application in the detail cache shows the form at once, a
   expect(skeletonRow()).toBeNull();
   expect(screen.getByLabelText(/Date and time/)).toBeTruthy();
   expect(fake.callsTo("GET", /^\/applications\/1$/)).toHaveLength(0);
+});
+
+const listEntry = { items: [], total: 0, nextOffset: 0 };
+
+it("a create keeps the list cache and drops only that application's detail", async () => {
+  setList(undefined, listEntry);
+  setDetail(1, { application: {} as never, interviews: null });
+  setDetail(2, { application: {} as never, interviews: null });
+  mountNew();
+  await fillMinimum();
+  await userEvent.click(save());
+  await waitFor(() => expect(replace).toHaveBeenCalled());
+  expect(getList()).toBe(listEntry);
+  expect(getDetail(1)).toBeUndefined();
+  expect(getDetail(2)).toBeDefined();
+});
+
+it("an edit keeps the list cache and drops only that application's detail", async () => {
+  setList(undefined, listEntry);
+  setDetail(1, { application: {} as never, interviews: null });
+  setDetail(2, { application: {} as never, interviews: null });
+  mountEdit("1");
+  await waitFor(() => expect(field("Notes")).toBeTruthy());
+  await userEvent.type(field("Notes"), "x");
+  await userEvent.click(save());
+  await waitFor(() => expect(replace).toHaveBeenCalled());
+  expect(getList()).toBe(listEntry);
+  expect(getDetail(1)).toBeUndefined();
+  expect(getDetail(2)).toBeDefined();
 });

@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { getApplication, getInterviews, parseId } from "@/lib/api";
-import { cacheVersion, dropDetail, getDetail, onCachesCleared, setDetail } from "@/lib/cache";
+import { cacheVersion, detailStamp, dropDetail, getDetail, onApplicationStored, onCachesCleared, setDetail } from "@/lib/cache";
 import { ApiError } from "@/lib/http";
 import type { Page } from "@/lib/mappers";
 import type { Application, Interview } from "@/lib/types";
@@ -48,18 +48,30 @@ export function useApplicationDetail(id: string | undefined) {
   }
 
   const n = id === undefined ? null : parseId(id);
+  // The listeners below are registered once and need the current id. A layout effect updates it
+  // inside the commit, so a clear that lands right after a navigation (a promise callback can run
+  // between the commit and passive effects) is never compared with the previous id.
+  const open = useRef(n);
+  useLayoutEffect(() => {
+    open.current = n;
+  });
 
-  // A response whose request started before a clearCaches() (a write, login, logout) is stale: it
+  // A response whose request started before a clearCaches() or clearDetail() of its id is stale: it
   // is neither applied nor cached. `live` alone misses one that lands before React re-renders.
   useEffect(() => {
     removing.current = false;
   }, [n]);
 
+  // Bumped by a status change of the open id: an application request that started before it is stale.
+  // Not detailStamp, which would also drop a valid interviews request with nothing to re-issue it.
+  const stores = useRef(0);
   useEffect(() => {
     if (n === null || n === removed) return;
     let live = true;
     const v = cacheVersion();
-    const current = () => live && cacheVersion() === v;
+    const d = detailStamp(n);
+    const st = stores.current;
+    const current = () => live && cacheVersion() === v && detailStamp(n) === d && stores.current === st;
     getApplication(n).then(
       (a) => {
         if (a === null) dropDetail(n); // gone (or never ours): a revisit must not show the old record
@@ -76,7 +88,8 @@ export function useApplicationDetail(id: string | undefined) {
     if (n === null || n === removed) return;
     let live = true;
     const v = cacheVersion();
-    const current = () => live && cacheVersion() === v;
+    const d = detailStamp(n);
+    const current = () => live && cacheVersion() === v && detailStamp(n) === d;
     getInterviews(n).then(
       (p) => current() && setIvRes(p),
       (e) => {
@@ -106,15 +119,28 @@ export function useApplicationDetail(id: string | undefined) {
     setIvTry((t) => t + 1);
   }, []);
   // A clear drops both results (so the cache-store effect never pairs an old one with a new one)
-  // and refetches: the user sees the skeleton, then fresh data.
+  // and refetches: the user sees the skeleton, then fresh data, unless the clear replaced the entry
+  // (replaceDetail), whose content then shows while the refetch runs.
   useEffect(
     () =>
-      onCachesCleared(() => {
+      onCachesCleared((cleared) => {
+        if (cleared !== undefined && cleared !== open.current) return; // another application's detail
         if (removing.current) return; // our own delete: this id must not be fetched again
         retryApp();
         retryInterviews();
       }),
     [retryApp, retryInterviews],
+  );
+  // A status change (storeApplication) hands over the server's row: it is the fresh application, and
+  // a status cannot change interviews, so nothing is refetched and the actions stay enabled.
+  useEffect(
+    () =>
+      onApplicationStored((row) => {
+        if (row.id !== open.current) return;
+        stores.current++;
+        setAppRes({ a: row });
+      }),
+    [],
   );
   /** Call before the DELETE request, with false again if it fails. */
   const setRemoving = useCallback((on: boolean) => {

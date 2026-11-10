@@ -116,7 +116,7 @@ export function InterviewForm({ applicationId, interview, qs }: { applicationId:
     setErrors({});
     setBanner([]);
     try {
-      if (interview && before) await updateInterview(interview.id, before, input);
+      if (interview && before) await updateInterview(applicationId, interview.id, before, input);
       else await createInterview(applicationId, input);
       setDone(true); // stays busy: the page is about to be replaced, so no second submit is possible
       toast.success("Interview saved.");

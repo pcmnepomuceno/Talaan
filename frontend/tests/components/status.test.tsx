@@ -7,7 +7,7 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { expect, it, vi } from "vitest";
 import { Banner } from "../../src/components/banner";
-import { type Filter, FilterTabs } from "../../src/components/filter-tabs";
+import { type Filter, StatusFilter } from "../../src/components/status-filter";
 import { OUTCOMES, STATUSES, StatusStamp } from "../../src/components/status-stamp";
 
 const labels = {
@@ -53,29 +53,22 @@ it("matches the API enum values", () => {
   expect(enumValues("interviews/models.py", "InterviewMode")).toEqual(["on_site", "online", "async"]);
 });
 
-function Tabs() {
+function Harness() {
   const [v, setV] = useState<Filter>("all");
-  return <FilterTabs value={v} onChange={setV} />;
+  return <StatusFilter value={v} onChange={setV} />;
 }
 
-it("FilterTabs: All plus nine statuses, one pressed, keyboard selects", async () => {
-  render(<Tabs />);
-  const group = screen.getByRole("group", { name: "Filter by status" });
-  const buttons = screen.getAllByRole("button");
-  expect(group.contains(buttons[0])).toBe(true);
-  expect(buttons.map((b) => b.textContent)).toEqual(["All", ...STATUSES.map((s) => labels[s])]);
-  const pressed = () => screen.getAllByRole("button", { pressed: true }).map((b) => b.textContent);
-  expect(pressed()).toEqual(["All"]);
-
+it("StatusFilter: labelled select, All plus nine statuses, reachable by Tab, changes value", async () => {
+  render(<Harness />);
+  const select = screen.getByRole("combobox", { name: "Status" }) as HTMLSelectElement;
+  expect([...select.options].map((o) => o.textContent)).toEqual(["All", ...STATUSES.map((s) => labels[s])]);
+  expect(select.value).toBe("all");
   const user = userEvent.setup();
   await user.tab();
-  await user.tab();
-  await user.keyboard("{Enter}");
-  expect(pressed()).toEqual(["Saved"]);
-  await user.tab();
-  await user.keyboard(" ");
-  expect(pressed()).toEqual(["Applied"]);
-  expect(screen.getByRole("button", { name: "Saved" }).getAttribute("aria-pressed")).toBe("false");
+  expect(document.activeElement).toBe(select);
+  // user-event does not emulate a native select's arrow keys; the keyboard path is in the e2e.
+  await user.selectOptions(select, "applied");
+  expect(select.value).toBe("applied");
 });
 
 it("Banner is an alert with title and text", () => {

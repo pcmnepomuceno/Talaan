@@ -2,13 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getApplications } from "@/lib/api";
-import { cacheVersion, getList, onCachesCleared, setList } from "@/lib/cache";
+import { getList, listFresh, listsSettled, listStamp, onApplicationStored, onCachesCleared, setList } from "@/lib/cache";
 import type { Application, Status } from "@/lib/types";
 
 // One status tab = one cached list, fetched 50 at a time from the server (the API pages and
 // filters). Cached rows show at once while page 1 is refetched; the fresh page 1 then REPLACES the
 // entry, dropping any extra pages the user had loaded, because their offsets may have shifted.
-// Any write (clearCaches) empties the cache and refetches the current tab. Load more asks for
+// A full clear (clearCaches) empties the cache and refetches the current tab; a status change
+// (storeApplication) patches the cached rows, which the view reads directly. A page that may straddle
+// a status write (listFresh false) is never stored: it is re-issued once the write ends. Load more asks for
 // nextOffset (rows the server has sent), not items.length (rows left after de-duplication); a
 // page that adds no new row means the offsets shifted, so Load more is withdrawn and page 1 refetched.
 export type ListView =
@@ -24,7 +26,8 @@ export type ListView =
       more: "idle" | "loading" | "failed";
     };
 
-type Fetched = { key: string; items: Application[]; total: number; nextOffset: number; failed: boolean; refreshFailed: boolean; more: "idle" | "loading" | "failed" };
+// The rows live in the cache only (getList); this is the outcome of the current key's page 1 and Load more.
+type Fetched = { key: string; failed: boolean; refreshFailed: boolean; more: "idle" | "loading" | "failed" };
 
 /** Adds `incoming` rows whose id is not already present, in order. */
 export function appendUnique(existing: Application[], incoming: Application[]): Application[] {
@@ -61,33 +64,39 @@ export function useApplicationList(status: Status | undefined) {
     keyRef.current = key;
   });
   const moreBusy = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
-  useEffect(() => onCachesCleared(() => setTick((n) => n + 1)), []);
+  // Only a full clear refetches: an interview write clears one detail (an id is passed) and no list row changes.
+  useEffect(() => onCachesCleared((id) => id === undefined && setTick((n) => n + 1)), []);
+
+  // A status change patched the cached lists in place (storeApplication): re-render from the cache,
+  // or refetch when the list on screen was dropped (its order around the row was unknown).
+  const [, setPatched] = useState(0);
+  useEffect(() => onApplicationStored(() => (getList(status) ? setPatched((n) => n + 1) : setTick((n) => n + 1))), [status]);
 
   useEffect(() => {
     let live = true;
-    const v = cacheVersion();
-    const cached = getList(status);
+    const s = listStamp();
+    // Requested before a write, or landing during a status write: ask again once the writes end.
+    const again = () => void listsSettled().then(() => live && setTick((n) => n + 1));
     getApplications(status).then(
       (page) => {
-        // Only a live request from the current cache version may write the cache: a write or tab
-        // switch since it started makes it stale (`live` alone misses one landing before a re-render).
-        if (!live || cacheVersion() !== v) return;
-        const entry = { ...page, nextOffset: page.items.length };
-        setList(status, entry);
-        setFetched({ key, ...entry, failed: false, refreshFailed: false, more: "idle" });
+        if (!live) return;
+        if (!listFresh(s)) return again();
+        setList(status, { ...page, nextOffset: page.items.length });
+        setFetched({ key, failed: false, refreshFailed: false, more: "idle" });
       },
       () => {
-        if (live && cacheVersion() === v)
-          setFetched({
-            key,
-            items: cached?.items ?? [],
-            total: cached?.total ?? 0,
-            nextOffset: cached?.nextOffset ?? 0,
-            failed: !cached,
-            refreshFailed: !!cached,
-            more: "idle",
-          });
+        if (!live) return;
+        if (!listFresh(s)) return again();
+        const cached = !!getList(status);
+        setFetched({ key, failed: !cached, refreshFailed: cached, more: "idle" });
       },
     );
     return () => {
@@ -105,44 +114,58 @@ export function useApplicationList(status: Status | undefined) {
 
   const loadMore = useCallback(async () => {
     const at = keyRef.current;
-    const v = cacheVersion();
-    const cur = getList(status);
-    if (!cur || moreBusy.current) return;
+    if (!getList(status) || moreBusy.current) return;
     moreBusy.current = true;
     setAnnouncement("");
-    setFetched((f) => (f && f.key === at ? { ...f, more: "loading" } : f));
+    const mark = (more: Fetched["more"]) => setFetched((f) => (f && f.key === at ? { ...f, more } : f));
+    const here = () => mounted.current && keyRef.current === at;
+    mark("loading");
     try {
-      const page = await getApplications(status, cur.nextOffset);
-      if (keyRef.current !== at || cacheVersion() !== v) return;
-      const items = appendUnique(cur.items, page.items);
-      const added = items.length - cur.items.length;
-      if (added === 0) {
-        // Nothing new: the offsets shifted under us. Stop offering Load more (nextOffset = total)
-        // and refetch page 1, which replaces this entry with a fresh start.
-        setList(status, { items, total: page.total, nextOffset: page.total });
-        setTick((n) => n + 1);
+      // A page that may straddle a status write is asked again once, from the patched cursor.
+      for (let attempt = 0; ; attempt++) {
+        await listsSettled();
+        const cur = getList(status);
+        if (!here() || !cur) return;
+        const s = listStamp();
+        const page = await getApplications(status, cur.nextOffset);
+        if (!here()) return;
+        if (!listFresh(s)) {
+          if (attempt === 0) continue;
+          mark("idle"); // still moving: offer Load more again
+          return;
+        }
+        const items = appendUnique(cur.items, page.items);
+        const added = items.length - cur.items.length;
+        if (added === 0) {
+          // Nothing new: the offsets shifted under us. Stop offering Load more (nextOffset = total)
+          // and refetch page 1, which replaces this entry with a fresh start.
+          setList(status, { items, total: page.total, nextOffset: page.total });
+          setTick((n) => n + 1);
+          return;
+        }
+        setList(status, { items, total: page.total, nextOffset: cur.nextOffset + page.items.length });
+        mark("idle");
+        setAnnouncement(`${added} more ${added === 1 ? "application" : "applications"} loaded`);
+        setFocusId(items[cur.items.length].id);
         return;
       }
-      const nextOffset = cur.nextOffset + page.items.length;
-      setList(status, { items, total: page.total, nextOffset });
-      setFetched((f) => (f && f.key === at ? { ...f, items, total: page.total, nextOffset, more: "idle" } : f));
-      setAnnouncement(`${added} more ${added === 1 ? "application" : "applications"} loaded`);
-      setFocusId(items[cur.items.length].id);
     } catch {
-      if (keyRef.current === at && cacheVersion() === v) setFetched((f) => (f && f.key === at ? { ...f, more: "failed" } : f));
+      if (here()) mark("failed"); // after a clear the key has moved on and this is ignored
     } finally {
       moreBusy.current = false;
     }
   }, [status]);
 
   let view: ListView;
+  const rows = getList(status);
   if (fetched?.key === key) {
     view = fetched.failed
       ? { kind: "failed" }
-      : { kind: "ready", items: fetched.items, total: fetched.total, nextOffset: fetched.nextOffset, refreshing: false, refreshFailed: fetched.refreshFailed, more: fetched.more };
+      : rows
+        ? { kind: "ready", items: rows.items, total: rows.total, nextOffset: rows.nextOffset, refreshing: false, refreshFailed: fetched.refreshFailed, more: fetched.more }
+        : { kind: "loading" }; // dropped or cleared: the refetch is already on its way
   } else {
-    const cached = getList(status);
-    view = cached ? { kind: "ready", ...cached, refreshing: true, refreshFailed: false, more: "idle" } : { kind: "loading" };
+    view = rows ? { kind: "ready", ...rows, refreshing: true, refreshFailed: false, more: "idle" } : { kind: "loading" };
   }
   return { view, retry, loadMore, announcement, clearAnnouncement, focusId, clearFocus };
 }

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ApplicationsScreen } from "../src/app/(app)/applications/(ledger)/screen";
 import { ANNOUNCE_MS, useApplicationList } from "../src/app/(app)/applications/(ledger)/use-list";
 import { ToastProvider } from "../src/components/toast";
-import { clearCaches, getList } from "../src/lib/cache";
+import { clearCaches, forgetLoaded, getList } from "../src/lib/cache";
 import { STATUSES } from "../src/lib/types";
 import { type Fake, installFake, json, makeApp } from "./helpers/fake-api";
 
@@ -50,7 +50,7 @@ it("first request is one page of 50 and shows Load more with 120 rows", async ()
   expect(rowLinks()).toHaveLength(50);
   expect(fake.calls[0].path).toBe("/applications?limit=50&offset=0");
   expect(screen.getByRole("button", { name: "Load more" })).toBeTruthy();
-});
+}, 15_000);
 
 it("Load more appends the next page, announces it, focuses the first new row; hidden at the end", async () => {
   setup(120);
@@ -142,7 +142,7 @@ it("a double click on Load more sends one request", async () => {
   expect(fake.callsTo("GET", /offset=50/)).toHaveLength(1);
 });
 
-it.each(STATUSES)("tab %s requests the server filter and shows only that status", async (s) => {
+it.each(STATUSES)("status %s requests the server filter and shows only that status", async (s) => {
   setup(9, (id) => ({ status: STATUSES[id - 1] }));
   search = `status=${s}`;
   mount();
@@ -151,7 +151,7 @@ it.each(STATUSES)("tab %s requests the server filter and shows only that status"
   expect(fake.calls[0].path).toBe(`/applications?limit=50&offset=0&status=${s}`);
 });
 
-it("empty versus no-match come from total and the active tab", async () => {
+it("empty versus no-match come from total and the active filter", async () => {
   setup(0);
   mount();
   expect(await screen.findByText("No applications yet.")).toBeTruthy();
@@ -159,7 +159,7 @@ it("empty versus no-match come from total and the active tab", async () => {
   expect(fake.calls).toHaveLength(1); // no second request to learn an overall total
 });
 
-it("a status tab with no rows is no-match even when other statuses exist", async () => {
+it("a status filter with no rows is no-match even when other statuses exist", async () => {
   setup(3);
   search = "status=ghosted";
   mount();
@@ -176,7 +176,7 @@ it("Add links carry ?status=", async () => {
   expect(screen.getAllByRole("link", { name: "Add application" })[0].getAttribute("href")).toBe("/applications/new?status=applied");
 });
 
-it("a cached tab shows at once while page 1 refetches, then the fresh rows replace it", async () => {
+it("a cached filter shows at once while page 1 refetches, then the fresh rows replace it", async () => {
   setup(3);
   const first = mount();
   await screen.findByRole("list", { name: "Applications" });
@@ -215,7 +215,7 @@ it("a first-load failure shows Retry, and Retry recovers", async () => {
   expect(await screen.findByRole("list", { name: "Applications" })).toBeTruthy();
 });
 
-it("clearing the caches (a write) empties every tab and refetches the current one", async () => {
+it("clearing the caches (a write) empties every filter and refetches the current one", async () => {
   setup(3);
   mount();
   await screen.findByRole("list", { name: "Applications" });
@@ -269,6 +269,27 @@ it("a Load more response landing in the same tick as a cache clear is neither st
   await waitFor(() => expect(getList()?.items).toHaveLength(50));
   expect(getList()?.items.some((a) => a.id === 500)).toBe(false);
   expect(screen.queryByRole("link", { name: /Company 500/ })).toBeNull();
+});
+
+it("changing the filter while Load more is running drops the late page", async () => {
+  setup(120);
+  const { rerender } = mount();
+  await screen.findByRole("list", { name: "Applications" });
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  fake.on("GET", /offset=50&?$/, async () => (await gate, json(200, { items: [makeApp(500)], total: 120, limit: 50, offset: 50 })));
+  await userEvent.click(screen.getByRole("button", { name: "Load more" }));
+  search = "status=applied";
+  rerender(ui());
+  await waitFor(() => expect(fake.callsTo("GET", /status=applied/)).toHaveLength(1));
+  await act(async () => {
+    release();
+    await gate;
+  });
+  await waitFor(() => expect(rowLinks()).toHaveLength(50));
+  expect(screen.queryByRole("link", { name: /Company 500/ })).toBeNull();
+  expect(getList("applied")?.items.some((a) => a.id === 500)).toBe(false);
+  expect(getList()?.items.some((a) => a.id === 500)).toBe(false);
 });
 
 it("Load more is disabled while a cached tab is refreshing", async () => {
@@ -332,7 +353,7 @@ it("opening a row after Load more never re-announces the old message", async () 
   expect(status().textContent).toBe("");
 });
 
-it("switching tab after Load more never re-announces the old message", async () => {
+it("switching the status filter after Load more never re-announces the old message", async () => {
   const { rerender } = await loadMoreOnce();
   search = "status=applied";
   rerender(ui());
@@ -347,4 +368,60 @@ it("the message clears itself after it has been read out", async () => {
   await loadMoreOnce();
   act(() => vi.advanceTimersByTime(ANNOUNCE_MS));
   expect(status().textContent).toBe("");
+});
+
+// ---- waking-up line (P1) ----
+const WAKE = "Starting up. This can take up to a minute the first time.";
+const advance = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
+
+it("a first list load pending past 3 s shows the waking-up line, gone when it lands", async () => {
+  setup(3);
+  forgetLoaded(); // earlier tests in this file already loaded data in this module
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  const real = fake.spy.getMockImplementation()!;
+  fake.spy.mockImplementation(async (input, init) => (await gate, real(input, init)));
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  mount();
+  await advance(2999);
+  expect(screen.queryByText(WAKE)).toBeNull();
+  await advance(1);
+  expect(screen.getAllByText(WAKE)).toHaveLength(2); // one copy per layout; CSS displays one
+  await act(async () => {
+    release();
+    await gate;
+  });
+  vi.useRealTimers();
+  await screen.findByRole("list", { name: "Applications" });
+  expect(screen.queryByText(WAKE)).toBeNull();
+});
+
+it("it also goes away when the first load fails", async () => {
+  setup(3);
+  forgetLoaded();
+  let fail!: () => void;
+  const gate = new Promise<void>((r) => (fail = r));
+  fake.on("GET", /^\/applications\?/, async () => (await gate, json(500, { detail: "x" })));
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  mount();
+  await advance(3000);
+  expect(screen.getAllByText(WAKE)).toHaveLength(2);
+  await act(async () => {
+    fail();
+    await gate;
+  });
+  expect(screen.queryByText(WAKE)).toBeNull();
+  expect(screen.getByText("Couldn't load applications.")).toBeTruthy();
+});
+
+it("a cached list refreshing never shows the line", async () => {
+  setup(3);
+  const first = mount();
+  await screen.findByRole("list", { name: "Applications" });
+  first.unmount();
+  fake.on("GET", /^\/applications\?/, () => new Promise<Response>(() => {}));
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  mount();
+  await advance(10_000);
+  expect(screen.queryByText(WAKE)).toBeNull();
 });

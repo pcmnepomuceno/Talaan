@@ -3,15 +3,15 @@
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Button, TextAction } from "@/components/button";
-import { DeleteConfirm } from "@/components/dialog";
+import { DeleteConfirm, StatusDialog } from "@/components/dialog";
 import { useToast } from "@/components/toast";
 import { LoadError } from "@/components/load-error";
 import { DetailRows, InterviewRow, LedgerSheet, LedgerSkeleton } from "@/components/ledger";
 import { NotFoundState } from "@/components/not-found-state";
-import { deleteInterview, parseStatus } from "@/lib/api";
-import { setDetail } from "@/lib/cache";
+import { changeStatus, deleteInterview, parseStatus } from "@/lib/api";
 import { formatDateTimePHT } from "@/lib/format";
-import type { Interview } from "@/lib/types";
+import { ApiError, errorMessage } from "@/lib/http";
+import type { Interview, Status } from "@/lib/types";
 import { StatusStamp } from "@/components/status-stamp";
 import { interviewDeleteMessage, sortInterviewsByDate } from "@/lib/interviews";
 import { useDetail } from "../screen";
@@ -36,6 +36,28 @@ export function ApplicationDetail() {
     (emptyAdd.current ?? ivHeading.current)?.focus();
   });
 
+  // Status change. Focus goes back to Change status. When the PATCH response could not be mapped the
+  // caches are cleared instead (skeleton, then a refetch) and the button remounts disabled, so the
+  // Dialog's own focus return fails; this effect focuses it once it is back and enabled.
+  const [changing, setChanging] = useState(false);
+  const [statusBusy, setStatusBusy] = useState(false);
+  const savingStatus = useRef(false); // a ref: two clicks in one tick both see the same stale state
+  const focusAfterStatus = useRef(false);
+  const statusBtn = useRef<HTMLButtonElement>(null);
+  // A cache clear (a no-answer or unmappable save, a 404, any write elsewhere) drops this component to
+  // the skeleton without unmounting it, so `changing` would survive into a later load and reopen the
+  // dialog unasked. Anything but a ready detail closes it (adjusted during render, React's pattern for
+  // state derived from props). A replaceDetail() keeps "ready", so the dialog stays open then.
+  if (changing && state.kind !== "ready") setChanging(false);
+  useEffect(() => {
+    if (!focusAfterStatus.current) return;
+    if (state.kind === "error" || state.kind === "missing") focusAfterStatus.current = false;
+    else if (state.kind === "ready" && !state.refreshing) {
+      focusAfterStatus.current = false;
+      statusBtn.current?.focus();
+    }
+  });
+
   // The screen's persistent live region announces "Loading application"; the skeleton is visual only.
   if (state.kind === "removed") return null;
   if (state.kind === "loading") return <LedgerSkeleton rows={2} silent />;
@@ -50,38 +72,53 @@ export function ApplicationDetail() {
     const target = deleting;
     setBusy(true);
     try {
-      await deleteInterview(target.id); // 404 resolves too: already gone is what we wanted
+      await deleteInterview(a.id, target.id); // 404 resolves too: already gone is what we wanted
     } catch {
       toast.error("Couldn't delete the interview. Try again."); // the dialog stays open
       return;
     } finally {
       setBusy(false);
     }
-    // Timing-sensitive: deleteInterview cleared the caches, which queued a refetch and a reset to "nothing
-    // loaded". This cache write must run before React renders that clear, so the render finds the page
-    // minus the row (the cached/refreshing path) instead of a skeleton; the refetch then replaces it. It
-    // works only because the await's continuation runs before React's scheduled render: adding any await
-    // between deleteInterview and setDetail brings back the skeleton flash. The skeleton check in
-    // scripts/e2e-interviews.cjs guards this.
-    if (iv.kind === "ready") {
-      setDetail(a.id, {
-        application: a,
-        interviews: { items: iv.items.filter((i) => i.id !== target.id), total: Math.max(0, iv.total - 1) },
-      });
-    }
     setDeleting(null);
     focusAfterDelete.current = true; // read by the effect after this render
     toast.success("Interview deleted.");
   }
 
+  async function confirmStatus(next: Status) {
+    if (savingStatus.current) return;
+    if (next === a.status) {
+      setChanging(false); // nothing to send, nothing to say
+      return;
+    }
+    savingStatus.current = true;
+    setStatusBusy(true);
+    try {
+      // The server's row is in every cache when this resolves (storeApplication): no skeleton, no refetch.
+      await changeStatus(a.id, next, a.status);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) setChanging(false); // the not-found view takes over
+      else toast.error(errorMessage(e) ?? "Couldn't change the status. Try again."); // the dialog stays open
+      return;
+    } finally {
+      savingStatus.current = false;
+      setStatusBusy(false);
+    }
+    setChanging(false);
+    focusAfterStatus.current = true;
+    toast.success("Status updated.");
+  }
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-start justify-between gap-3 rounded-sm border border-border-subtle bg-surface-card p-4">
-        <div className="min-w-0">
-          <h2 className="text-section-title text-text-primary [overflow-wrap:anywhere]">{a.job_name}</h2>
-          <p className="mt-1 text-body text-text-secondary [overflow-wrap:anywhere]">{a.company}</p>
+      <div className="rounded-sm border border-border-subtle bg-surface-card p-4">
+        <h2 className="text-section-title text-text-primary [overflow-wrap:anywhere]">{a.job_name}</h2>
+        <p className="mt-1 text-body text-text-secondary [overflow-wrap:anywhere]">{a.company}</p>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-border-subtle pt-3">
+          <StatusStamp value={a.status} />
+          <Button ref={statusBtn} variant="secondary" onClick={() => setChanging(true)} disabled={state.refreshing}>
+            Change status
+          </Button>
         </div>
-        <StatusStamp value={a.status} />
       </div>
       <section aria-labelledby="d-details">
         <h3 id="d-details" className={heading}>
@@ -159,6 +196,13 @@ export function ApplicationDetail() {
           </>
         )}
       </section>
+      <StatusDialog
+        open={changing}
+        current={a.status}
+        busy={statusBusy}
+        onCancel={() => setChanging(false)}
+        onConfirm={confirmStatus}
+      />
       <DeleteConfirm
         open={deleting !== null && !state.refreshing}
         busy={busy}
