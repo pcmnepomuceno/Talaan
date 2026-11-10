@@ -103,7 +103,9 @@ export async function request<T = void>(path: string, opts: Options = {}): Promi
     const here = window.location.pathname + window.location.search;
     leaving = true;
     window.location.replace(`/login?expired=1&next=${encodeURIComponent(here)}`);
-    // Never settles: the page is being replaced, so the caller must not flash an error state.
+    // Never settles: the page is being replaced, so the caller must not flash an error state. The
+    // caller's `finally` never runs either: a status window it opened (beginMove) stays open until
+    // resetCaches(), which login, logout and account deletion call.
     return new Promise<T>(() => {});
   }
   throw error;

@@ -6,6 +6,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useApplicationList } from "../src/app/(app)/applications/(ledger)/use-list";
 import { changeStatus, STATUS_TIMEOUT_MS } from "../src/lib/api";
+import { login } from "../src/lib/auth";
 import { clearCaches, getList, listsSettled, moveState, setList, storeApplication } from "../src/lib/cache";
 import type { Application } from "../src/lib/types";
 import { type Fake, installFake, json, makeApp } from "./helpers/fake-api";
@@ -267,4 +268,47 @@ it("the list unmounting while a stale Load more waits for the window: no re-issu
   expect(moveState()).toEqual({ moving: 0, waiters: 0 });
   expect(fake.callsTo("GET", /offset=50/)).toHaveLength(1); // never re-issued after unmount
   expect(errors).not.toHaveBeenCalled();
+});
+
+// ---- review round 3, finding 4: a status write that never ends ----
+
+it("finding 4: a 401 on the status PATCH never settles; the auth reset (login) still ends the window and lists load", async () => {
+  install(desc(3, 1).map((id) => makeApp(id)));
+  vi.stubGlobal("location", { pathname: "/applications/2", search: "", replace: vi.fn() });
+  try {
+    fake.on("PATCH", /^\/applications\/\d+$/, () => json(401, { detail: "Not authenticated" }));
+    void changeStatus(2, "offered", "applied"); // request() hands back a promise that never settles
+    await flush();
+    fake.on("POST", /^\/login$/, () => json(200, { detail: "Logged in" }));
+    await login("a@example.com", "pw"); // the user signs in again in this tab
+    const { result } = renderHook(() => useApplicationList("applied"));
+    await waitFor(() => expect(result.current.view.kind).toBe("ready"));
+    const v = result.current.view;
+    expect(v.kind === "ready" && ids(v.items)).toEqual([3, 2, 1]);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+it("finding 4: a no-answer clear from one status PATCH keeps the window of another still in flight", async () => {
+  install(desc(3, 1).map((id) => makeApp(id)));
+  const b = gate();
+  fake.on("PATCH", /^\/applications\/\d+$/, () => Promise.reject(new TypeError("fetch failed")));
+  const first = changeStatus(1, "offered", "applied");
+  slowPatch(b);
+  const second = changeStatus(2, "offered", "applied");
+  await expect(first).rejects.toMatchObject({ status: 0 }); // clearCaches(), the second is still in flight
+  const { result } = renderHook(() => useApplicationList("applied"));
+  await waitFor(() => expect(fake.callsTo("GET", /status=applied/)).toHaveLength(1));
+  await act(flush);
+  expect(result.current.view.kind).toBe("loading"); // the page landed during the second write: refused
+  expect(getList("applied")).toBeUndefined();
+  await act(async () => {
+    b.release();
+    await second;
+  });
+  await waitFor(() => expect(result.current.view.kind).toBe("ready"));
+  expect(fake.callsTo("GET", /status=applied/)).toHaveLength(2); // re-issued once after the window
+  const v = result.current.view;
+  expect(v.kind === "ready" && ids(v.items)).toEqual([3, 1]); // 2 moved to offered
 });

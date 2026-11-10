@@ -2,7 +2,9 @@
 // navigation but not a reload). Never touches web storage. Only the api.ts writes and auth change
 // them, so no screen can forget to (the per-write rules are listed at the top of api.ts):
 //   - clearCaches(): everything is dropped and refetched. Application create, edit and delete, any
-//     404 on a write, and login, logout and account deletion (one user's rows never reach the next).
+//     404 on a write, and a status PATCH with no answer.
+//   - resetCaches(): clearCaches() and every status window ends (login, logout and account deletion:
+//     one user's rows never reach the next, and a write cut off by a 401 never blocks the lists).
 //   - clearDetail(id): one detail is dropped and refetched (interview create and edit). An interview
 //     changes nothing a list row shows, so the lists and every other detail stay valid.
 //   - replaceDetail(id, entry): like clearDetail, but the entry is replaced in the same step, so the
@@ -81,6 +83,18 @@ export const listsSettled = () => (moving === 0 ? Promise.resolve() : new Promis
 /** Tests only. */
 export const moveState = () => ({ moving, waiters: settled.size });
 
+/**
+ * clearCaches() plus the end of every status window, for login, logout and account deletion only.
+ * A status PATCH answered 401 never settles (request() leaves the page for /login), so its endMove()
+ * never runs; this is what ends it. Plain clearCaches() leaves the window alone: another status
+ * PATCH may still be in flight, and its list pages must still be refused.
+ */
+export function resetCaches() {
+  moving = 0;
+  releaseWaiters();
+  clearCaches();
+}
+
 /** Call before a status PATCH is sent; endMove() in its `finally`. */
 export function beginMove() {
   moving++;
@@ -88,7 +102,9 @@ export function beginMove() {
 }
 export function endMove() {
   moving = Math.max(0, moving - 1);
-  if (moving > 0) return;
+  if (moving === 0) releaseWaiters();
+}
+function releaseWaiters() {
   const waiters = [...settled];
   settled.clear();
   for (const r of waiters) r();
