@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { dateAppliedLabel, formatDateTimePHT, formatPeso } from "../lib/format";
-import { type Application, type Interview, interviewMode, workModeLabel } from "../lib/types";
+import { type AgendaInterview, type Application, type Interview, interviewMode, workModeLabel } from "../lib/types";
 import { Icon } from "./icon";
 import { StatusStamp } from "./status-stamp";
 
@@ -71,10 +71,32 @@ export function ApplicationRow({
   );
 }
 
+// The mode with its icon and, only when present, the interviewer (DESIGN.md 6.6). Shared by the
+// detail's interview rows and the agenda rows.
+function InterviewMeta({ interview: i }: { interview: Interview }) {
+  const mode = interviewMode(i.mode);
+  return (
+    <p className="flex flex-wrap items-center gap-x-2 text-caption text-text-secondary">
+      <span className="flex items-center gap-1">
+        {mode && <Icon name={mode.icon} size={20} />}
+        {mode?.label}
+      </span>
+      {i.interviewer && (
+        <>
+          <span aria-hidden>·</span>
+          <span className={`flex min-w-0 items-center gap-1 ${wrap}`}>
+            <Icon name="person" size={20} />
+            {i.interviewer}
+          </span>
+        </>
+      )}
+    </p>
+  );
+}
+
 // DESIGN.md 6.6. The outcome stamp always shows; interviewer and notes only when present.
 // `actions` (Edit, Delete) sit under the notes; the detail passes them, read-only lists omit them.
 export function InterviewRow({ interview: i, actions }: { interview: Interview; actions?: ReactNode }) {
-  const mode = interviewMode(i.mode);
   return (
     <li className="flex flex-col gap-1 p-4">
       <div className="flex items-start justify-between gap-3">
@@ -83,23 +105,35 @@ export function InterviewRow({ interview: i, actions }: { interview: Interview; 
         </p>
         <StatusStamp value={i.outcome} />
       </div>
-      <p className="flex flex-wrap items-center gap-x-2 text-caption text-text-secondary">
-        <span className="flex items-center gap-1">
-          {mode && <Icon name={mode.icon} size={20} />}
-          {mode?.label}
-        </span>
-        {i.interviewer && (
-          <>
-            <span aria-hidden>·</span>
-            <span className={`flex min-w-0 items-center gap-1 ${wrap}`}>
-              <Icon name="person" size={20} />
-              {i.interviewer}
-            </span>
-          </>
-        )}
-      </p>
+      <InterviewMeta interview={i} />
       {i.remarks && <p className={`whitespace-pre-line text-caption text-text-muted ${wrap}`}>{i.remarks}</p>}
       {actions && <div className="-mx-2 -mb-2 flex items-center">{actions}</div>}
+    </li>
+  );
+}
+
+// DESIGN.md 8.8 (agenda row). The link covers the whole row and goes to that application's detail;
+// `action` (Add to calendar) sits under it, outside the link, so no interactive element is nested.
+// The notes are not shown. `data-interview-id` lets the screen focus the first row of a new page.
+export function AgendaRow({ interview: i, action }: { interview: AgendaInterview; action?: ReactNode }) {
+  return (
+    <li>
+      <Link
+        href={`/applications/${i.job_application_id}`}
+        data-interview-id={i.id}
+        className="flex w-full min-h-11 flex-col gap-1 p-4 text-left focus-visible:-outline-offset-2"
+      >
+        <span className="flex items-start justify-between gap-3">
+          <span className={`min-w-0 text-row-title tabular-nums text-text-primary ${wrap}`}>
+            {formatDateTimePHT(i.scheduled_at) ?? "Date unavailable"}
+          </span>
+          <StatusStamp value={i.outcome} />
+        </span>
+        <span className={`text-body-medium text-text-primary ${wrap}`}>{i.job_name}</span>
+        <span className={`text-caption text-text-secondary ${wrap}`}>{i.company}</span>
+        <InterviewMeta interview={i} />
+      </Link>
+      {action && <div className="px-2 pb-2">{action}</div>}
     </li>
   );
 }
