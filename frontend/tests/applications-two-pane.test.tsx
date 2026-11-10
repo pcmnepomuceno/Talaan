@@ -28,7 +28,13 @@ beforeEach(() => {
   search = "";
   paramId = "1";
 });
-afterEach(() => vi.restoreAllMocks());
+// Disconnected here too, so an observer from a timed-out test never runs after cleanup.
+let observer: MutationObserver | null = null;
+afterEach(() => {
+  observer?.disconnect();
+  observer = null;
+  vi.restoreAllMocks();
+});
 
 const mount = () =>
   render(
@@ -38,9 +44,16 @@ const mount = () =>
       </ApplicationsScreen>
     </ToastProvider>,
   );
-const appList = () => screen.getByRole("list", { name: "Applications" });
-const rowIds = () => within(appList()).getAllByRole("link").map((a) => Number(a.getAttribute("href")!.split("?")[0].split("/").pop()));
-const rowOf = (id: number) => within(appList()).getAllByRole("link").find((a) => a.getAttribute("href")!.split("?")[0] === `/applications/${id}`)!;
+// With 120 rows, role queries (which compute accessible names for the whole tree) dominate the run
+// time, so the row helpers read the list's links with selectors, and buttons are found in their pane.
+const appList = () => document.querySelector<HTMLElement>('ul[aria-label="Applications"]')!;
+const links = () => [...appList().querySelectorAll<HTMLAnchorElement>("a[href]")];
+const idOf = (a: HTMLAnchorElement) => Number(a.getAttribute("href")!.split("?")[0].split("/").pop());
+const rowIds = () => links().map(idOf);
+const rowOf = (id: number) => links().find((a) => idOf(a) === id)!;
+const listPane = () => document.querySelector<HTMLElement>('section[aria-label="Applications"]')!;
+const detailPane = () => document.querySelector<HTMLElement>('section[aria-label="Application detail"]')!;
+const loadMore = () => within(listPane()).getByRole("button", { name: "Load more" });
 const listGets = () => fake.callsTo("GET", /^\/applications\?/);
 const detailGets = () => fake.callsTo("GET", /^\/applications\/\d+(\/|$)/);
 
@@ -51,25 +64,27 @@ function watchSkeletons() {
       seen.add(el.closest('section[aria-label="Applications"]') ? "list skeleton" : "detail skeleton");
   };
   const obs = new MutationObserver(look);
+  observer = obs;
   obs.observe(document.body, { subtree: true, childList: true, attributes: true });
   return { seen, stop: () => obs.disconnect() };
 }
 
 async function changeStatusTo(label: string) {
-  await screen.findByText("No interviews yet.");
-  await userEvent.click(screen.getByRole("button", { name: "Change status" }));
-  await userEvent.click(screen.getByRole("radio", { name: label }));
-  await userEvent.click(screen.getByRole("button", { name: "Update status" }));
+  await within(detailPane()).findByText("No interviews yet.");
+  await userEvent.click(within(detailPane()).getByRole("button", { name: "Change status" }));
+  const dialog = document.querySelector<HTMLElement>("dialog[open]")!;
+  await userEvent.click(within(dialog).getByRole("radio", { name: label }));
+  await userEvent.click(within(dialog).getByRole("button", { name: "Update status" }));
   await screen.findByText("Status updated.");
 }
 
 it("All view: the row changes in place; loaded pages stay; no skeleton, no list or detail refetch, actions enabled", async () => {
   install(Array.from({ length: 120 }, (_, i) => makeApp(i + 1, { status: "applied" })));
   mount();
-  await screen.findByRole("list", { name: "Applications" });
-  await userEvent.click(screen.getByRole("button", { name: "Load more" }));
+  await within(listPane()).findByRole("button", { name: "Load more" });
+  await userEvent.click(loadMore());
   await waitFor(() => expect(rowIds()).toHaveLength(100));
-  await userEvent.click(screen.getByRole("button", { name: "Load more" }));
+  await userEvent.click(loadMore());
   await waitFor(() => expect(rowIds()).toHaveLength(120));
   const order = rowIds();
   const lists = listGets().length;
@@ -83,9 +98,9 @@ it("All view: the row changes in place; loaded pages stay; no skeleton, no list 
   expect(rowOf(1).textContent).toContain("Offered");
   expect(listGets()).toHaveLength(lists);
   expect(detailGets()).toHaveLength(details); // the PATCH response is the fresh row: no refetch
-  expect((screen.getByRole("button", { name: "Change status" }) as HTMLButtonElement).disabled).toBe(false);
-  expect(screen.getByRole("region", { name: "Application detail" }).getAttribute("aria-busy")).toBeNull();
-});
+  expect((within(detailPane()).getByRole("button", { name: "Change status" }) as HTMLButtonElement).disabled).toBe(false);
+  expect(detailPane().getAttribute("aria-busy")).toBeNull();
+}, 15_000);
 
 it("filtered view: the row leaves, and the next Load more asks for the server's next unsent row (no gap)", async () => {
   install([
@@ -104,12 +119,12 @@ it("filtered view: the row leaves, and the next Load more asks for the server's 
   expect([...w.seen]).toEqual([]);
   expect(rowIds()).not.toContain(60);
   expect(listGets()).toHaveLength(lists);
-  await userEvent.click(screen.getByRole("button", { name: "Load more" }));
+  await userEvent.click(loadMore());
   await waitFor(() => expect(rowIds()).toHaveLength(59));
   expect(listGets().at(-1)!.path).toContain("offset=49");
   const server = fake.db.apps.filter((a) => a.status === "applied").map((a) => a.id).sort((a, b) => b - a);
   expect(rowIds()).toEqual(server);
-  expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+  expect(within(listPane()).queryByRole("button", { name: "Load more" })).toBeNull();
 });
 
 it("a fully loaded list for the new status gets the row at its sorted place, without a skeleton or refetch", async () => {
@@ -143,15 +158,15 @@ it("a Load more in flight during a status change is dropped (its offset is stale
     await gate; // answered with the pre-change rows
     return new Response(JSON.stringify({ items: rows, total: 60, limit: 50, offset: 50 }));
   });
-  await userEvent.click(screen.getByRole("button", { name: "Load more" }));
+  await userEvent.click(loadMore());
   await changeStatusTo("Offered");
   await act(async () => {
     release();
     await gate;
   });
-  await waitFor(() => expect(screen.getByRole("button", { name: "Load more" }).textContent).toBe("Load more"));
+  await waitFor(() => expect(loadMore().textContent).toBe("Load more"));
   expect(rowIds()).toHaveLength(49); // the stale page was not appended
-  await userEvent.click(screen.getByRole("button", { name: "Load more" }));
+  await userEvent.click(loadMore());
   await waitFor(() => expect(rowIds()).toHaveLength(59));
   expect(listGets().at(-1)!.path).toContain("offset=49");
   expect(rowIds()).toEqual(fake.db.apps.filter((a) => a.status === "applied").map((a) => a.id).sort((a, b) => b - a));

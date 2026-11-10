@@ -50,7 +50,7 @@ it("first request is one page of 50 and shows Load more with 120 rows", async ()
   expect(rowLinks()).toHaveLength(50);
   expect(fake.calls[0].path).toBe("/applications?limit=50&offset=0");
   expect(screen.getByRole("button", { name: "Load more" })).toBeTruthy();
-});
+}, 15_000);
 
 it("Load more appends the next page, announces it, focuses the first new row; hidden at the end", async () => {
   setup(120);

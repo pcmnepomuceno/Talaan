@@ -41,7 +41,14 @@ beforeEach(() => {
   clearCaches();
   fake = installFake();
 });
-afterEach(() => vi.restoreAllMocks());
+// The observer outlives a test that times out (RTL unmounts first): disconnect it here, and query
+// without throwing inside its callback, so a timeout never turns into an unhandled error.
+let observer: MutationObserver | null = null;
+afterEach(() => {
+  observer?.disconnect();
+  observer = null;
+  vi.restoreAllMocks();
+});
 
 const mount = () =>
   render(
@@ -51,13 +58,14 @@ const mount = () =>
       </ApplicationsScreen>
     </ToastProvider>,
   );
-const detailSkeleton = () => screen.getByRole("region", { name: "Application detail" }).querySelector(".animate-ledger-pulse");
+const detailSkeleton = () => screen.queryByRole("region", { name: "Application detail" })?.querySelector(".animate-ledger-pulse");
 
 function watchSkeleton() {
   const seen: string[] = [];
   const obs = new MutationObserver(() => {
     if (detailSkeleton()) seen.push("skeleton");
   });
+  observer = obs;
   obs.observe(document.body, { subtree: true, childList: true, attributes: true });
   return { seen, stop: () => obs.disconnect() };
 }
@@ -73,7 +81,7 @@ it("interview delete: an extra awaited tick after the API resolves cannot show a
   await new Promise((r) => setTimeout(r, 30));
   w.stop();
   expect(w.seen).toEqual([]);
-});
+}, 15_000);
 
 it("status change: an extra awaited tick after the API resolves cannot show a skeleton", async () => {
   mount();
