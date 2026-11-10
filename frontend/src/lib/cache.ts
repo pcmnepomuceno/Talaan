@@ -125,7 +125,9 @@ function sortsBefore(a: Application, b: Application): boolean | null {
 
 /**
  * One list after the server returned `row` for a status change from `oldStatus`. Derived from the
- * list's own rows, so a second application changes nothing. Returns `entry` itself when nothing
+ * list's own rows. Not idempotent: a second application drops an incomplete list of `oldStatus`
+ * (the row is no longer held, so it may sit beyond the cursor). The list epoch (listFresh,
+ * listStamp) is what makes sure no list is patched twice. Returns `entry` itself when nothing
  * changes, and undefined when the result cannot be known exactly (drop that list; it refetches).
  * `nextOffset` is the server offset of the next unsent row, so it moves with every row removed or
  * inserted before it.

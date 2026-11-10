@@ -93,6 +93,15 @@ it("patchList, all: replaces a held row in place (order, total and cursor unchan
   expect(patchList("all", e, app(9, "offered"), "applied")).toBe(e);
 });
 
+it("patchList is not idempotent: the same patch applied twice drops an incomplete list of the old status", () => {
+  // Review round 3, finding 6. The list epoch (listFresh/listStamp) is what keeps a list from being patched twice.
+  const e = { items: [app(3, "applied"), app(2, "applied"), app(1, "applied")], total: 52, nextOffset: 50 };
+  const once = patchList("applied", e, app(2, "offered"), "applied")!;
+  expect(ids(once)).toEqual([3, 1]);
+  expect([once.total, once.nextOffset]).toEqual([51, 49]);
+  expect(patchList("applied", once, app(2, "offered"), "applied")).toBeUndefined();
+});
+
 it("patchList, old status holding the row: removed, total - 1, nextOffset - 1", () => {
   const e = { items: [app(3, "applied"), app(2, "applied"), app(1, "applied")], total: 10, nextOffset: 3 };
   const out = patchList("applied", e, app(2, "offered"), "applied")!;
