@@ -18,8 +18,10 @@ vi.mock("next/navigation", () => ({
 }));
 
 let fake: Fake;
+// Only setTimeout is faked (the WakingUp clock). Faking everything (setImmediate included) let the fake
+// fetch's Response body stall under CPU load, so the test hung until its 5 s timeout.
 beforeEach(() => {
-  vi.useFakeTimers();
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   fake = installFake();
 });
 afterEach(() => {
@@ -28,6 +30,16 @@ afterEach(() => {
 });
 
 const LINE = /Starting up/;
+/** Lets real I/O callbacks and fake timers run until `done()` holds (bounded). */
+async function until(done: () => boolean) {
+  for (let i = 0; i < 200 && !done(); i++) {
+    await act(async () => {
+      await new Promise((r) => setImmediate(r));
+      await vi.advanceTimersByTimeAsync(10);
+    });
+  }
+  expect(done()).toBe(true);
+}
 function slowList() {
   let release!: () => void;
   const gate = new Promise<void>((r) => (release = r));
@@ -45,7 +57,7 @@ it("shows after 3 s on the first load only; a reload after a cache clear never s
       </ApplicationsScreen>
     </ToastProvider>,
   );
-  await act(async () => vi.advanceTimersByTime(WAKE_MS));
+  await act(() => vi.advanceTimersByTimeAsync(WAKE_MS));
   // Two always-mounted copies: above <main> below 1280, inside the list pane from 1280 (CSS shows one).
   const lines = screen.getAllByText(LINE);
   expect(lines).toHaveLength(2);
@@ -53,13 +65,13 @@ it("shows after 3 s on the first load only; a reload after a cache clear never s
   expect(lines.filter((p) => !p.closest("main"))).toHaveLength(1);
 
   await act(async () => release());
-  await act(async () => {});
+  await until(() => !!document.querySelector('ul[aria-label="Applications"]'));
   expect(screen.queryByText(LINE)).toBeNull();
   expect(screen.getByRole("list", { name: "Applications" })).toBeTruthy();
 
   slowList();
   act(() => clearCaches()); // a write elsewhere: the list reloads behind the skeleton
-  await act(async () => vi.advanceTimersByTime(WAKE_MS * 2));
+  await act(() => vi.advanceTimersByTimeAsync(WAKE_MS * 2));
   expect(document.querySelector('section[aria-label="Applications"] .animate-ledger-pulse')).toBeTruthy();
   expect(screen.queryByText(LINE)).toBeNull();
-});
+}, 15_000);
