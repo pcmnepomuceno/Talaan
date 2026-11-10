@@ -96,13 +96,17 @@ export async function updateApplication(id: number, initial: ApplicationInput, n
   return id;
 }
 
+// Gateway statuses from the proxy in front of the API: the request may still reach or finish there.
+const NO_ANSWER = new Set([502, 503, 504]);
+
 /**
  * PATCH `{status}` only (the server fills date_applied for a non-saved status; the client never
  * sends a date). `from` is the status on screen before the change. The server's row is written into
  * every cache in one step (storeApplication: the lists are patched, the detail swapped, nothing is
  * refetched); the caches are the result, so nothing is returned. When that response cannot be
  * mapped, the row is saved all the same: the caches are cleared instead (skeleton, then a refetch).
- * Rejects with ApiError: a 404 or no answer (status 0, a 60 s timeout included) clears the caches first.
+ * Rejects with ApiError: a 404 or no answer clears the caches first. No answer is status 0 (network
+ * error, a 60 s timeout included) or a gateway 502/503/504: the proxy gave up, the backend may not have.
  */
 export async function changeStatus(id: number, status: Status, from: Status): Promise<void> {
   beginMove(); // list pages landing until endMove() may straddle the commit: they are re-issued
@@ -117,8 +121,9 @@ export async function changeStatus(id: number, status: Status, from: Status): Pr
     }
     storeApplication(row, from);
   } catch (e) {
-    // No answer (network error or timeout): the server may have committed, so nothing cached is trusted.
-    if (e instanceof ApiError && e.status === 0) clearCaches();
+    // No answer (network error, timeout or a gateway 502/503/504): the server may have committed, so
+    // nothing cached is trusted. A 500 or 4xx is the API's own answer and is taken as not committed.
+    if (e instanceof ApiError && (e.status === 0 || NO_ANSWER.has(e.status))) clearCaches();
     throw e;
   } finally {
     endMove();

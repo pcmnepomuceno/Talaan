@@ -249,6 +249,24 @@ it("changeStatus: a 500 rejects and leaves every cache as it was", async () => {
   expect(moveState()).toEqual({ moving: 0, waiters: 0 });
 });
 
+it.each([502, 503, 504])("changeStatus: a gateway %i is no answer (the backend may still commit): every cache is cleared", async (code) => {
+  cached();
+  const v = cacheVersion();
+  fake.failNext("PATCH", /^\/applications\/1$/, code);
+  await expect(changeStatus(1, "offered", "applied")).rejects.toMatchObject({ status: code });
+  expect([getList(), getList("applied"), getDetail(1)]).toEqual([undefined, undefined, undefined]);
+  expect(cacheVersion()).toBe(v + 1);
+  expect(moveState()).toEqual({ moving: 0, waiters: 0 });
+});
+
+it.each([400, 422])("changeStatus: a %i rejects and leaves every cache as it was", async (code) => {
+  cached();
+  const before = [getList(), getList("applied"), getDetail(1)];
+  fake.failNext("PATCH", /^\/applications\/1$/, code);
+  await expect(changeStatus(1, "offered", "applied")).rejects.toMatchObject({ status: code });
+  expect([getList(), getList("applied"), getDetail(1)]).toEqual(before);
+});
+
 it("changeStatus: success patches the caches and resolves to nothing (the caches are the result)", async () => {
   cached();
   await expect(changeStatus(1, "offered", "applied")).resolves.toBeUndefined();
