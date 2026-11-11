@@ -20,6 +20,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 let fake: Fake;
+const AS_OF = "2026-11-10T12:00:00Z";
 beforeEach(() => {
   clearCaches();
   forgetLoaded();
@@ -123,7 +124,7 @@ it("shows the skeleton and announces the loading, then the rows", async () => {
   setup([iv(1, 1, "2099-03-10T14:00:00+08:00")]);
   let release!: () => void;
   const gate = new Promise<void>((r) => (release = r));
-  fake.on("GET", /^\/interviews/, async () => (await gate, json(200, { items: [{ ...iv(1, 1, "2099-03-10T14:00:00+08:00"), company: "C", job_name: "J" }], total: 1, limit: 50, offset: 0 })));
+  fake.on("GET", /^\/interviews/, async () => (await gate, json(200, { items: [{ ...iv(1, 1, "2099-03-10T14:00:00+08:00"), company: "C", job_name: "J" }], total: 1, limit: 50, offset: 0, as_of: AS_OF })));
   mount();
   expect(status().textContent).toBe("Loading interviews");
   expect(rows()).toHaveLength(0);
@@ -146,7 +147,7 @@ async function until(done: () => boolean) {
 function slow() {
   let release!: () => void;
   const gate = new Promise<void>((r) => (release = r));
-  fake.on("GET", /^\/interviews/, async () => (await gate, json(200, { items: [], total: 0, limit: 50, offset: 0 })));
+  fake.on("GET", /^\/interviews/, async () => (await gate, json(200, { items: [], total: 0, limit: 50, offset: 0, as_of: AS_OF })));
   return () => release();
 }
 
@@ -208,7 +209,7 @@ it("Load more: 50, then 100, then 120; announces each page, focuses the first ne
   expect(screen.getByRole("button", { name: "Load more" })).toBeTruthy();
   await userEvent.click(screen.getByRole("button", { name: "Load more" }));
   await waitFor(() => expect(rows()).toHaveLength(100));
-  expect(fake.calls.at(-1)!.path).toBe("/interviews?when=upcoming&limit=50&offset=50");
+  expect(fake.calls.at(-1)!.path).toMatch(/^\/interviews\?when=upcoming&limit=50&offset=50&as_of=[^&]+$/);
   expect(status().textContent).toBe("50 more interviews loaded");
   expect(document.activeElement).toBe(rows()[50]);
   expect(rows()[50].getAttribute("data-interview-id")).toBe("51");
@@ -216,6 +217,21 @@ it("Load more: 50, then 100, then 120; announces each page, focuses the first ne
   await waitFor(() => expect(rows()).toHaveLength(120));
   expect(status().textContent).toBe("20 more interviews loaded");
   expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+}, 20_000);
+
+it("Load more keeps page 1's as_of: an interview passing between pages skips no row (review round 1, finding 1)", async () => {
+  const t0 = Date.now();
+  // 60 upcoming interviews a minute apart, the first one minute from now.
+  setup(Array.from({ length: 60 }, (_, i) => iv(i + 1, 1, new Date(t0 + (i + 1) * 60_000).toISOString())));
+  mount();
+  await waitFor(() => expect(rows()).toHaveLength(50));
+  const asOf = new URL(`http://x${fake.calls.at(-1)!.path}`).searchParams.get("as_of");
+  expect(asOf).toBeNull(); // page 1 lets the server pick now
+  vi.spyOn(Date, "now").mockReturnValue(t0 + 150_000); // the first two interviews are now past
+  await userEvent.click(screen.getByRole("button", { name: "Load more" }));
+  await waitFor(() => expect(rows()).toHaveLength(60));
+  expect(rows().map((r) => Number(r.getAttribute("data-interview-id")))).toEqual(Array.from({ length: 60 }, (_, i) => i + 1));
+  expect(Date.parse(new URL(`http://x${fake.calls.at(-1)!.path}`).searchParams.get("as_of")!)).toBeLessThanOrEqual(t0 + 60_000);
 }, 20_000);
 
 it("a failed Load more keeps the rows and offers Retry", async () => {
@@ -264,7 +280,7 @@ it("a response requested before a clear is dropped, never shown", async () => {
   let release!: () => void;
   const gate = new Promise<void>((r) => (release = r));
   const stale = { ...iv(9, 1, "2099-03-10T14:00:00+08:00"), company: "STALE", job_name: "STALE" };
-  fake.on("GET", /^\/interviews/, async () => (await gate, json(200, { items: [stale], total: 1, limit: 50, offset: 0 })));
+  fake.on("GET", /^\/interviews/, async () => (await gate, json(200, { items: [stale], total: 1, limit: 50, offset: 0, as_of: AS_OF })));
   mount();
   act(() => clearCaches()); // the first request is now outdated; its refetch answers from the fake db
   await waitFor(() => expect(rows()).toHaveLength(1));

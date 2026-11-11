@@ -109,10 +109,13 @@ export function installFake(initial = seed()) {
     }
     if (p === "/interviews" && c.method === "GET") {
       // The agenda: every interview with its application's names; upcoming (>= now) oldest first, past newest first.
+      // now = as_of when sent (echoed back, as the server does), else the clock.
       const when = url.searchParams.get("when");
       const limit = Number(url.searchParams.get("limit") ?? 20);
       const offset = Number(url.searchParams.get("offset") ?? 0);
-      const now = Date.now();
+      const asOf = url.searchParams.get("as_of");
+      const now = asOf === null ? Date.now() : Date.parse(asOf);
+      if (Number.isNaN(now)) return json(422, { detail: [{ loc: ["query", "as_of"], msg: "bad as_of" }] });
       const dir = when === "past" ? -1 : 1;
       const rows = db.interviews
         .filter((i) => (when === "past" ? Date.parse(i.scheduled_at) < now : Date.parse(i.scheduled_at) >= now))
@@ -121,7 +124,7 @@ export function installFake(initial = seed()) {
           const a = db.apps.find((x) => x.id === i.job_application_id);
           return a ? [{ ...i, company: a.company, job_name: a.job_name }] : [];
         });
-      return json(200, { items: rows.slice(offset, offset + limit), total: rows.length, limit, offset });
+      return json(200, { items: rows.slice(offset, offset + limit), total: rows.length, limit, offset, as_of: asOf ?? new Date(now).toISOString() });
     }
     if ((m = p.match(/^\/interviews\/(\d+)$/))) {
       const row = db.interviews.find((i) => i.id === Number(m![1]));

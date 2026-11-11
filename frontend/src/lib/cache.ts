@@ -29,7 +29,8 @@ export type ListEntry = { items: Application[]; total: number; nextOffset: numbe
 export type DetailEntry = { application: Application; interviews: { items: Interview[]; total: number } | null };
 
 export type AgendaKey = "upcoming" | "past";
-export type AgendaEntry = { items: AgendaInterview[]; total: number; nextOffset: number };
+// asOf: the instant page 1 was split at (from the server); every Load more of this entry sends it.
+export type AgendaEntry = { items: AgendaInterview[]; total: number; nextOffset: number; asOf: string };
 
 const lists = new Map<string, ListEntry>();
 const agenda = new Map<AgendaKey, AgendaEntry>();

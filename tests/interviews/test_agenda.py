@@ -118,7 +118,7 @@ def test_isolation_between_users(client, users):
 def test_user_with_no_interviews(client, users):
     as_user(client, "tok-a")
     r = client.get(AGENDA, params={"when": "upcoming"})
-    assert r.status_code == 200 and r.json() == {"items": [], "total": 0, "limit": 20, "offset": 0}
+    assert r.status_code == 200 and r.json() == {"items": [], "total": 0, "limit": 20, "offset": 0, "as_of": "2026-11-10T12:00:00Z"}
 
 
 def test_unauthenticated_is_401(client):
@@ -140,3 +140,83 @@ def test_unauthenticated_is_401(client):
 def test_bad_params_are_422(client, users, params):
     as_user(client, "tok-a")
     assert client.get(AGENDA, params=params).status_code == 422
+
+
+def page(client, when, offset, limit=50, as_of=None):
+    params = {"when": when, "limit": limit, "offset": offset}
+    if as_of is not None:
+        params["as_of"] = as_of
+    r = client.get(AGENDA, params=params)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+@pytest.mark.parametrize("when", ["upcoming", "past"])
+def test_as_of_keeps_pages_contiguous_when_the_clock_moves(client, users, monkeypatch, when):
+    """Finding 1 (review round 1): offset paging over a moving `now` skipped (upcoming) or
+    repeated (past) rows. Page 2 sent with page 1's `as_of` sees the same set."""
+    as_user(client, "tok-a")
+    app = new_app(client)
+    sign = 1 if when == "upcoming" else -1
+    # 60 rows a minute apart on the tested side of NOW, plus 2 upcoming rows at NOW + 1 and + 2 min
+    # for past. The clock then moves 2.5 min: without as_of, upcoming page 2 skips 2 rows and past
+    # page 2 repeats 2 (the 2 upcoming rows join the head of past and shift it).
+    made = [new_iv(client, app, NOW + timedelta(minutes=sign * (k + 1))) for k in range(60)]
+    if when == "past":
+        new_iv(client, app, NOW + timedelta(minutes=1))
+        new_iv(client, app, NOW + timedelta(minutes=2))
+    first = page(client, when, 0)
+    assert first["total"] == 60 and first["as_of"] is not None
+    monkeypatch.setattr(iv_router, "_now", lambda: NOW + timedelta(minutes=2, seconds=30), raising=False)
+    second = page(client, when, 50, as_of=first["as_of"])
+    seen = [i["id"] for i in first["items"]] + [i["id"] for i in second["items"]]
+    assert seen == made and second["total"] == 60 and second["as_of"] == first["as_of"]
+
+
+def test_without_as_of_the_server_clock_is_used(client, users):
+    as_user(client, "tok-a")
+    r = page(client, "upcoming", 0)
+    assert datetime.fromisoformat(r["as_of"]) == NOW
+
+
+def test_as_of_boundary_exactly_at_is_upcoming(client, users):
+    as_user(client, "tok-a")
+    app = new_app(client)
+    t = NOW + timedelta(days=3)
+    before = new_iv(client, app, t - timedelta(seconds=1))
+    at = new_iv(client, app, t)
+    assert ids(client.get(AGENDA, params={"when": "upcoming", "as_of": t.isoformat()})) == [at]
+    assert ids(client.get(AGENDA, params={"when": "past", "as_of": t.isoformat()}))[0] == before
+
+
+def test_as_of_z_and_plus_offset_survive_the_query_string(client, users):
+    """`+` in a query string decodes to a space; the offset must arrive percent-encoded."""
+    as_user(client, "tok-a")
+    app = new_app(client)
+    new_iv(client, app, NOW + timedelta(hours=1))
+    want = new_iv(client, app, NOW + timedelta(hours=3))
+    # Same instant two ways: NOW + 2 h in UTC (Z) and in +08:00.
+    z = "2026-11-10T14:00:00Z"
+    plus = "2026-11-10T22:00:00+08:00"
+    r_z = client.get(f"{AGENDA}?when=upcoming&as_of={z}")
+    r_plus = client.get(f"{AGENDA}?when=upcoming&as_of=2026-11-10T22%3A00%3A00%2B08%3A00")
+    assert ids(r_z) == [want] and ids(r_plus) == [want]
+    assert datetime.fromisoformat(r_z.json()["as_of"]) == datetime.fromisoformat(plus)
+    # Unencoded `+` arrives as a space: not a valid offset, never silently misread.
+    assert client.get(f"{AGENDA}?when=upcoming&as_of={plus}").status_code == 422
+
+
+@pytest.mark.parametrize("bad", ["2026-11-10T12:00:00", "yesterday", "", "2026-13-01T00:00:00Z"])
+def test_bad_as_of_is_422(client, users, bad):
+    as_user(client, "tok-a")
+    assert client.get(AGENDA, params={"when": "upcoming", "as_of": bad}).status_code == 422
+
+
+def test_as_of_keeps_isolation(client, users):
+    as_user(client, "tok-a")
+    new_iv(client, new_app(client, "Mine"), NOW + timedelta(days=1))
+    as_user(client, "tok-b")
+    theirs = new_iv(client, new_app(client, "Theirs"), NOW + timedelta(days=1))
+    r = client.get(AGENDA, params={"when": "upcoming", "as_of": NOW.isoformat()})
+    assert ids(r) == [theirs] and r.json()["total"] == 1
+    assert client.get(AGENDA, params={"when": "past", "as_of": (NOW + timedelta(days=9)).isoformat()}).json()["total"] == 1

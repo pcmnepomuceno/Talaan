@@ -91,3 +91,4 @@ class AgendaPage(BaseModel):
     total: int
     limit: int
     offset: int
+    as_of: datetime

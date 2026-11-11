@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, status
+from pydantic import AwareDatetime
 from sqlalchemy import func
 from sqlalchemy.orm import Session as DBSession
 
@@ -67,27 +68,33 @@ def list_agenda(
     when: Literal["upcoming", "past"],
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0, le=INT4_MAX),
+    as_of: AwareDatetime | None = None,
     user: User = Depends(get_current_user),
     db: DBSession = Depends(get_db),
 ):
     """The caller's interviews across all applications. Upcoming is `scheduled_at >= now` (an
     interview exactly at now is still upcoming), oldest first; past is the rest, newest first.
-    Ties break on id in the same direction so paging is stable."""
+    Ties break on id in the same direction so paging is stable.
+
+    `now` is `as_of` when given, else the server clock; the response echoes it. The client sends
+    page 1's `as_of` with every later page, so a row crossing the boundary between pages cannot
+    shift the offsets (DECISIONS.md 2026-11-11, review round 1)."""
+    now = as_of or _now()
     q = (
         db.query(Interview, JobApplication.company, JobApplication.job_name)
         .join(JobApplication, Interview.job_application_id == JobApplication.id)
         .filter(JobApplication.created_by == user.id)
     )
     if when == "upcoming":
-        q = q.filter(Interview.scheduled_at >= _now())
+        q = q.filter(Interview.scheduled_at >= now)
         order = (Interview.scheduled_at.asc(), Interview.id.asc())
     else:
-        q = q.filter(Interview.scheduled_at < _now())
+        q = q.filter(Interview.scheduled_at < now)
         order = (Interview.scheduled_at.desc(), Interview.id.desc())
     total = q.with_entities(func.count(Interview.id)).scalar()
     rows = q.order_by(*order).limit(limit).offset(offset).all()
     items = [AgendaItem(**InterviewRead.model_validate(i).model_dump(), company=c, job_name=j) for i, c, j in rows]
-    return AgendaPage(items=items, total=total, limit=limit, offset=offset)
+    return AgendaPage(items=items, total=total, limit=limit, offset=offset, as_of=now)
 
 
 @router.get("/interviews/{interview_id}", response_model=InterviewRead)

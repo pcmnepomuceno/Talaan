@@ -11,7 +11,8 @@ import type { AgendaInterview } from "@/lib/types";
 // are dropped, their offsets may have shifted). Any cache clear (an interview or application write,
 // an auth event: cache.ts) refetches the tab on screen; a response requested before a clear is dropped
 // (agendaVersion). There is no status-write window here: a status change never alters an agenda row.
-// Load more asks for nextOffset (rows the server has sent), and a page that adds no new row withdraws
+// Load more asks for nextOffset (rows the server has sent) at page 1's asOf (so the upcoming/past
+// boundary cannot move between pages), and a page that adds no new row withdraws
 // Load more and refetches page 1. Same shape as use-list.ts.
 export type AgendaView =
   | { kind: "loading" }
@@ -71,7 +72,7 @@ export function useAgenda(when: AgendaKey) {
       (page) => {
         // Requested before a clear: the clear already queued a refetch, so this answer is just dropped.
         if (!live || v !== agendaVersion()) return;
-        setAgenda(when, { ...page, nextOffset: page.items.length });
+        setAgenda(when, { ...page, nextOffset: page.items.length }); // page 1: a fresh asOf
         setFetched({ key, failed: false, refreshFailed: false, more: "idle" });
       },
       () => {
@@ -103,18 +104,18 @@ export function useAgenda(when: AgendaKey) {
     const here = () => mounted.current && keyRef.current === at && v === agendaVersion();
     mark("loading");
     try {
-      const page = await getAgenda(when, cur.nextOffset);
+      const page = await getAgenda(when, cur.nextOffset, cur.asOf);
       if (!here()) return; // a clear in between: its refetch replaces everything
       const items = appendUnique(cur.items, page.items);
       const added = items.length - cur.items.length;
       if (added === 0) {
         // Nothing new: the offsets shifted under us. Stop offering Load more (nextOffset = total) and
         // refetch page 1, which replaces this entry with a fresh start.
-        setAgenda(when, { items, total: page.total, nextOffset: page.total });
+        setAgenda(when, { items, total: page.total, nextOffset: page.total, asOf: cur.asOf });
         setTick((n) => n + 1);
         return;
       }
-      setAgenda(when, { items, total: page.total, nextOffset: cur.nextOffset + page.items.length });
+      setAgenda(when, { items, total: page.total, nextOffset: cur.nextOffset + page.items.length, asOf: cur.asOf });
       mark("idle");
       setAnnouncement(`${added} more ${added === 1 ? "interview" : "interviews"} loaded`);
       setFocusId(items[cur.items.length].id);
