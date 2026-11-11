@@ -15,9 +15,13 @@ function utc(d: Date): string {
   return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`;
 }
 
-/** TEXT values (RFC 5545 3.3.11): backslash first, then separators, then line breaks as \n. */
+/** Control characters RFC 5545 3.3.11 forbids in TEXT (CR and LF are kept: escapeText turns them into \n). */
+const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
+const clean = (s: string) => s.replace(CONTROL, "");
+
+/** TEXT values (RFC 5545 3.3.11): control characters out, backslash first, then separators, then line breaks as \n. */
 function escapeText(s: string): string {
-  return s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r\n|\r|\n/g, "\\n");
+  return clean(s).replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r\n|\r|\n/g, "\\n");
 }
 
 /** Folds one content line at 75 octets (3.1): continuation lines start with a space. Splits only between code points. */
@@ -72,7 +76,7 @@ export function buildIcs(i: AgendaInterview, { now, origin }: { now: Date; origi
 /** talaan-interview-<company-slug>-<yyyy-mm-dd in PHT>.ics, ASCII only. */
 export function icsFileName(i: AgendaInterview): string {
   const slug =
-    i.company
+    clean(i.company)
       .normalize("NFKD")
       .replace(/[\u0300-\u036f]/g, "")
       .toLowerCase()

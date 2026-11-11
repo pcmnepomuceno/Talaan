@@ -157,3 +157,31 @@ describe("icsFileName", () => {
   });
 });
 
+
+describe("control characters (review round 1, finding 2)", () => {
+  // One of each class RFC 5545 3.3.11 forbids in TEXT: C0 below TAB, VT, FF, C0 after CR, DEL.
+  const CTRL = ["\u0000", "\u0001", "\u0008", "\u000b", "\u000c", "\u000e", "\u001b", "\u001f", "\u007f"];
+  const hostile = (c: string) => make({ company: `Ac${c}me`, job_name: `De${c}v`, interviewer: `An${c}a` });
+
+  it.each(CTRL.map((c) => [c.codePointAt(0)!.toString(16).padStart(4, "0"), c]))("U+%s is stripped from SUMMARY and DESCRIPTION", (_, c) => {
+    const out = ics(hostile(c));
+    // The only control bytes left are the CRLF line ends (TAB is allowed but never produced here).
+    expect(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(out)).toBe(false);
+    expect(out.replace(/\r\n/g, "")).not.toMatch(/[\r\n]/);
+    const u = unfold(out);
+    expect(u).toContain("SUMMARY:Interview: Dev at Acme\r\n");
+    expect(u).toContain("Interviewer: Ana\\n");
+  });
+
+  it("a long name full of control characters still folds at 75 octets and keeps line breaks escaped", () => {
+    const junk = Array.from({ length: 300 }, (_, k) => CTRL[k % CTRL.length] + "é").join("");
+    const out = ics(make({ company: junk, job_name: "a\r\nb", interviewer: junk }));
+    for (const l of lines(out)) expect(bytes(l)).toBeLessThanOrEqual(75);
+    expect(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(out)).toBe(false);
+    expect(unfold(out)).toContain("SUMMARY:Interview: a\\nb at " + "é".repeat(300));
+  });
+
+  it("the file name never carries one", () => {
+    for (const c of CTRL) expect(icsFileName(hostile(c))).toBe("talaan-interview-acme-2026-11-20.ics");
+  });
+});
