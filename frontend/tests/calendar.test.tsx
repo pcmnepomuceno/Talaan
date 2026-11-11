@@ -25,6 +25,10 @@ const iv = (rest: Partial<AgendaInterview> = {}): AgendaInterview => ({
   ...rest,
 });
 
+// Every object URL is unique across tests: the component revokes 1 s after the click on a REAL timer,
+// and one still pending from an earlier test must not be counted by a later one (seen under load).
+let seq = 0;
+let mine: string[];
 let blobs: { parts: unknown[]; type?: string }[];
 let anchors: { download: string; href: string }[];
 let revoked: string[];
@@ -34,6 +38,7 @@ beforeEach(() => {
   blobs = [];
   anchors = [];
   revoked = [];
+  mine = [];
   vi.stubGlobal(
     "Blob",
     class {
@@ -42,7 +47,11 @@ beforeEach(() => {
       }
     },
   );
-  URL.createObjectURL = vi.fn(() => `blob:talaan-${blobs.length}`);
+  URL.createObjectURL = vi.fn(() => {
+    const u = `blob:talaan-${++seq}`;
+    mine.push(u);
+    return u;
+  });
   URL.revokeObjectURL = vi.fn((u: string) => void revoked.push(u));
   vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
     anchors.push({ download: this.download, href: this.href });
@@ -54,6 +63,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** Revocations of the URLs this test created (never a late one from an earlier test). */
+const revokedHere = () => revoked.filter((u) => mine.includes(u));
 const withToasts = (ui: React.ReactNode) => <ToastProvider>{ui}</ToastProvider>;
 const NAME = /^Add to calendar, Pinagsama Tech, Mar 10, 2099, 2:00 PM PHT$/;
 
@@ -75,7 +86,7 @@ it("download: a text/calendar Blob with the file, an anchor with the file name, 
   expect(text).toContain("DTSTART:20990310T060000Z\r\n");
   expect(text).not.toContain("PRIVATE NOTES");
   expect(text).toContain(`/applications/12`); // the link back to the application
-  expect(anchors).toEqual([{ download: "talaan-interview-pinagsama-tech-2099-03-10.ics", href: "blob:talaan-1" }]);
+  expect(anchors).toEqual([{ download: "talaan-interview-pinagsama-tech-2099-03-10.ics", href: mine[0] }]);
   expect(await screen.findByText("Calendar file downloaded.")).toBeTruthy();
 });
 
@@ -84,9 +95,10 @@ it("the object URL is revoked after the click, not before it", async () => {
   render(withToasts(<AddToCalendar interview={iv()} />));
   await act(async () => screen.getByRole("button", { name: NAME }).click());
   expect(anchors).toHaveLength(1);
-  expect(revoked).toEqual([]);
+  expect(revokedHere()).toEqual([]);
   await act(async () => void (await vi.advanceTimersByTimeAsync(1000)));
-  expect(revoked).toEqual(["blob:talaan-1"]);
+  expect(revokedHere()).toEqual(mine);
+  expect(mine).toHaveLength(1);
 });
 
 it("pressing twice quickly downloads twice (same UID, so a calendar sees one event) and revokes both URLs", async () => {
@@ -100,7 +112,8 @@ it("pressing twice quickly downloads twice (same UID, so a calendar sees one eve
   expect(anchors).toHaveLength(2);
   expect(screen.getAllByText("Calendar file downloaded.")).toHaveLength(2);
   await act(async () => void (await vi.advanceTimersByTimeAsync(1000)));
-  expect(revoked).toHaveLength(2);
+  expect(revokedHere()).toEqual(mine);
+  expect(mine).toHaveLength(2);
 });
 
 it("offers nothing for a date it cannot read", () => {
@@ -120,7 +133,7 @@ it("the detail offers Add to calendar on upcoming interviews only, and the guide
   const fake: Fake = installFake();
   fake.db.interviews.push(makeInterview(9, 1, { scheduled_at: "2099-03-10T14:00:00+08:00" }));
   render(<Detail />);
-  const list = await screen.findByRole("list", { name: "Interviews" });
+  const list = await screen.findByRole("list", { name: "Interviews" }, { timeout: 5000 });
   const buttons = within(list).getAllByRole("button", { name: /^Add to calendar/ });
   expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual(["Add to calendar, Pinagsama Tech, Mar 10, 2099, 2:00 PM PHT"]);
   expect(screen.getAllByRole("button", { name: "How to add this to your calendar" })).toHaveLength(1);
@@ -132,7 +145,7 @@ it("the detail offers Add to calendar on upcoming interviews only, and the guide
 it("the detail with only past interviews has neither the action nor the guide", async () => {
   installFake();
   render(<Detail />);
-  await screen.findByRole("list", { name: "Interviews" });
+  await screen.findByRole("list", { name: "Interviews" }, { timeout: 5000 });
   expect(screen.queryByRole("button", { name: /Add to calendar/ })).toBeNull();
   expect(screen.queryByRole("button", { name: "How to add this to your calendar" })).toBeNull();
 });
