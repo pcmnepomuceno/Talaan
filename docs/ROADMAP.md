@@ -69,7 +69,6 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - PR #23 review round 3, finding 9 (2026-11-10): a per-id application stamp in `cache.ts`, bumped by `storeApplication`, to replace the three tokens that guard the application request in `use-detail.ts` (`cacheVersion`, `detailStamp`, a hook-local counter). Deferred: a refactor with no behavior change.
 - Detail back arrow returns to the agenda when the application was opened from it (2026-11-11, F8). Left out: the browser Back button already returns to the agenda, and the arrow would need a query param on the detail route (like `?status=`) that every link to the detail has to carry.
 - Import guide gaps (2026-11-11, F8): opening the `.ics` directly on an iPhone or an Android phone, and the new Outlook for Windows, are not in the guide because Apple's and Microsoft's help pages did not document them. Add them when a vendor page states the steps.
-- `scripts/e2e-applications.cjs` (2026-11-11, found in F8): on a clean `main` and on `feature/f8-agenda` alike it stops after 54 passing checks at the "dialog busy" status-change step (line 296: waits 30 s for the 500 toast "Couldn't change the status. Try again." that never shows) and the run times out. Not caused by F8; investigate separately.
 - Backend: the agenda (`GET /interviews`) and the other authenticated routes have no rate limit (same backlog item as above).
 
 ## Maintenance
