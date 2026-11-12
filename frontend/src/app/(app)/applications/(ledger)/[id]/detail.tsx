@@ -194,11 +194,11 @@ export function ApplicationDetail() {
                 />
               ))}
             </LedgerSheet>
-            {hasUpcoming && (
-              <div className="mt-1 -ml-2">
-                <CalendarGuide />
-              </div>
-            )}
+            {/* Always mounted under a non-empty sheet so an open guide survives the last upcoming
+                interview passing; only its trigger follows hasUpcoming (review round 1, finding 4). */}
+            <div className={hasUpcoming ? "mt-1 -ml-2" : undefined}>
+              <CalendarGuide available={hasUpcoming} onGone={() => ivHeading.current?.focus()} />
+            </div>
             {iv.total > iv.items.length && (
               <p className="mt-2 text-caption text-text-muted">
                 Showing the first {iv.items.length} of {iv.total} interviews.

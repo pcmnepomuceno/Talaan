@@ -150,6 +150,25 @@ it("the detail with only past interviews has neither the action nor the guide", 
   expect(screen.queryByRole("button", { name: "How to add this to your calendar" })).toBeNull();
 });
 
+it("the guide stays open when the only upcoming interview passes, and closing it focuses the Interviews heading (review round 1, finding 4)", async () => {
+  const t0 = Date.now();
+  const fake: Fake = installFake();
+  fake.db.interviews = [makeInterview(9, 1, { scheduled_at: new Date(t0 + 60_000).toISOString() })];
+  const { rerender } = render(<Detail />);
+  const list = await screen.findByRole("list", { name: "Interviews" }, { timeout: 5000 });
+  expect(within(list).getAllByRole("button", { name: /^Add to calendar/ })).toHaveLength(1);
+  await userEvent.click(screen.getByRole("button", { name: "How to add this to your calendar" }));
+  const dialog = screen.getByRole("dialog", { name: "How to add this to your calendar" }) as HTMLDialogElement;
+  vi.spyOn(Date, "now").mockReturnValue(t0 + 120_000); // the interview has started
+  rerender(<Detail />); // any re-render (a toast, a refresh) recomputes "upcoming"
+  expect(screen.queryByRole("button", { name: /^Add to calendar/ })).toBeNull();
+  expect(dialog.isConnected && dialog.open).toBe(true);
+  expect(document.activeElement).not.toBe(document.body);
+  await userEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+  expect(screen.queryByRole("button", { name: "How to add this to your calendar" })).toBeNull();
+  expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Interviews" }));
+});
+
 // ---- the guide ----
 const open = async () => {
   render(<CalendarGuide />);

@@ -47,12 +47,19 @@ const h = "mt-6 text-body-medium text-text-primary";
 // DESIGN.md 6.8c. The standard dialog (sheet under 768, centered from 768, scrolls inside, focus
 // trapped, Escape closes, focus returns to the trigger). Steps were checked against the vendors' help
 // pages (Google Calendar, Apple Calendar on Mac, Outlook on the web, classic Outlook) and reworded.
-export function CalendarGuide() {
+// `available` hides only the trigger (the detail: no interview still ahead). An open dialog stays open
+// when it turns false (the last upcoming interview passed while reading); closing it then calls
+// `onGone`, which must move focus somewhere that still exists, since the trigger is gone.
+export function CalendarGuide({ available = true, onGone }: { available?: boolean; onGone?: () => void }) {
   const [open, setOpen] = useState(false);
+  function close() {
+    setOpen(false);
+    if (!available) onGone?.();
+  }
   return (
     <>
-      <TextAction onClick={() => setOpen(true)}>How to add this to your calendar</TextAction>
-      <Dialog open={open} onClose={() => setOpen(false)} title="How to add this to your calendar" focusTitle>
+      {(available || open) && <TextAction onClick={() => setOpen(true)}>How to add this to your calendar</TextAction>}
+      <Dialog open={open} onClose={close} title="How to add this to your calendar" focusTitle>
         <p className="mt-3 text-body text-text-primary">
           The file is a one-time copy of the interview. If an interview changes in Talaan, download a new file and delete the old event in your
           calendar first.
@@ -92,7 +99,7 @@ export function CalendarGuide() {
         </ol>
 
         <div className="mt-8">
-          <Button variant="secondary" className="w-full" onClick={() => setOpen(false)}>
+          <Button variant="secondary" className="w-full" onClick={close}>
             Close
           </Button>
         </div>
