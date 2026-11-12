@@ -16,6 +16,8 @@
 //     shows no status and a status change cannot touch the fields it shows. Clearing, not patching: an
 //     interview write returns only an id, and an edited time can move a row between Upcoming and Past
 //     or onto another page.
+//   - The month view's ranges (getCalendar) go exactly where the agenda goes (dropAgenda) and share its
+//     version: the same writes change what a day shows, and a status change does not.
 //   - storeApplication(row, from): a status change. Every list and the detail are patched from the
 //     server's row; only a list whose result cannot be known is dropped (patchList). The list stamp
 //     moves, and changeStatus brackets the PATCH with beginMove()/endMove() (see listFresh).
@@ -32,7 +34,11 @@ export type AgendaKey = "upcoming" | "past";
 // asOf: the instant page 1 was split at (from the server); every Load more of this entry sends it.
 export type AgendaEntry = { items: AgendaInterview[]; total: number; nextOffset: number; asOf: string };
 
+// The month view's data: one entry per requested range, keyed "from/to" (the visible grid).
+export type CalendarEntry = { items: AgendaInterview[]; total: number; truncated: boolean };
+
 const lists = new Map<string, ListEntry>();
+const calendar = new Map<string, CalendarEntry>();
 const agenda = new Map<AgendaKey, AgendaEntry>();
 let agendaEpoch = 0; // bumped whenever the agenda is dropped: guards in-flight agenda responses
 const details = new Map<number, DetailEntry>();
@@ -64,10 +70,17 @@ export const setAgenda = (when: AgendaKey, entry: AgendaEntry) => {
   loaded = true;
   agenda.set(when, entry);
 };
-/** Changes whenever the agenda is dropped. A response requested at another value must not be stored. */
+export const calendarKey = (from: string, to: string) => `${from}/${to}`;
+export const getCalendar = (key: string) => calendar.get(key);
+export const setCalendar = (key: string, entry: CalendarEntry) => {
+  loaded = true;
+  calendar.set(key, entry);
+};
+/** Changes whenever the agenda is dropped (the calendar ranges are dropped with it and share this stamp). A response requested at another value must not be stored. */
 export const agendaVersion = () => agendaEpoch;
 function dropAgenda() {
   agenda.clear();
+  calendar.clear();
   agendaEpoch++;
 }
 export const dropDetail = (id: number) => void details.delete(id);

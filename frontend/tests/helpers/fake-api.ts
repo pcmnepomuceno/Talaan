@@ -107,6 +107,22 @@ export function installFake(initial = seed()) {
       const limit = Number(url.searchParams.get("limit") ?? 20);
       return json(200, { items: rows.slice(0, limit), total: rows.length, limit, offset: 0 });
     }
+    if (p === "/interviews/calendar" && c.method === "GET") {
+      // PHT days from..to inclusive, oldest first, capped at 200 like the server.
+      const from = url.searchParams.get("from") ?? "";
+      const to = url.searchParams.get("to") ?? "";
+      const lo = Date.parse(`${from}T00:00:00+08:00`);
+      const hi = Date.parse(`${to}T00:00:00+08:00`) + 864e5;
+      if (Number.isNaN(lo) || Number.isNaN(hi) || lo >= hi) return json(422, { detail: [{ loc: ["query", "from"], msg: "bad range" }] });
+      const rows = db.interviews
+        .filter((i) => Date.parse(i.scheduled_at) >= lo && Date.parse(i.scheduled_at) < hi)
+        .sort((a, b) => Date.parse(a.scheduled_at) - Date.parse(b.scheduled_at) || a.id - b.id)
+        .flatMap((i) => {
+          const a = db.apps.find((x) => x.id === i.job_application_id);
+          return a ? [{ ...i, company: a.company, job_name: a.job_name }] : [];
+        });
+      return json(200, { items: rows.slice(0, 200), total: rows.length, truncated: rows.length > 200, from, to });
+    }
     if (p === "/interviews" && c.method === "GET") {
       // The agenda: every interview with its application's names; upcoming (>= now) oldest first, past newest first.
       // now = as_of when sent (echoed back, as the server does), else the clock.

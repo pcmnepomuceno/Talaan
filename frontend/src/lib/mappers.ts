@@ -9,6 +9,7 @@ import { fromPhtInput, toPhtInput } from "./pht";
 import {
   type Application,
   type AgendaInterview,
+  type CalendarRange,
   type Interview,
   type InterviewMode,
   INTERVIEW_MODES,
@@ -269,3 +270,11 @@ export function fromInterviewFormValues(v: InterviewFormValues): InterviewInput 
  * time cannot be shown in the PHT input.
  */
 export const toInterviewInput = (i: Interview): InterviewInput => fromInterviewFormValues(toInterviewFormValues(i));
+
+/** The calendar range: items, the count, whether the server cut the list at its cap, and the echoed PHT days. */
+export function fromApiCalendarRange(v: unknown): CalendarRange {
+  const r = obj(v, "calendar");
+  if (typeof r.truncated !== "boolean") throw new MappingError("truncated");
+  for (const k of ["from", "to"]) if (!/^\d{4}-\d{2}-\d{2}$/.test(str(r, k))) throw new MappingError(k);
+  return { ...fromApiPage(v, fromApiAgendaInterview), truncated: r.truncated, from: str(r, "from"), to: str(r, "to") };
+}

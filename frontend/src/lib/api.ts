@@ -8,14 +8,15 @@
 //   - interview create and edit: clearDetail(applicationId)
 //   - interview delete: replaceDetail(applicationId, page minus the row) (the detail still refetches)
 //   - any 404 on a write: clearCaches() (the row, or its application, may be gone)
-//   - the agenda cache (cache.ts) is dropped by clearCaches, clearDetail and replaceDetail, so every
-//     rule above that calls one of them also drops it; changeStatus's storeApplication keeps it
+//   - the agenda and calendar caches (cache.ts) are dropped by clearCaches, clearDetail and replaceDetail, so
+//     every rule above that calls one of them also drops them; changeStatus's storeApplication keeps them
 import { type AgendaKey, beginMove, clearCaches, clearDetail, endMove, getDetail, replaceDetail, storeApplication } from "./cache";
 import { ApiError, request } from "./http";
 import {
   type ApplicationInput,
   fromApiAgendaPage,
   fromApiApplication,
+  fromApiCalendarRange,
   fromApiInterview,
   fromApiPage,
   idOf,
@@ -26,7 +27,7 @@ import {
   toInterviewPatchBody,
   toPatchBody,
 } from "./mappers";
-import { type AgendaInterview, type Application, type Interview, STATUSES, type Status } from "./types";
+import { type AgendaInterview, type Application, type CalendarRange, type Interview, STATUSES, type Status } from "./types";
 
 export const PAGE_SIZE = 50;
 export const INTERVIEWS_LIMIT = 100;
@@ -161,6 +162,15 @@ export async function getAgenda(when: AgendaKey, offset = 0, asOf?: string): Pro
   // URLSearchParams percent-encodes the value: a raw "+08:00" would arrive as " 08:00".
   if (asOf !== undefined) q.set("as_of", asOf);
   return fromApiAgendaPage(await request<unknown>(`${INTERVIEWS}?${q}`));
+}
+
+/**
+ * The user's interviews on the PHT days `from` to `to` (YYYY-MM-DD, both included), oldest first, at
+ * most 200 (`truncated` says rows are missing). The month view asks for its whole visible grid.
+ */
+export async function getCalendarRange(from: string, to: string): Promise<CalendarRange> {
+  const q = new URLSearchParams({ from, to });
+  return fromApiCalendarRange(await request<unknown>(`${INTERVIEWS}/calendar?${q}`));
 }
 
 /** null = not found (missing, or under another user's application). */
