@@ -1,15 +1,18 @@
 """Interview routes. Ownership always goes through the parent application's `created_by`."""
 
-from datetime import datetime, timezone
+import re
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi.exceptions import RequestValidationError
 from pydantic import AwareDatetime
 from sqlalchemy import func
 from sqlalchemy.orm import Session as DBSession
 
 from app.applications.dependencies import get_owned_application
 from app.applications.models import JobApplication
+from app.applications.router import MANILA
 from app.applications.schemas import INT4_MAX
 from app.auth.dependencies import get_current_user
 from app.database import get_db
@@ -18,6 +21,7 @@ from app.interviews.models import Interview
 from app.interviews.schemas import (
     AgendaItem,
     AgendaPage,
+    CalendarRange,
     InterviewCreate,
     InterviewPage,
     InterviewRead,
@@ -80,11 +84,7 @@ def list_agenda(
     page 1's `as_of` with every later page, so a row crossing the boundary between pages cannot
     shift the offsets (DECISIONS.md 2026-11-11, review round 1)."""
     now = as_of or _now()
-    q = (
-        db.query(Interview, JobApplication.company, JobApplication.job_name)
-        .join(JobApplication, Interview.job_application_id == JobApplication.id)
-        .filter(JobApplication.created_by == user.id)
-    )
+    q = _owned_agenda(db, user)
     if when == "upcoming":
         q = q.filter(Interview.scheduled_at >= now)
         order = (Interview.scheduled_at.asc(), Interview.id.asc())
@@ -93,8 +93,69 @@ def list_agenda(
         order = (Interview.scheduled_at.desc(), Interview.id.desc())
     total = q.with_entities(func.count(Interview.id)).scalar()
     rows = q.order_by(*order).limit(limit).offset(offset).all()
-    items = [AgendaItem(**InterviewRead.model_validate(i).model_dump(), company=c, job_name=j) for i, c, j in rows]
-    return AgendaPage(items=items, total=total, limit=limit, offset=offset, as_of=now)
+    return AgendaPage(items=_items(rows), total=total, limit=limit, offset=offset, as_of=now)
+
+
+CALENDAR_CAP = 200
+CALENDAR_MAX_DAYS = 62
+_DAY = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")  # ASCII only: \d would accept other scripts' digits
+
+
+def _owned_agenda(db: DBSession, user: User):
+    """Every interview under the caller's applications, with the application's names."""
+    return (
+        db.query(Interview, JobApplication.company, JobApplication.job_name)
+        .join(JobApplication, Interview.job_application_id == JobApplication.id)
+        .filter(JobApplication.created_by == user.id)
+    )
+
+
+def _items(rows) -> list[AgendaItem]:
+    return [AgendaItem(**InterviewRead.model_validate(i).model_dump(), company=c, job_name=j) for i, c, j in rows]
+
+
+def _bad(name: str, msg: str) -> RequestValidationError:
+    return RequestValidationError([{"type": "value_error", "loc": ("query", name), "msg": msg, "input": None}])
+
+
+def _pht_day(name: str, raw: str) -> date:
+    """`YYYY-MM-DD` and nothing else, a real day, years 1900-2200 (like the interview form)."""
+    if not _DAY.fullmatch(raw):
+        raise _bad(name, f"{name} must be a date as YYYY-MM-DD")
+    try:
+        d = date.fromisoformat(raw)
+    except ValueError:
+        raise _bad(name, f"{name} must be a real calendar date") from None
+    if not 1900 <= d.year <= 2200:
+        raise _bad(name, f"{name} year must be between 1900 and 2200")
+    return d
+
+
+@router.get("/interviews/calendar", response_model=CalendarRange, response_model_by_alias=True)
+def list_calendar(
+    request: Request,
+    frm: str = Query(alias="from"),
+    to: str = Query(),
+    user: User = Depends(get_current_user),
+    db: DBSession = Depends(get_db),
+):
+    """The caller's interviews on the PHT days `from` to `to`, both included, oldest first (ties by
+    id), at most 200. Not a mode of the agenda: paging and `as_of` have no meaning here, so passing
+    any agenda parameter is 422. Must be declared before `/interviews/{interview_id}`."""
+    for name in ("when", "limit", "offset", "as_of"):
+        if name in request.query_params:
+            raise _bad(name, f"{name} cannot be combined with from and to")
+    start, end = _pht_day("from", frm), _pht_day("to", to)
+    if start > end:
+        raise _bad("from", "from must not be after to")
+    if (end - start).days + 1 > CALENDAR_MAX_DAYS:
+        raise _bad("to", f"the range can span at most {CALENDAR_MAX_DAYS} days")
+    lo = datetime.combine(start, time.min, tzinfo=MANILA)
+    hi = datetime.combine(end + timedelta(days=1), time.min, tzinfo=MANILA)
+    q = _owned_agenda(db, user).filter(Interview.scheduled_at >= lo, Interview.scheduled_at < hi)
+    total = q.with_entities(func.count(Interview.id)).scalar()
+    rows = q.order_by(Interview.scheduled_at.asc(), Interview.id.asc()).limit(CALENDAR_CAP).all()
+    return CalendarRange(items=_items(rows), total=total, truncated=total > CALENDAR_CAP, from_=start, to=end)
 
 
 @router.get("/interviews/{interview_id}", response_model=InterviewRead)

@@ -1,6 +1,6 @@
 """Pydantic schemas: Interview request/response bodies."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated
 
 from pydantic import (
@@ -8,6 +8,7 @@ from pydantic import (
     AwareDatetime,
     BaseModel,
     ConfigDict,
+    Field,
     StringConstraints,
     model_validator,
 )
@@ -92,3 +93,15 @@ class AgendaPage(BaseModel):
     limit: int
     offset: int
     as_of: datetime
+
+
+class CalendarRange(BaseModel):
+    """The interviews of a PHT date range, capped; `truncated` says rows are missing from `items`."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    items: list[AgendaItem]
+    total: int
+    truncated: bool
+    from_: date = Field(serialization_alias="from")
+    to: date
