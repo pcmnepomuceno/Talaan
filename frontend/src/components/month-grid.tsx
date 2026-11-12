@@ -67,8 +67,11 @@ export function MonthGrid({
     if (!KEYS.has(e.key) || e.altKey || e.ctrlKey || e.metaKey) return;
     e.preventDefault();
     const key = e.key as MoveKey;
-    const next = moveDay(day, key);
-    if (next === day) return;
+    // A move that has not landed yet (the month is still changing) is where the next key starts, so
+    // keys pressed faster than the screen re-renders add up instead of repeating the first one.
+    const from = pending.current ?? day;
+    const next = moveDay(from, key);
+    if (next === from) return;
     if (key === "PageUp" || key === "PageDown" || !grid.includes(next)) {
       go(next);
       onMonth(monthOf(next), next);

@@ -170,14 +170,23 @@ it.each([
   expect(onMonth).not.toHaveBeenCalled();
 });
 
-it("PageDown and PageUp ask for the next and previous month, keeping the day", async () => {
+it.each([
+  ["{PageDown}", "2026-12", "2026-12-10"],
+  ["{PageUp}", "2026-10", "2026-10-10"],
+])("%s asks for the next or previous month, keeping the day", async (key, month, day) => {
   const user = userEvent.setup();
   const { cell, onMonth } = mount();
   cell("2026-11-10").focus();
-  await user.keyboard("{PageDown}");
-  expect(onMonth).toHaveBeenLastCalledWith("2026-12", "2026-12-10");
-  await user.keyboard("{PageUp}");
-  expect(onMonth).toHaveBeenLastCalledWith("2026-10", "2026-10-10");
+  await user.keyboard(key);
+  expect(onMonth).toHaveBeenLastCalledWith(month, day);
+});
+
+it("keys pressed before the month has changed add up from the day the first one asked for", async () => {
+  const user = userEvent.setup();
+  const { cell, onMonth } = mount(); // the parent does not re-render here: the first move stays pending
+  cell("2026-11-10").focus();
+  await user.keyboard("{PageDown}{PageDown}{PageUp}");
+  expect(onMonth.mock.calls.map((c) => c[1])).toEqual(["2026-12-10", "2027-01-10", "2026-12-10"]);
 });
 
 it("an arrow past the visible grid asks for the neighbouring month", async () => {
