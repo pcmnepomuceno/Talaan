@@ -34,6 +34,14 @@ export function useAgenda(when: AgendaKey) {
   const [fetched, setFetched] = useState<Fetched | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [focusId, setFocusId] = useState<number | null>(null);
+  // Every visit to a tab is a new request generation: a tab switch bumps tick too, so Upcoming -> Past ->
+  // Upcoming never reuses "upcoming:0". A response (page 1 or Load more) answers only the key it was
+  // started under; one from an earlier visit is dropped (review round 1, finding 3).
+  const [shownWhen, setShownWhen] = useState(when);
+  if (shownWhen !== when) {
+    setShownWhen(when);
+    setTick((n) => n + 1);
+  }
   const key = `${when}:${tick}`;
 
   // The live region falls back to this text after every loading message, so it must not outlive the
@@ -53,7 +61,7 @@ export function useAgenda(when: AgendaKey) {
   useEffect(() => {
     keyRef.current = key;
   });
-  const moreBusy = useRef(false);
+  const moreBusy = useRef<Record<AgendaKey, boolean>>({ upcoming: false, past: false }); // per tab: each has its own Load more
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -96,8 +104,8 @@ export function useAgenda(when: AgendaKey) {
   const loadMore = useCallback(async () => {
     const at = keyRef.current;
     const cur = cached(when);
-    if (!cur || moreBusy.current) return;
-    moreBusy.current = true;
+    if (!cur || moreBusy.current[when]) return;
+    moreBusy.current[when] = true;
     setAnnouncement("");
     const v = agendaVersion();
     const mark = (more: Fetched["more"]) => setFetched((f) => (f && f.key === at ? { ...f, more } : f));
@@ -122,7 +130,7 @@ export function useAgenda(when: AgendaKey) {
     } catch {
       if (here()) mark("failed");
     } finally {
-      moreBusy.current = false;
+      moreBusy.current[when] = false;
     }
   }, [when]);
 
