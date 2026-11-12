@@ -46,7 +46,9 @@ const h = "mt-6 text-body-medium text-text-primary";
 
 // DESIGN.md 6.8c. The standard dialog (sheet under 768, centered from 768, scrolls inside, focus
 // trapped, Escape closes, focus returns to the trigger). Steps were checked against the vendors' help
-// pages (Google Calendar, Apple Calendar on Mac, Outlook on the web, classic Outlook) and reworded.
+// pages (Google Calendar, Apple Calendar on Mac, Outlook on the web, classic Outlook) and reworded;
+// re-checked 2026-11-12: classic Outlook really says "Open as New" (it adds the file as another
+// calendar under Other Calendars), and Apple's File > Import ends with an Import button.
 // `available` hides only the trigger (the detail: no interview still ahead). An open dialog stays open
 // when it turns false (the last upcoming interview passed while reading); closing it then calls
 // `onGone`, which must move focus somewhere that still exists, since the trigger is gone.
@@ -79,7 +81,7 @@ export function CalendarGuide({ available = true, onGone }: { available?: boolea
         <h3 className={h}>Apple Calendar on a Mac</h3>
         <ol className={steps}>
           <li>Open the Calendar app.</li>
-          <li>Drag the downloaded file into the Calendar window, or choose File, then Import, and select the file.</li>
+          <li>Drag the downloaded file into the Calendar window, or choose File, then Import, select the file, then select Import.</li>
           <li>Choose the calendar that should receive the event, then select OK.</li>
         </ol>
 

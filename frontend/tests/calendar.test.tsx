@@ -226,3 +226,12 @@ it("can be opened again after closing", async () => {
   await userEvent.click(trigger);
   expect(screen.getByRole("dialog", { name: "How to add this to your calendar" })).toBeTruthy();
 });
+
+it("steps that name a menu item or button match the vendors' help pages (checked 2026-11-12)", async () => {
+  const { dialog } = await open();
+  const items = within(dialog).getAllByRole("listitem").map((li) => li.textContent);
+  // Apple (support.apple.com, icl1023): "Choose File > Import, select the exported calendar file, then click Import."
+  expect(items).toContain("Drag the downloaded file into the Calendar window, or choose File, then Import, select the file, then select Import.");
+  // Classic Outlook (support.microsoft.com, 8e8364e1): step 9 is "Select Open as New", not Import.
+  expect(items.at(-1)).toBe("Select Open as New.");
+});
