@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Banner } from "@/components/banner";
 import { DeleteConfirm } from "@/components/dialog";
 import { EmptyState } from "@/components/empty-state";
 import { ApplicationRow, DetailRows, InterviewRow, LedgerSheet, LedgerSkeleton } from "@/components/ledger";
 import { useToast } from "@/components/toast";
+import { monthOf } from "@/lib/calendar";
 import { sortInterviewsByDate } from "@/lib/interviews";
 import {
   type Application,
@@ -19,6 +20,7 @@ import { Button } from "@/components/button";
 import { PasswordField, Select, Textarea, TextField } from "@/components/fields";
 import { type Filter, StatusFilter } from "@/components/status-filter";
 import { Icon, iconNames } from "@/components/icon";
+import { MonthGrid } from "@/components/month-grid";
 import { SegmentedControl } from "@/components/segmented-control";
 import { OUTCOMES, STATUSES, StatusStamp, stampLabel } from "@/components/status-stamp";
 
@@ -46,6 +48,41 @@ const interviews: Interview[] = [
   { id: 1, job_application_id: 1, interviewer: "Ana Santos", scheduled_at: "2026-10-18T02:00:00Z", mode: "online", outcome: "good", remarks: "Background check and portfolio walkthrough.", created_at: "", updated_at: "" },
   { id: 3, job_application_id: 1, interviewer: null, scheduled_at: "2026-10-26T01:30:00+00:00", mode: "async", outcome: "bad", remarks: null, created_at: "", updated_at: "" },
 ];
+
+// Fictional interviews for the month grid sample (2026-11, today the 12th): a single one, two, and
+// three (the "+1 more" line shows from 1280).
+const ivBase = { job_application_id: 1, interviewer: null, mode: "online", outcome: "pending", remarks: null, created_at: "", updated_at: "", job_name: "Frontend Engineer" } as const;
+const monthDays = new Map(
+  (
+    [
+      ["2026-11-05", [{ ...ivBase, id: 11, scheduled_at: "2026-11-05T14:00:00+08:00", company: "Pinagsama Tech" }]],
+      ["2026-11-10", [{ ...ivBase, id: 12, scheduled_at: "2026-11-10T09:30:00+08:00", company: "Kape Digital" }, { ...ivBase, id: 13, scheduled_at: "2026-11-10T14:00:00+08:00", company: "Bayanihan Digital" }]],
+      ["2026-11-19", [{ ...ivBase, id: 14, scheduled_at: "2026-11-19T09:00:00+08:00", company: "Mayon Software Labs" }, { ...ivBase, id: 15, scheduled_at: "2026-11-19T11:00:00+08:00", company: "Haraya Solutions" }, { ...ivBase, id: 16, scheduled_at: "2026-11-19T15:00:00+08:00", company: "Kalayaan Logistics" }]],
+      ["2026-12-02", [{ ...ivBase, id: 17, scheduled_at: "2026-12-02T10:00:00+08:00", company: "Pinagsama Tech" }]],
+    ] as const
+  ).map(([d, rows]) => [d, rows.map((r) => ({ ...r }))]),
+);
+
+function MonthGridSample() {
+  const id = useId();
+  const [state, set] = useState({ month: "2026-11", selected: "2026-11-10" });
+  return (
+    <>
+      <h5 id={id} className="text-section-title">
+        {state.month === "2026-11" ? "November 2026" : state.month}
+      </h5>
+      <MonthGrid
+        month={state.month}
+        today="2026-11-12"
+        selected={state.selected}
+        days={state.month === "2026-11" ? monthDays : new Map()}
+        labelledBy={id}
+        onSelect={(d) => set({ month: monthOf(d), selected: d })}
+        onMonth={(month, d) => set({ month, selected: d })}
+      />
+    </>
+  );
+}
 
 function Block({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -78,6 +115,10 @@ export function Gallery() {
             </li>
           ))}
         </ul>
+      </Block>
+
+      <Block title="Month grid: tint and bold = interviews, outline = today, fill = selected">
+        <MonthGridSample />
       </Block>
 
       <Block title="Buttons: default, disabled">
