@@ -4,7 +4,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useAgenda } from "../src/app/(app)/interviews/use-agenda";
 import type { AgendaKey } from "../src/lib/cache";
-import { clearCaches, forgetLoaded } from "../src/lib/cache";
+import { clearCaches, forgetLoaded, getAgenda as cached } from "../src/lib/cache";
 import { type Fake, installFake, json, makeApp, makeInterview } from "./helpers/fake-api";
 
 const AS_OF = "2026-11-10T12:00:00Z";
@@ -74,4 +74,87 @@ it("Load more on Past goes out while Upcoming's is still loading", async () => {
   expect(ids(result)).toHaveLength(60);
   g.release();
   await settle();
+});
+
+// Finding 10: the Load more branches use-list.ts has tests for, pinned here for the copy in use-agenda.ts.
+
+it("a Load more page with no new row withdraws Load more and refetches page 1", async () => {
+  fake = installFake({ apps: [A], interviews: up(60) });
+  const { result } = mount();
+  await waitFor(() => expect(ids(result)).toHaveLength(50));
+  // Offsets shifted under us: the page holds only rows already shown.
+  fake.on("GET", /when=upcoming.*offset=50/, () => page(named(up(10, 41)), 60, 50));
+  const firstPages = fake.callsTo("GET", /when=upcoming.*offset=0/).length;
+  const g = gate(); // hold the page-1 refetch so the state between the two answers can be seen
+  const fresh = up(50).map((r) => ({ ...r, company: A.company, job_name: A.job_name }));
+  fake.on("GET", /when=upcoming.*offset=0/, async () => (await g.p, page(fresh, 60, 0)));
+  await act(async () => void (await result.current.loadMore()));
+  await waitFor(() => expect(fake.callsTo("GET", /when=upcoming.*offset=0/)).toHaveLength(firstPages + 1));
+  expect(ready(result).refreshing).toBe(true);
+  expect(ready(result).nextOffset).toBeGreaterThanOrEqual(ready(result).total); // Load more is gone
+  expect(ids(result)).toEqual(up(50).map((i) => i.id)); // nothing appended
+  g.release();
+  await waitFor(() => expect(ready(result).refreshing).toBe(false));
+  expect(ready(result).refreshFailed).toBe(false);
+  expect(ready(result).nextOffset).toBe(50); // the fresh page 1 offers Load more again
+  expect(ids(result)).toEqual(up(50).map((i) => i.id)); // the fresh page 1, no duplicate, no STALE row
+  expect(ready(result).items.some((i) => i.company === "STALE")).toBe(false);
+});
+
+it("a Load more that lands after a clear is dropped; the refetch replaces the list", async () => {
+  fake = installFake({ apps: [A], interviews: up(60) });
+  const { result } = mount();
+  await waitFor(() => expect(ids(result)).toHaveLength(50));
+  const g = gate();
+  fake.on("GET", /when=upcoming.*offset=50/, async () => (await g.p, page(named(up(10, 51)), 60, 50)));
+  let more!: Promise<void>;
+  act(() => void (more = result.current.loadMore()));
+  act(() => clearCaches());
+  await waitFor(() => expect(result.current.view.kind === "ready" && !ready(result).refreshing).toBe(true));
+  g.release();
+  await act(async () => void (await more));
+  await settle();
+  expect(ids(result)).toEqual(up(50).map((i) => i.id));
+  expect(ready(result).more).toBe("idle");
+  expect(result.current.announcement).toBe("");
+  expect(cached("upcoming")!.items.some((i) => i.company === "STALE")).toBe(false);
+});
+
+it("unmounting during Load more: the late page is not stored and React reports nothing", async () => {
+  const errors = vi.spyOn(console, "error");
+  fake = installFake({ apps: [A], interviews: up(60) });
+  const { result, unmount } = mount();
+  await waitFor(() => expect(ids(result)).toHaveLength(50));
+  const g = gate();
+  fake.on("GET", /when=upcoming.*offset=50/, async () => (await g.p, page(named(up(10, 51)), 60, 50)));
+  let more!: Promise<void>;
+  act(() => void (more = result.current.loadMore()));
+  unmount();
+  g.release();
+  await expect(more).resolves.toBeUndefined();
+  await settle();
+  expect(cached("upcoming")!.items).toHaveLength(50);
+  expect(errors).not.toHaveBeenCalled();
+});
+
+it("a Load more answering between a clear and the re-render it causes is still dropped (agendaVersion)", async () => {
+  fake = installFake({ apps: [A], interviews: up(60) });
+  const { result } = mount();
+  await waitFor(() => expect(ids(result)).toHaveLength(50));
+  const g = gate();
+  fake.on("GET", /when=upcoming.*offset=50/, async () => (await g.p, page(named(up(10, 51)), 60, 50)));
+  let more!: Promise<void>;
+  act(() => void (more = result.current.loadMore()));
+  const hold = gate(); // the clear's page-1 refetch stays pending, so only the Load more could write
+  fake.on("GET", /when=upcoming.*offset=0/, async () => (await hold.p, page(up(50).map((r) => ({ ...r, company: A.company, job_name: A.job_name })), 60, 0)));
+  // Inside one async act React renders only at the end, so the page lands while the old key is current.
+  await act(async () => {
+    clearCaches();
+    g.release();
+    await more;
+  });
+  expect(cached("upcoming")).toBeUndefined(); // the clear dropped it and nothing wrote it back
+  hold.release();
+  await waitFor(() => expect(result.current.view.kind === "ready" && !ready(result).refreshing).toBe(true));
+  expect(ready(result).items.some((i) => i.company === "STALE")).toBe(false);
 });
