@@ -31,7 +31,7 @@ export function AddToCalendar({ interview, disabled = false }: { interview: Agen
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), REVOKE_MS);
-    toast.success("Calendar file downloaded.");
+    toast.success("Calendar file created.");
   }
 
   return (

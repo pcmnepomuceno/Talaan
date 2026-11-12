@@ -133,7 +133,7 @@ withEnv(async ({ base, createInvite }) => {
     const [dl] = await Promise.all([page.waitForEvent("download"), nastyBtn.first().click()]);
     const text = fs.readFileSync(await dl.path(), "utf8");
     if (out) fs.writeFileSync(path.join(out, `nasty-${dl.suggestedFilename()}`), text);
-    check("toast after the download", await page.getByText("Calendar file downloaded.").first().isVisible());
+    check("toast after the download", await page.getByText("Calendar file created.").first().isVisible());
     check("file name: talaan-interview-<slug>-<PHT date>.ics, ASCII", /^talaan-interview-[a-z0-9-]{1,40}-\d{4}-\d{2}-\d{2}\.ics$/.test(dl.suggestedFilename()) && dl.suggestedFilename().endsWith(`-${d31}.ics`), dl.suggestedFilename());
     const lines = text.split("\r\n");
     check("CRLF only and every line within 75 octets", !/(?<!\r)\n/.test(text) && lines.every((l) => Buffer.byteLength(l) <= 75));

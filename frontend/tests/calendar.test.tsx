@@ -87,7 +87,7 @@ it("download: a text/calendar Blob with the file, an anchor with the file name, 
   expect(text).not.toContain("PRIVATE NOTES");
   expect(text).toContain(`/applications/12`); // the link back to the application
   expect(anchors).toEqual([{ download: "talaan-interview-pinagsama-tech-2099-03-10.ics", href: mine[0] }]);
-  expect(await screen.findByText("Calendar file downloaded.")).toBeTruthy();
+  expect(await screen.findByText("Calendar file created.")).toBeTruthy();
 });
 
 it("the object URL is revoked after the click, not before it", async () => {
@@ -110,7 +110,7 @@ it("pressing twice quickly downloads twice (same UID, so a calendar sees one eve
     b.click();
   });
   expect(anchors).toHaveLength(2);
-  expect(screen.getAllByText("Calendar file downloaded.")).toHaveLength(2);
+  expect(screen.getAllByText("Calendar file created.")).toHaveLength(2);
   await act(async () => void (await vi.advanceTimersByTimeAsync(1000)));
   expect(revokedHere()).toEqual(mine);
   expect(mine).toHaveLength(2);
