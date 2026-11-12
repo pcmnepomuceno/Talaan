@@ -9,19 +9,32 @@
 //     changes nothing a list row shows, so the lists and every other detail stay valid.
 //   - replaceDetail(id, entry): like clearDetail, but the entry is replaced in the same step, so the
 //     detail never shows a skeleton while it refetches (interview delete).
+//   - The interviews agenda (getAgenda) is dropped, and its version bumped, by clearCaches() and by
+//     clearDetail()/replaceDetail(): every write that can change a row it shows (an interview time,
+//     mode, interviewer or outcome, an application's company or job title, a deleted application) goes
+//     through one of them, and so does every auth event (resetCaches). A status change does not: a row
+//     shows no status and a status change cannot touch the fields it shows. Clearing, not patching: an
+//     interview write returns only an id, and an edited time can move a row between Upcoming and Past
+//     or onto another page.
 //   - storeApplication(row, from): a status change. Every list and the detail are patched from the
 //     server's row; only a list whose result cannot be known is dropped (patchList). The list stamp
 //     moves, and changeStatus brackets the PATCH with beginMove()/endMove() (see listFresh).
 // Each of these sets the new state before notifying listeners, in one synchronous call, so no
 // caller has to win a race against React's next render.
-import type { Application, Interview } from "./types";
+import type { AgendaInterview, Application, Interview } from "./types";
 
 // nextOffset = the server offset of the next page: offset + rows the server sent, which can be more
 // than items.length when de-duplication dropped rows. Load more is offered while it is below total.
 export type ListEntry = { items: Application[]; total: number; nextOffset: number };
 export type DetailEntry = { application: Application; interviews: { items: Interview[]; total: number } | null };
 
+export type AgendaKey = "upcoming" | "past";
+// asOf: the instant page 1 was split at (from the server); every Load more of this entry sends it.
+export type AgendaEntry = { items: AgendaInterview[]; total: number; nextOffset: number; asOf: string };
+
 const lists = new Map<string, ListEntry>();
+const agenda = new Map<AgendaKey, AgendaEntry>();
+let agendaEpoch = 0; // bumped whenever the agenda is dropped: guards in-flight agenda responses
 const details = new Map<number, DetailEntry>();
 // An id is passed when only that application's detail was cleared; undefined means everything was.
 const listeners = new Set<(id?: number) => void>();
@@ -46,6 +59,17 @@ export const setDetail = (id: number, entry: DetailEntry) => {
   loaded = true;
   details.set(id, entry);
 };
+export const getAgenda = (when: AgendaKey) => agenda.get(when);
+export const setAgenda = (when: AgendaKey, entry: AgendaEntry) => {
+  loaded = true;
+  agenda.set(when, entry);
+};
+/** Changes whenever the agenda is dropped. A response requested at another value must not be stored. */
+export const agendaVersion = () => agendaEpoch;
+function dropAgenda() {
+  agenda.clear();
+  agendaEpoch++;
+}
 export const dropDetail = (id: number) => void details.delete(id);
 
 export const cacheVersion = () => version;
@@ -61,6 +85,7 @@ export function onCachesCleared(fn: (id?: number) => void) {
 export function clearCaches() {
   lists.clear();
   details.clear();
+  dropAgenda();
   version++;
   listEpoch++;
   for (const fn of [...listeners]) fn();
@@ -192,6 +217,7 @@ export function storeApplication(row: Application, oldStatus: string) {
 }
 
 function bumpDetail(id: number) {
+  dropAgenda();
   detailBumps.set(id, detailStamp(id) + 1);
   for (const fn of [...listeners]) fn(id);
 }

@@ -8,6 +8,7 @@
 import { fromPhtInput, toPhtInput } from "./pht";
 import {
   type Application,
+  type AgendaInterview,
   type Interview,
   type InterviewMode,
   INTERVIEW_MODES,
@@ -85,7 +86,20 @@ export function fromApiInterview(v: unknown): Interview {
   };
 }
 
+/** An agenda row: the interview plus its application's company and job title. */
+export function fromApiAgendaInterview(v: unknown): AgendaInterview {
+  const r = obj(v, "interview");
+  return { ...fromApiInterview(v), company: str(r, "company"), job_name: str(r, "job_name") };
+}
+
 export type Page<T> = { items: T[]; total: number };
+
+/** An agenda page also carries `as_of`, the instant the server split upcoming from past at. */
+export function fromApiAgendaPage(v: unknown): Page<AgendaInterview> & { asOf: string } {
+  const asOf = str(obj(v, "page"), "as_of");
+  if (Number.isNaN(Date.parse(asOf))) throw new MappingError("as_of");
+  return { ...fromApiPage(v, fromApiAgendaInterview), asOf };
+}
 
 export function fromApiPage<T>(v: unknown, item: (x: unknown) => T): Page<T> {
   const r = obj(v, "page");

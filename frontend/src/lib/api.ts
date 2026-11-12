@@ -8,10 +8,13 @@
 //   - interview create and edit: clearDetail(applicationId)
 //   - interview delete: replaceDetail(applicationId, page minus the row) (the detail still refetches)
 //   - any 404 on a write: clearCaches() (the row, or its application, may be gone)
-import { beginMove, clearCaches, clearDetail, endMove, getDetail, replaceDetail, storeApplication } from "./cache";
+//   - the agenda cache (cache.ts) is dropped by clearCaches, clearDetail and replaceDetail, so every
+//     rule above that calls one of them also drops it; changeStatus's storeApplication keeps it
+import { type AgendaKey, beginMove, clearCaches, clearDetail, endMove, getDetail, replaceDetail, storeApplication } from "./cache";
 import { ApiError, request } from "./http";
 import {
   type ApplicationInput,
+  fromApiAgendaPage,
   fromApiApplication,
   fromApiInterview,
   fromApiPage,
@@ -23,7 +26,7 @@ import {
   toInterviewPatchBody,
   toPatchBody,
 } from "./mappers";
-import { type Application, type Interview, STATUSES, type Status } from "./types";
+import { type AgendaInterview, type Application, type Interview, STATUSES, type Status } from "./types";
 
 export const PAGE_SIZE = 50;
 export const INTERVIEWS_LIMIT = 100;
@@ -145,6 +148,19 @@ export async function deleteApplication(id: number): Promise<void> {
     if (!(e instanceof ApiError && e.status === 404)) throw e;
   }
   clearCaches();
+}
+
+/**
+ * One page of the agenda: the user's interviews across all applications, with each application's
+ * company and job title. Upcoming is oldest first, past newest first. `total` counts every match.
+ * Page 1 omits `asOf` and the server answers with the instant it split at; every later page of the
+ * same list sends that `asOf` back, so a row crossing the boundary cannot shift the offsets.
+ */
+export async function getAgenda(when: AgendaKey, offset = 0, asOf?: string): Promise<Page<AgendaInterview> & { asOf: string }> {
+  const q = new URLSearchParams({ when, limit: String(PAGE_SIZE), offset: String(offset) });
+  // URLSearchParams percent-encodes the value: a raw "+08:00" would arrive as " 08:00".
+  if (asOf !== undefined) q.set("as_of", asOf);
+  return fromApiAgendaPage(await request<unknown>(`${INTERVIEWS}?${q}`));
 }
 
 /** null = not found (missing, or under another user's application). */

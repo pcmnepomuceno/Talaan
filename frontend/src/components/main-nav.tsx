@@ -5,8 +5,9 @@ import { usePathname } from "next/navigation";
 import { Icon, type IconName } from "./icon";
 import { LogoLink } from "./logo";
 
-const items: { href: string; label: string; icon: "table_chart" | "manage_accounts" }[] = [
+const items: { href: string; label: string; icon: "table_chart" | "event" | "manage_accounts" }[] = [
   { href: "/applications", label: "Applications", icon: "table_chart" },
+  { href: "/interviews", label: "Interviews", icon: "event" },
   { href: "/account", label: "Account", icon: "manage_accounts" },
 ];
 

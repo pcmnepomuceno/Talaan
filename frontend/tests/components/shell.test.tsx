@@ -9,10 +9,10 @@ vi.mock("next/navigation", () => ({ usePathname: () => path }));
 
 const current = () => screen.getAllByRole("link").filter((l) => l.getAttribute("aria-current") === "page");
 
-it("nav has exactly Applications and Account, labelled", () => {
+it("nav has exactly Applications, Interviews and Account, labelled", () => {
   render(<MainNav />);
   const nav = screen.getByRole("navigation", { name: "Main" });
-  expect(within(within(nav).getByRole("list")).getAllByRole("link").map((l) => l.textContent)).toEqual(["Applications", "Account"]);
+  expect(within(within(nav).getByRole("list")).getAllByRole("link").map((l) => l.textContent)).toEqual(["Applications", "Interviews", "Account"]);
 });
 
 const LOGO = "Talaan, go to applications";
@@ -38,11 +38,17 @@ it("inner bar has no logo link", () => {
 it.each([
   ["/applications", "Applications"],
   ["/applications/3", "Applications"],
+  ["/interviews", "Interviews"],
   ["/account", "Account"],
 ])("marks %s active", (p, label) => {
   path = p;
   render(<MainNav />);
   expect(current().map((l) => l.textContent)).toEqual([label]);
+});
+
+it("the Interviews link goes to /interviews", () => {
+  render(<MainNav />);
+  expect(within(screen.getByRole("navigation", { name: "Main" })).getByRole("link", { name: "Interviews" }).getAttribute("href")).toBe("/interviews");
 });
 
 it("no active item elsewhere", () => {

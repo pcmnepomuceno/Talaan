@@ -1,6 +1,6 @@
 # Talaan Roadmap
 
-**Current milestone:** P1 polish (in review on `feature/p1-polish`): logo link, status select, Change status on the detail, waking-up line, interview writes clear one detail, status screenshots. Not in this batch: swipe actions, calendar view, demo account, README screenshots.
+**Current milestone:** F8 interviews agenda (in review on `feature/f8-agenda`): `GET /interviews`, the Interviews screen and third nav destination, per-interview `.ics`, import guide, DESIGN.md v2.4. Not in this batch: month grid, subscription feed, API tokens, a duration field, swipe actions, demo account, README screenshots.
 
 ## Roadmap
 
@@ -31,6 +31,7 @@ Next.js app in `frontend/`, built from `docs/DESIGN.md`. Each milestone is merge
   - Note for copy and tests: the account stays deleted even if the user later gets a new invite code; signing up again creates a fresh, empty account.
 - F5 (done, in review on `feature/f5-applications`): application list (server-side status filter, Load more), detail (stale-while-revalidate, isolated interviews error), create and edit form, delete. Interviews are read-only on the detail.
 - F6 (done, in review on `feature/f6-interviews`): interviews create, edit and delete (full-screen routes, times in PHT only, no automatic status change), Add interview on the detail, shared `TextAction`.
+- F8 (done, in review on `feature/f8-agenda`): interviews agenda across applications (Upcoming / Past, PHT day groups, Load more), per-interview `.ics` download built in the browser, import guide; third nav destination; no migration.
 - F7 (done, 2026-11-09): live on Vercel + Render + Neon (https://talaan-phi.vercel.app); results and gotchas in docs/DEPLOY.md.
 
 ## Clients
@@ -41,7 +42,7 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 
 - CI `changes` job clones the full history (`fetch-depth: 0`) only to list changed paths. Deferred (2026-10-28): a full clone of this small repo costs seconds. Revisit if clone time grows (many binary design assets); `gh pr diff --name-only` or the `pulls/{n}/files` API needs no checkout.
 - Playwright layout smoke tests in CI (clipping, 44px targets, no horizontal scroll). Reason (2026-11-02): layout can't be tested in jsdom; the F2a review checks (segment clipping at 320px, hover band) were run by hand in Chrome.
-- The 88px rail fits the bold 14px label "Applications" only with `tracking-tight` (77px label in a 79px pill, 4px from the rail edges). A longer label or a third item needs a wider rail or a smaller label token.
+- The 88px rail fits the bold 14px label "Applications" only with `tracking-tight` (77px label in a 79px pill, 4px from the rail edges). A longer label or a third item needs a wider rail or a smaller label token. (2026-11-11, F8: the third item, "Interviews", fits; checked at 768 in `e2e-agenda.cjs`. A longer fourth label would still need the wider rail.)
 - Add a formatter (Prettier) and a CI format check. Reason (2026-11-03): no formatter config exists, so JSX indentation drifted by hand in the F3 layouts (code review finding 9). Not added in F3 to keep the PR scoped; needs a dependency decision.
 - Backend: `ruff format --check` fails on many pre-existing files. Add a formatter run (one `ruff format` commit) and a CI format check, same as the frontend formatter item. Found 2026-11-03 (PR #14); nothing reformatted yet.
 - 2026-11-03: `npm audit` shows 16 moderate findings, all one minimatch advisory (GHSA-g3hv-75wg-m249) through the ESLint toolchain, dev-only (`npm audit --omit=dev` = 0). No non-breaking fix; do NOT run `npm audit fix --force` (it downgrades to eslint 4.0.0). Recheck when eslint-config-next or typescript-eslint is bumped, or via Dependabot.
@@ -66,6 +67,12 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - PR #23 review round 3, finding 1 (2026-11-10): optimistic concurrency for PATCH, an `updated_at` precondition (409 on mismatch). A status PATCH the server saves after the client's 60 s timeout lands after the refetch, so the screen keeps the old status, and a retry can lose to the late save. Deferred: it needs a backend contract change; the client alone cannot close the window.
 - PR #23 review round 3, finding 3 (2026-11-10): during a status PATCH refuse only the lists it can change (`all`, the old and the new status) instead of every list. Today an unrelated page 1 can sit on the skeleton for up to 60 s on a cold backend. Deferred: latency on cold starts only, never wrong data.
 - PR #23 review round 3, finding 9 (2026-11-10): a per-id application stamp in `cache.ts`, bumped by `storeApplication`, to replace the three tokens that guard the application request in `use-detail.ts` (`cacheVersion`, `detailStamp`, a hook-local counter). Deferred: a refactor with no behavior change.
+- Detail back arrow returns to the agenda when the application was opened from it (2026-11-11, F8). Left out: the browser Back button already returns to the agenda, and the arrow would need a query param on the detail route (like `?status=`) that every link to the detail has to carry.
+- Import guide gaps (2026-11-11, F8): opening the `.ics` directly on an iPhone or an Android phone, and the new Outlook for Windows, are not in the guide because Apple's and Microsoft's help pages did not document them. Add them when a vendor page states the steps.
+- PR #24 review round 1, finding 8 (2026-11-12): the `.ics` has no `SEQUENCE` or `LAST-MODIFIED`, so a file downloaded again after an edit carries the same UID at revision 0, and Apple Calendar or Outlook may keep the old time. Deferred: the guide already tells people to delete the old event first, and `SEQUENCE` needs a counter the schema does not have (`updated_at` as `LAST-MODIFIED` is the cheap half).
+- PR #24 review round 1, finding 9 (2026-11-12): the detail decides "upcoming" (Add to calendar) with the device clock, the agenda with the server clock (`as_of`), so a skewed phone can disagree for a few minutes around an interview's start. Deferred: it only affects which interviews offer a file, never the data.
+- PR #24 review round 1, finding 10 (2026-11-12): `use-agenda.ts` is a near copy of `use-list.ts` (announcement, focus, key/tick refetch, Load more with de-dup). Extract one paged-list hook taking a fetcher and the cache get/set/version functions. Deferred: a refactor touching the applications list, which has its own status-write window; the agenda copy now has its own tests (`tests/use-agenda.test.tsx`).
+- Backend: the agenda (`GET /interviews`) and the other authenticated routes have no rate limit (same backlog item as above).
 
 ## Maintenance
 

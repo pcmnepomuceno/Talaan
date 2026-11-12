@@ -66,3 +66,6 @@ export type Interview = {
   created_at: string;
   updated_at: string;
 };
+
+/** One row of the interviews agenda (GET /interviews): an interview plus its application's names. */
+export type AgendaInterview = Interview & { company: string; job_name: string };

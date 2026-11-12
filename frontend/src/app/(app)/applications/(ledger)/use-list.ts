@@ -30,7 +30,7 @@ export type ListView =
 type Fetched = { key: string; failed: boolean; refreshFailed: boolean; more: "idle" | "loading" | "failed" };
 
 /** Adds `incoming` rows whose id is not already present, in order. */
-export function appendUnique(existing: Application[], incoming: Application[]): Application[] {
+export function appendUnique<T extends { id: number }>(existing: T[], incoming: T[]): T[] {
   const seen = new Set(existing.map((a) => a.id));
   return [...existing, ...incoming.filter((a) => !seen.has(a.id))];
 }
