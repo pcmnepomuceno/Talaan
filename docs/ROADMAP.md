@@ -1,6 +1,6 @@
 # Talaan Roadmap
 
-**Current milestone:** F8 interviews agenda (in review on `feature/f8-agenda`): `GET /interviews`, the Interviews screen and third nav destination, per-interview `.ics`, import guide, DESIGN.md v2.4. Not in this batch: month grid, subscription feed, API tokens, a duration field, swipe actions, demo account, README screenshots.
+**Current milestone:** F9 calendar view (on `feature/f9-calendar`): `GET /interviews/calendar` (PHT date range, ascending, capped at 200), a Month view on the Interviews screen (`?view=month&month=YYYY-MM&day=YYYY-MM-DD`), keyboard date grid, DESIGN.md v2.5. F8 (agenda, `.ics`, import guide) is merged. Not in this batch: drag to reschedule, adding an interview from a day, week or day views, application dates in the grid, subscription feed, API tokens, a duration field, swipe actions, demo account, README screenshots.
 
 ## Roadmap
 
@@ -31,7 +31,7 @@ Next.js app in `frontend/`, built from `docs/DESIGN.md`. Each milestone is merge
   - Note for copy and tests: the account stays deleted even if the user later gets a new invite code; signing up again creates a fresh, empty account.
 - F5 (done, in review on `feature/f5-applications`): application list (server-side status filter, Load more), detail (stale-while-revalidate, isolated interviews error), create and edit form, delete. Interviews are read-only on the detail.
 - F6 (done, in review on `feature/f6-interviews`): interviews create, edit and delete (full-screen routes, times in PHT only, no automatic status change), Add interview on the detail, shared `TextAction`.
-- F8 (done, in review on `feature/f8-agenda`): interviews agenda across applications (Upcoming / Past, PHT day groups, Load more), per-interview `.ics` download built in the browser, import guide; third nav destination; no migration.
+- F8 (done, merged in PR #24): interviews agenda across applications (Upcoming / Past, PHT day groups, Load more), per-interview `.ics` download built in the browser, import guide; third nav destination; no migration.
 - F7 (done, 2026-11-09): live on Vercel + Render + Neon (https://talaan-phi.vercel.app); results and gotchas in docs/DEPLOY.md.
 
 ## Clients
