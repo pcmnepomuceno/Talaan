@@ -107,7 +107,8 @@ async function withEnv(fn) {
   fs.mkdirSync(LOGS, { recursive: true });
   const foreign8000 = listener(8000); // not ours: only recorded
   const devBefore = counts(db.dev); // read-only SELECT on the dev database
-  const apiPort = await freePort(8000);
+  // E2E_API_PORT: start the search elsewhere to leave :8000 alone even when it is free (default 8000).
+  const apiPort = await freePort(Number(process.env.E2E_API_PORT) || 8000);
   const webPort = await freePort(3000);
   const children = [];
   let cleaned = false;
@@ -132,7 +133,7 @@ async function withEnv(fn) {
   for (const sig of ["SIGINT", "SIGTERM"]) process.once(sig, () => cleanup().finally(() => process.exit(130)));
 
   try {
-    console.log(`API port ${apiPort}${apiPort === 8000 ? "" : ` (:8000 is busy${foreign8000 ? `, pid ${foreign8000}, not ours` : ""})`}; web port ${webPort}; test db ${db.testName}`);
+    console.log(`API port ${apiPort}${apiPort === 8000 ? "" : foreign8000 !== null ? ` (:8000 is busy, pid ${foreign8000}, not ours)` : " (E2E_API_PORT; :8000 left alone)"}; web port ${webPort}; test db ${db.testName}`);
     const baseEnv = { ...process.env, DATABASE_URL: db.test, TEST_DATABASE_URL: db.test };
     execFileSync(PYTHON, ["-m", "alembic", "upgrade", "head"], { cwd: REPO, env: baseEnv, stdio: "ignore" });
 
