@@ -135,7 +135,7 @@ export function MonthGrid({
                     day === today ? "border-primary" : "border-transparent"
                   } ${dead ? "cursor-not-allowed text-text-muted" : tone}`}
                 >
-                  <span className={`tabular-nums ${has ? "text-body font-semibold" : "text-body-medium"}`}>{Number(day.slice(8))}</span>
+                  <span data-number className={`text-body tabular-nums ${has || isSelected ? "font-semibold" : "font-normal"}`}>{Number(day.slice(8))}</span>
                   {has && (
                     <span data-lines aria-hidden="true" className="mt-1 hidden min-w-0 flex-col xl:flex">
                       {rows.slice(0, LINES).map((r) => (

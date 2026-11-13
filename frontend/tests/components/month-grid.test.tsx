@@ -83,13 +83,31 @@ it("leaves the count out of the names and marks the grid busy while there is no 
   expect(grid.querySelector(".bg-primary-tint")).toBeNull();
 });
 
-it("tints a day with interviews and sets its number bold; no other day is tinted", () => {
-  const { cell, grid } = mount({ selected: "2026-11-01" });
+it("tints a day with interviews as reinforcement; no other day is tinted", async () => {
+  const { grid } = mount({ selected: "2026-11-01" });
   const tinted = [...grid.querySelectorAll<HTMLElement>("button.bg-primary-tint")].map((b) => b.dataset.day);
   expect(tinted).toEqual(["2026-11-10", "2026-11-11", "2026-11-20", "2026-12-02"]);
-  expect(cell("2026-11-10").querySelector(".font-semibold")).toBeTruthy();
-  expect(cell("2026-11-03").querySelector(".font-semibold")).toBeNull();
-  expect(cell("2026-11-03").className).not.toContain("bg-primary-tint");
+});
+
+// The tint alone is 1.20:1 (light) and 1.16:1 (dark) against the cell, so the number weight is the
+// cue that does not rely on color: 400 without interviews, 600 with, 600 on the selected day.
+it("sets the number weight 400 on a day without interviews and 600 on a day with them", () => {
+  const { cell } = mount({ selected: "2026-11-01" });
+  const num = (d: string) => cell(d).querySelector<HTMLElement>("[data-number]")!;
+  for (const d of ["2026-11-03", "2026-11-12", "2026-12-05"]) {
+    expect(num(d).className).toContain("font-normal");
+    expect(num(d).className).not.toMatch(/font-(medium|semibold)/);
+  }
+  for (const d of ["2026-11-10", "2026-11-20", "2026-12-02"]) {
+    expect(num(d).className).toContain("font-semibold");
+    expect(num(d).className).not.toContain("font-normal");
+  }
+});
+
+it.each(["2026-11-03", "2026-11-10"])("keeps the selected day's number at 600 and its fill (%s)", (day) => {
+  const { cell } = mount({ selected: day });
+  expect(cell(day).querySelector("[data-number]")!.className).toContain("font-semibold");
+  expect(cell(day).className).toContain("bg-primary");
 });
 
 it("outlines today with a 1px primary border and marks it aria-current", () => {
