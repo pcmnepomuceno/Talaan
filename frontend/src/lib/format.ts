@@ -58,6 +58,14 @@ export function formatDayHeading(day: string): string | null {
   return DAY_HEADING.format(new Date(`${day}T00:00:00Z`));
 }
 
+const TIME = new Intl.DateTimeFormat("en-US", { timeZone: TZ, hour: "numeric", minute: "2-digit" });
+
+/** "2:00 PM" in Manila (no zone suffix: the month view says PHT once). null on missing or invalid input. */
+export function formatTimePht(value: string | null | undefined): string | null {
+  const p = parse(value);
+  return p ? TIME.format(p.date).replace(/[  ]/g, " ") : null;
+}
+
 export function formatDateTimePHT(value: string | null | undefined): string | null {
   const p = parse(value);
   if (!p) return null;

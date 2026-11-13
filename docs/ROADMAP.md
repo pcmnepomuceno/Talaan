@@ -1,6 +1,6 @@
 # Talaan Roadmap
 
-**Current milestone:** F8 interviews agenda (in review on `feature/f8-agenda`): `GET /interviews`, the Interviews screen and third nav destination, per-interview `.ics`, import guide, DESIGN.md v2.4. Not in this batch: month grid, subscription feed, API tokens, a duration field, swipe actions, demo account, README screenshots.
+**Current milestone:** F9 calendar view (on `feature/f9-calendar`): `GET /interviews/calendar` (PHT date range, ascending, capped at 200), a Month view on the Interviews screen (`?view=month&month=YYYY-MM&day=YYYY-MM-DD`), keyboard date grid, DESIGN.md v2.5. F8 (agenda, `.ics`, import guide) is merged. Not in this batch: drag to reschedule, adding an interview from a day, week or day views, application dates in the grid, subscription feed, API tokens, a duration field, swipe actions, demo account, README screenshots.
 
 ## Roadmap
 
@@ -31,7 +31,8 @@ Next.js app in `frontend/`, built from `docs/DESIGN.md`. Each milestone is merge
   - Note for copy and tests: the account stays deleted even if the user later gets a new invite code; signing up again creates a fresh, empty account.
 - F5 (done, in review on `feature/f5-applications`): application list (server-side status filter, Load more), detail (stale-while-revalidate, isolated interviews error), create and edit form, delete. Interviews are read-only on the detail.
 - F6 (done, in review on `feature/f6-interviews`): interviews create, edit and delete (full-screen routes, times in PHT only, no automatic status change), Add interview on the detail, shared `TextAction`.
-- F8 (done, in review on `feature/f8-agenda`): interviews agenda across applications (Upcoming / Past, PHT day groups, Load more), per-interview `.ics` download built in the browser, import guide; third nav destination; no migration.
+- F8 (done, merged in PR #24): interviews agenda across applications (Upcoming / Past, PHT day groups, Load more), per-interview `.ics` download built in the browser, import guide; third nav destination; no migration.
+- F9 (done, in review on `feature/f9-calendar`): month calendar view of the Interviews screen (`GET /interviews/calendar`, grid, keyboard navigation, PHT only); no migration.
 - F7 (done, 2026-11-09): live on Vercel + Render + Neon (https://talaan-phi.vercel.app); results and gotchas in docs/DEPLOY.md.
 
 ## Clients
@@ -72,7 +73,11 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - PR #24 review round 1, finding 8 (2026-11-12): the `.ics` has no `SEQUENCE` or `LAST-MODIFIED`, so a file downloaded again after an edit carries the same UID at revision 0, and Apple Calendar or Outlook may keep the old time. Deferred: the guide already tells people to delete the old event first, and `SEQUENCE` needs a counter the schema does not have (`updated_at` as `LAST-MODIFIED` is the cheap half).
 - PR #24 review round 1, finding 9 (2026-11-12): the detail decides "upcoming" (Add to calendar) with the device clock, the agenda with the server clock (`as_of`), so a skewed phone can disagree for a few minutes around an interview's start. Deferred: it only affects which interviews offer a file, never the data.
 - PR #24 review round 1, finding 10 (2026-11-12): `use-agenda.ts` is a near copy of `use-list.ts` (announcement, focus, key/tick refetch, Load more with de-dup). Extract one paged-list hook taking a fetcher and the cache get/set/version functions. Deferred: a refactor touching the applications list, which has its own status-write window; the agenda copy now has its own tests (`tests/use-agenda.test.tsx`).
-- Backend: the agenda (`GET /interviews`) and the other authenticated routes have no rate limit (same backlog item as above).
+- Backend: the agenda (`GET /interviews`), the calendar (`GET /interviews/calendar`) and the other authenticated routes have no rate limit (same backlog item as above).
+- Neutral banner variant for non-error notices (2026-11-13, F9): the truncated-calendar banner uses the error style; it is only reachable above 200 interviews in a range.
+- F9 (2026-11-12): a month with more than 200 interviews shows the first 200 and a banner, so a day's count can be low. Raise the cap or add a per-day count endpoint if it ever matters.
+- F9 (2026-11-12): `use-calendar.ts` is a third near copy of the cache-version/refetch pattern (with `use-agenda.ts` and `use-list.ts`); fold into one hook in the same refactor as the agenda item above.
+- F9 (2026-11-12): the month view computes "today" on each render and does not re-render at midnight PHT; the outline moves on the next interaction. Accepted.
 
 ## Maintenance
 

@@ -69,3 +69,6 @@ export type Interview = {
 
 /** One row of the interviews agenda (GET /interviews): an interview plus its application's names. */
 export type AgendaInterview = Interview & { company: string; job_name: string };
+
+/** GET /interviews/calendar: the interviews of a PHT date range (at most 200; `truncated` = rows are missing). */
+export type CalendarRange = { items: AgendaInterview[]; total: number; truncated: boolean; from: string; to: string };
