@@ -229,15 +229,21 @@ withEnv(async ({ base, createInvite }) => {
       const vis = (el) => !!el && getComputedStyle(el).display !== "none";
       return {
         mainW: Math.round(document.querySelector("main").getBoundingClientRect().width),
-        lines: [...c.querySelectorAll("[data-line]")].map((l) => l.textContent),
+        entries: [...c.querySelectorAll("[data-line]")].map((l) => [l.querySelector("[data-time]").textContent, l.querySelector("[data-company]").textContent]),
+        sameLine: [...c.querySelectorAll("[data-line]")].some((l) => l.querySelector("[data-time]").getBoundingClientRect().top === l.querySelector("[data-company]").getBoundingClientRect().top),
         more: c.querySelector("[data-more]")?.textContent,
         shown: vis(c.querySelector("[data-lines]")),
-        trunc: [...c.querySelectorAll("[data-line]")].every((l) => getComputedStyle(l).textOverflow === "ellipsis" || getComputedStyle(l).overflow === "hidden"),
+        ellipsis: [...c.querySelectorAll("[data-company]")].every((l) => getComputedStyle(l).textOverflow === "ellipsis" && getComputedStyle(l).overflow === "hidden"),
+        companyW: Math.round(c.querySelector("[data-company]").getBoundingClientRect().width),
+        cellH: Math.round(c.getBoundingClientRect().height),
+        weights: { marked: getComputedStyle(c.querySelector("[data-number]")).fontWeight, plain: getComputedStyle(document.querySelector(`button[data-day="${m}-03"] [data-number]`)).fontWeight },
         tinted: [...document.querySelectorAll("button[data-day].bg-primary-tint")].map((b) => b.dataset.day).includes(`${m}-09`),
       };
     }, M);
     check("1280: month view container is 960px wide", d.mainW === 960, String(d.mainW));
-    check("1280: up to two time lines and '+1 more' for three interviews", d.shown && d.lines.length === 2 && d.lines[0].startsWith("9:00 AM · ") && d.lines[1].startsWith("11:00 AM · ") && d.more === "+1 more" && d.trunc, JSON.stringify(d));
+    check("1280: two entries (time line, company line) and '+1 more' for three interviews", d.shown && d.entries.length === 2 && d.entries[0][0] === "9:00 AM" && d.entries[0][1] === "Pinagsama Tech" && d.entries[1][0] === "11:00 AM" && d.entries[1][1] === "Bayanihan Digital" && d.more === "+1 more" && !d.sameLine && d.ellipsis, JSON.stringify(d));
+    check("1280: the company has the whole cell width (over 100px), cells are 144px tall", d.companyW > 100 && d.cellH >= 140 && d.cellH <= 150, `${d.companyW}px wide, ${d.cellH}px tall`);
+    check("number weight is 600 on a day with interviews and 400 on a plain day", d.weights.marked === "600" && d.weights.plain === "400", JSON.stringify(d.weights));
     check("1280 in a far zone (Auckland): the same days are tinted", d.tinted);
     await w.goto(`${base}/interviews`);
     await w.locator("main h1").waitFor();

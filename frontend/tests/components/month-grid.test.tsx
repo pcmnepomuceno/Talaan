@@ -136,20 +136,22 @@ it("dims days of the neighbouring months but keeps them interactive", () => {
   expect(onSelect).toHaveBeenCalledWith("2026-12-05");
 });
 
-it("shows up to two time lines and '+N more' from 1280 (hidden below), in time order", () => {
+it("shows up to two entries, time on one line and the company on the next, then '+N more' (from 1280)", () => {
   const { cell } = mount();
-  const lines = [...cell("2026-11-10").querySelectorAll("[data-line]")];
-  expect(lines.map((l) => l.textContent)).toEqual(["9:30 AM · Kape Digital", "2:00 PM · Pinagsama Tech"]);
-  const ex = cell("2026-11-20");
-  expect([...ex.querySelectorAll("[data-line]")].map((l) => l.textContent)).toEqual(["9:00 AM · A", "10:00 AM · B"]);
-  const more = ex.querySelector("[data-more]")!;
+  const entries = (d: string) => [...cell(d).querySelectorAll("[data-line]")].map((l) => [l.querySelector("[data-time]")!.textContent, l.querySelector("[data-company]")!.textContent]);
+  expect(entries("2026-11-10")).toEqual([["9:30 AM", "Kape Digital"], ["2:00 PM", "Pinagsama Tech"]]);
+  expect(entries("2026-11-20")).toEqual([["9:00 AM", "A"], ["10:00 AM", "B"]]);
+  const more = cell("2026-11-20").querySelector("[data-more]")!;
   expect(more.textContent).toBe("+1 more");
   expect(cell("2026-11-10").querySelector("[data-more]")).toBeNull();
-  for (const el of [...lines, ex.querySelector("[data-line]")!, more]) {
-    expect(el.closest("[data-lines]")!.getAttribute("aria-hidden")).toBe("true");
-    expect(el.closest("[data-lines]")!.className).toMatch(/\bhidden\b.*\bxl:/);
-  }
-  expect(lines[0].className).toContain("truncate");
+  const box = cell("2026-11-10").querySelector("[data-lines]")!;
+  expect(box.getAttribute("aria-hidden")).toBe("true");
+  expect(box.className).toMatch(/\bhidden\b.*\bxl:/);
+  // The company gets a whole line to itself and is the part that is cut with an ellipsis.
+  const company = cell("2026-11-10").querySelector("[data-company]")!;
+  expect(company.className).toContain("truncate");
+  expect(company.className).toContain("block");
+  expect(cell("2026-11-10").querySelector("[data-time]")!.className).not.toContain("truncate");
   expect(cell("2026-11-03").querySelector("[data-lines]")).toBeNull();
 });
 

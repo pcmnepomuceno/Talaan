@@ -15,6 +15,9 @@ const SIZES = [
   [768, 1024],
   [1280, 800],
 ];
+// SHOT_SUFFIX=-A adds a suffix to every file name; SHOT_ONLY=month-selected-day,... limits the shots.
+const SUFFIX = process.env.SHOT_SUFFIX ?? "";
+const ONLY = process.env.SHOT_ONLY?.split(",");
 const PASSWORD = "Passw0rd!shots";
 const phtDay = (n = 0) => new Date(Date.now() + 8 * 3600e3 + n * 864e5).toISOString().slice(0, 10);
 const addMonth = (m, n) => {
@@ -68,8 +71,9 @@ withEnv(async ({ base, createInvite }) => {
       const page = await ctx.newPage();
       const ready = () => page.waitForFunction(() => document.querySelector('[role="grid"]') && !document.querySelector('[role="grid"]').hasAttribute("aria-busy"));
       const shot = async (name, opts = {}) => {
+        if (ONLY && !ONLY.includes(name)) return;
         await page.waitForTimeout(300);
-        await page.screenshot({ path: path.join(OUT, `${theme}-${width}-${name}.png`), ...opts });
+        await page.screenshot({ path: path.join(OUT, `${theme}-${width}-${name}${SUFFIX}.png`), ...opts });
         shots++;
         console.log(`${theme}-${width}-${name}`);
       };
@@ -78,6 +82,8 @@ withEnv(async ({ base, createInvite }) => {
       await page.goto(`${base}/interviews?view=month&month=${M}&day=${M}-16`);
       await ready();
       await shot("month-selected-day", full);
+      const g = await page.evaluate(() => ({ gridH: Math.round(document.querySelector('[role="grid"]').getBoundingClientRect().height), listTop: Math.round(document.querySelector("main section > h3").getBoundingClientRect().top + scrollY), cellH: Math.round(document.querySelector('button[data-day]').getBoundingClientRect().height) }));
+      console.log(`  ${theme}-${width}: grid ${g.gridH}px, cell ${g.cellH}px, selected-day heading at y=${g.listTop} (viewport ${height})`);
 
       await page.locator(`button[data-day="${M}-10"]`).focus();
       await page.keyboard.press("ArrowRight");

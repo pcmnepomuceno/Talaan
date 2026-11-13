@@ -22,7 +22,9 @@ import type { AgendaInterview } from "../lib/types";
 // when a day changes rows, so focus is put back after every move that can cause that.
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const KEYS = new Set<string>(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"]);
-const LINES = 2;
+// From 1280 a cell shows ENTRIES interviews, each as two lines (the time, then the company, which
+// gets the full cell width and is the part cut with an ellipsis), then "+N more".
+const ENTRIES = 2;
 
 const count = (n: number) => (n === 0 ? "no interviews" : n === 1 ? "1 interview" : `${n} interviews`);
 
@@ -131,21 +133,26 @@ export function MonthGrid({
                   tabIndex={!dead && day === current ? 0 : -1}
                   onClick={() => choose(day)}
                   onKeyDown={(e) => onKeyDown(e, day)}
-                  className={`flex min-h-11 w-full flex-col items-center justify-center border text-center focus-visible:-outline-offset-2 xl:min-h-28 xl:items-stretch xl:justify-start xl:px-2 xl:py-1 xl:text-left ${
+                  className={`flex min-h-11 w-full flex-col items-center justify-center border text-center focus-visible:-outline-offset-2 xl:min-h-36 xl:items-stretch xl:justify-start xl:px-2 xl:py-1 xl:text-left ${
                     day === today ? "border-primary" : "border-transparent"
                   } ${dead ? "cursor-not-allowed text-text-muted" : tone}`}
                 >
                   <span data-number className={`text-body tabular-nums ${has || isSelected ? "font-semibold" : "font-normal"}`}>{Number(day.slice(8))}</span>
                   {has && (
                     <span data-lines aria-hidden="true" className="mt-1 hidden min-w-0 flex-col xl:flex">
-                      {rows.slice(0, LINES).map((r) => (
-                        <span key={r.id} data-line className="truncate text-caption tabular-nums">
-                          {formatTimePht(r.scheduled_at) ?? "Time unavailable"} · {r.company}
+                      {rows.slice(0, ENTRIES).map((r) => (
+                        <span key={r.id} data-line className="mb-1 flex min-w-0 flex-col">
+                          <span data-time className="whitespace-nowrap text-caption tabular-nums">
+                            {formatTimePht(r.scheduled_at) ?? "Time unavailable"}
+                          </span>
+                          <span data-company className="block truncate text-caption">
+                            {r.company}
+                          </span>
                         </span>
                       ))}
-                      {rows.length > LINES && (
+                      {rows.length > ENTRIES && (
                         <span data-more className={`text-caption ${isSelected ? "" : "text-text-secondary"}`}>
-                          +{rows.length - LINES} more
+                          +{rows.length - ENTRIES} more
                         </span>
                       )}
                     </span>
