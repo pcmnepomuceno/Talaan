@@ -78,6 +78,7 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - F9 (2026-11-12): a month with more than 200 interviews shows the first 200 and a banner, so a day's count can be low. Raise the cap or add a per-day count endpoint if it ever matters.
 - F9 (2026-11-12): `use-calendar.ts` is a third near copy of the cache-version/refetch pattern (with `use-agenda.ts` and `use-list.ts`); fold into one hook in the same refactor as the agenda item above.
 - F9 (2026-11-12): the month view computes "today" on each render and does not re-render at midnight PHT; the outline moves on the next interaction. Accepted.
+- PR #25 review, finding 8 (2026-11-15): the calendar range cache in `cache.ts` keeps one entry per month visited for the life of the tab. Deferred: entries are bounded by hand navigation, and every write and auth event clears them.
 
 ## Maintenance
 
