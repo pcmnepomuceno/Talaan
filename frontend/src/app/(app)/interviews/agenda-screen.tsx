@@ -14,7 +14,7 @@ import { monthOf, phtToday } from "@/lib/calendar";
 import { type AgendaKey, loadedOnce } from "@/lib/cache";
 import { formatDayHeading } from "@/lib/format";
 import { groupByPhtDay } from "@/lib/interviews";
-import { MonthView } from "./month-view";
+import { MonthView, monthHref } from "./month-view";
 import { useAgenda } from "./use-agenda";
 
 const TABS = [
@@ -54,7 +54,7 @@ export function AgendaScreen() {
             hideLabel
             options={VIEWS}
             value={month ? "month" : "agenda"}
-            onChange={(v) => router.replace(v === "month" ? `/interviews?view=month&month=${monthOf(phtToday())}` : "/interviews")}
+            onChange={(v) => router.replace(v === "month" ? monthHref(monthOf(phtToday())) : "/interviews")}
           />
         </div>
         {month ? <MonthView /> : <AgendaBody />}
