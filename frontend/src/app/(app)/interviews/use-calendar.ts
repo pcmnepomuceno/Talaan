@@ -15,14 +15,21 @@ export type CalendarView =
   | { kind: "failed" }
   | ({ kind: "ready"; refreshing: boolean; refreshFailed: boolean } & CalendarEntry);
 
-type Fetched = { key: string; tick: number; failed: boolean; refreshFailed: boolean };
+type Fetched = { gen: number; failed: boolean; refreshFailed: boolean };
 
 export function useCalendar(from: string, to: string) {
   const key = calendarKey(from, to);
-  const [tick, setTick] = useState(0);
+  // `gen` numbers the request now in flight: a new range, a cache clear and Retry each start a new one,
+  // so an answer to an earlier request of the same range (Nov, Dec, Nov) never counts as this one's.
+  const [gen, setGen] = useState(0);
+  const [shownKey, setShownKey] = useState(key);
   const [fetched, setFetched] = useState<Fetched | null>(null);
+  if (shownKey !== key) {
+    setShownKey(key);
+    setGen((g) => g + 1);
+  }
 
-  useEffect(() => onCachesCleared(() => setTick((n) => n + 1)), []);
+  useEffect(() => onCachesCleared(() => setGen((g) => g + 1)), []);
 
   useEffect(() => {
     let live = true;
@@ -31,26 +38,23 @@ export function useCalendar(from: string, to: string) {
       (r) => {
         if (!live || v !== agendaVersion()) return; // a clear queued its own refetch
         setCalendar(key, { items: r.items, total: r.total, truncated: r.truncated });
-        setFetched({ key, tick, failed: false, refreshFailed: false });
+        setFetched({ gen, failed: false, refreshFailed: false });
       },
       () => {
         if (!live || v !== agendaVersion()) return;
         const had = !!getCalendar(key);
-        setFetched({ key, tick, failed: !had, refreshFailed: had });
+        setFetched({ gen, failed: !had, refreshFailed: had });
       },
     );
     return () => {
       live = false;
     };
-  }, [from, to, key, tick]);
+  }, [from, to, key, gen]);
 
-  const retry = useCallback(() => {
-    setFetched(null);
-    setTick((n) => n + 1);
-  }, []);
+  const retry = useCallback(() => setGen((g) => g + 1), []);
 
   const entry = getCalendar(key);
-  const done = fetched?.key === key && fetched.tick === tick;
+  const done = fetched?.gen === gen;
   let view: CalendarView;
   if (done && fetched.failed) view = { kind: "failed" };
   else if (entry) view = { kind: "ready", ...entry, refreshing: !done, refreshFailed: done && fetched.refreshFailed };

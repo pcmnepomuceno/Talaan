@@ -299,6 +299,87 @@ it("keeps the cached month on screen when its refresh fails", async () => {
   expect(tinted()).toContain("2026-11-10");
 });
 
+// Holds the next calendar request for `from` and answers it from the fake database when released.
+function hold(from: string, to: string) {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  fake.on("GET", new RegExp(`^/interviews/calendar\\?from=${from}`), async () => {
+    await gate;
+    const rows = fake.db.interviews
+      .filter((i) => Date.parse(i.scheduled_at) >= Date.parse(`${from}T00:00:00+08:00`) && Date.parse(i.scheduled_at) < Date.parse(`${to}T00:00:00+08:00`) + 864e5)
+      .map((i) => ({ ...i, company: "Pinagsama Tech", job_name: "Frontend Engineer" }));
+    return json(200, { items: rows, total: rows.length, truncated: false, from, to });
+  });
+  return () => act(async () => release());
+}
+const addToCalendar = () => screen.getByRole("button", { name: /^Add to calendar/ });
+
+it("Nov, Dec, Nov: a cached November is refreshing until its own refetch answers", async () => {
+  fake.db.interviews.push(iv(7, 1, "2026-11-12T15:00:00+08:00"));
+  mount();
+  await ready();
+  expect(addToCalendar().getAttribute("aria-disabled")).toBeNull();
+  const user = userEvent.setup({ advanceTimers: () => {} });
+  const releaseDec = hold("2026-11-29", "2027-01-02");
+  await user.click(screen.getByRole("button", { name: "Next month" }));
+  const releaseNov = hold("2026-11-01", "2026-12-05");
+  await user.click(screen.getByRole("button", { name: "Previous month" }));
+  expect(heading("November 2026")).toBeTruthy();
+  expect(addToCalendar().getAttribute("aria-disabled")).toBe("true");
+  await releaseNov();
+  await waitFor(() => expect(addToCalendar().getAttribute("aria-disabled")).toBeNull());
+  await releaseDec();
+});
+
+it("Nov failed, Dec, Nov: the retry in flight shows loading, not the old error", async () => {
+  fake.failNext("GET", /^\/interviews\/calendar/);
+  mount();
+  await waitFor(() => expect(alerts()).toContain("Couldn't load interviews."));
+  const user = userEvent.setup({ advanceTimers: () => {} });
+  const releaseDec = hold("2026-11-29", "2027-01-02");
+  await user.click(screen.getByRole("button", { name: "Next month" }));
+  const releaseNov = hold("2026-11-01", "2026-12-05");
+  await user.click(screen.getByRole("button", { name: "Previous month" }));
+  expect(alerts()).not.toContain("Couldn't load interviews.");
+  expect(screen.getAllByRole("status")[0].textContent).toBe("Loading interviews");
+  expect(grid().getAttribute("aria-busy")).toBe("true");
+  await releaseNov();
+  await ready();
+  expect(tinted()).toContain("2026-11-10");
+  await releaseDec();
+});
+
+it("Retry from a failed first load shows no error while it is in flight", async () => {
+  fake.failNext("GET", /^\/interviews\/calendar/);
+  mount();
+  await waitFor(() => expect(alerts()).toContain("Couldn't load interviews."));
+  const release = hold("2026-11-01", "2026-12-05");
+  const user = userEvent.setup({ advanceTimers: () => {} });
+  await user.click(screen.getByRole("button", { name: "Retry" }));
+  expect(alerts()).not.toContain("Couldn't load interviews.");
+  expect(grid().getAttribute("aria-busy")).toBe("true");
+  await release();
+  await ready();
+});
+
+it("Retry after a failed refresh disables Add to calendar until the answer lands", async () => {
+  fake.db.interviews.push(iv(7, 1, "2026-11-12T15:00:00+08:00"));
+  mount();
+  await ready();
+  const user = userEvent.setup({ advanceTimers: () => {} });
+  await user.click(screen.getByRole("button", { name: "Next month" }));
+  await ready();
+  fake.failNext("GET", /^\/interviews\/calendar/);
+  await user.click(screen.getByRole("button", { name: "Previous month" }));
+  await waitFor(() => expect(alerts()).toContain("Couldn't refresh the interviews."));
+  expect(addToCalendar().getAttribute("aria-disabled")).toBeNull();
+  const release = hold("2026-11-01", "2026-12-05");
+  await user.click(screen.getByRole("button", { name: "Retry" }));
+  expect(addToCalendar().getAttribute("aria-disabled")).toBe("true");
+  await release();
+  await waitFor(() => expect(addToCalendar().getAttribute("aria-disabled")).toBeNull());
+});
+
 it("says so when the server cut the month at 200 rows", async () => {
   fake.on("GET", /^\/interviews\/calendar/, () => json(200, { items: [], total: 201, truncated: true, from: "2026-11-01", to: "2026-12-05" }));
   mount();
