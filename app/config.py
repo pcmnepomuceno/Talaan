@@ -7,11 +7,15 @@ present). Keep real secrets in .env, never commit them — see .env.example.
 import ipaddress
 import logging
 import os
+from datetime import timedelta, timezone
 from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Manila has no DST, so a fixed +08:00 offset needs no tzdata.
+MANILA = timezone(timedelta(hours=8))
 
 # Full SQLAlchemy connection string, e.g.
 # postgresql+psycopg2://user:password@host:5432/dbname

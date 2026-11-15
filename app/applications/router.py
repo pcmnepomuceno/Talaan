@@ -1,6 +1,6 @@
 """Job Application routes. Every route is scoped to the caller (`created_by`)."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import func
@@ -16,12 +16,9 @@ from app.applications.schemas import (
     ApplicationUpdate,
 )
 from app.auth.dependencies import get_current_user
+from app.config import MANILA
 from app.database import get_db
 from app.users.models import User
-
-# Manila has no DST, so a fixed +08:00 offset needs no tzdata.
-MANILA = timezone(timedelta(hours=8))
-
 
 router = APIRouter(prefix="/applications", tags=["applications"])
 

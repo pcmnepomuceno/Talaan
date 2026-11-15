@@ -12,9 +12,9 @@ from sqlalchemy.orm import Session as DBSession
 
 from app.applications.dependencies import get_owned_application
 from app.applications.models import JobApplication
-from app.applications.router import MANILA
 from app.applications.schemas import INT4_MAX
 from app.auth.dependencies import get_current_user
+from app.config import MANILA
 from app.database import get_db
 from app.interviews.dependencies import get_owned_interview
 from app.interviews.models import Interview
