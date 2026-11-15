@@ -16,7 +16,7 @@ import type { AgendaInterview } from "../lib/types";
 // DESIGN.md 6.13. A date grid (APG pattern): one tab stop, arrow keys move focus, Enter and Space
 // select. The parent owns the month and the selected day; this component owns only the "active" day
 // (where focus and the tab stop are), which falls back to the selected day when focus leaves.
-// `days` maps a PHT day to its interviews in time order; null = no data yet (no markers, no counts).
+// `days` maps a PHT day to its interviews in time order; null = no data (no markers, no counts).
 // Moving past the visible grid, or PageUp/PageDown, asks the parent for another month (`onMonth`)
 // and the focus follows to the target day as soon as the new grid has it. Day buttons are rebuilt
 // when a day changes rows, so focus is put back after every move that can cause that.
@@ -33,6 +33,7 @@ export function MonthGrid({
   today,
   selected,
   days,
+  busy,
   labelledBy,
   onSelect,
   onMonth,
@@ -41,6 +42,7 @@ export function MonthGrid({
   today: Day;
   selected: Day;
   days: ReadonlyMap<Day, readonly AgendaInterview[]> | null;
+  busy: boolean; // true while a load is pending; null `days` alone (a failed load) is not busy
   labelledBy: string;
   onSelect: (day: Day) => void;
   onMonth: (month: Month, day: Day) => void;
@@ -92,7 +94,7 @@ export function MonthGrid({
       ref={root}
       role="grid"
       aria-labelledby={labelledBy}
-      aria-busy={days === null || undefined}
+      aria-busy={busy || undefined}
       className="overflow-hidden rounded-sm border border-border-subtle bg-surface-card"
       onBlur={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {

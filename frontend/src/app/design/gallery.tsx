@@ -76,6 +76,7 @@ function MonthGridSample() {
         today="2026-11-12"
         selected={state.selected}
         days={state.month === "2026-11" ? monthDays : new Map()}
+        busy={false}
         labelledBy={id}
         onSelect={(d) => set({ month: monthOf(d), selected: d })}
         onMonth={(month, d) => set({ month, selected: d })}

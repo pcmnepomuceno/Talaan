@@ -278,9 +278,11 @@ it("shows an error with Retry when nothing is cached, and Retry loads it", async
   mount();
   await waitFor(() => expect(alerts()).toContain("Couldn't load interviews."));
   expect(grid().querySelectorAll("button")).toHaveLength(35); // the grid stays
+  expect(grid().hasAttribute("aria-busy")).toBe(false); // an error is not loading
   const user = userEvent.setup({ advanceTimers: () => {} });
   await user.click(screen.getByRole("button", { name: "Retry" }));
   await ready();
+  expect(grid().hasAttribute("aria-busy")).toBe(false);
   expect(alerts()).toBe("");
   expect(tinted()).toContain("2026-11-10");
 });

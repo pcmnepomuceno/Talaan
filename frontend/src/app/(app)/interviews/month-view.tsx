@@ -119,6 +119,7 @@ export function MonthView() {
           today={today}
           selected={selected}
           days={days}
+          busy={view.kind === "loading"}
           labelledBy={headingId}
           onSelect={(d) => {
             if (monthOf(d) !== month) setAnnouncement(formatMonthHeading(monthOf(d)));

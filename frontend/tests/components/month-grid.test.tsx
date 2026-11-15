@@ -35,7 +35,7 @@ function mount(props: Props = {}) {
   const utils = render(
     <>
       <h2 id="m">Month</h2>
-      <MonthGrid month="2026-11" today="2026-11-12" selected="2026-11-10" days={sortedDays()} labelledBy="m" onSelect={onSelect} onMonth={onMonth} {...props} />
+      <MonthGrid month="2026-11" today="2026-11-12" selected="2026-11-10" days={sortedDays()} busy={false} labelledBy="m" onSelect={onSelect} onMonth={onMonth} {...props} />
     </>,
   );
   const grid = screen.getByRole("grid");
@@ -77,10 +77,16 @@ it("names every day button with the weekday, date and number of interviews", () 
 });
 
 it("leaves the count out of the names and marks the grid busy while there is no data", () => {
-  const { cell, grid } = mount({ days: null });
+  const { cell, grid } = mount({ days: null, busy: true });
   expect(grid.getAttribute("aria-busy")).toBe("true");
   expect(cell("2026-11-10").getAttribute("aria-label")).toBe("Tuesday, Nov 10, 2026");
   expect(grid.querySelector(".bg-primary-tint")).toBeNull();
+});
+
+it("is not busy with no data when the caller says so (a failed load)", () => {
+  const { cell, grid } = mount({ days: null, busy: false });
+  expect(grid.hasAttribute("aria-busy")).toBe(false);
+  expect(cell("2026-11-10").getAttribute("aria-label")).toBe("Tuesday, Nov 10, 2026");
 });
 
 it("tints a day with interviews as reinforcement; no other day is tinted", async () => {
@@ -254,6 +260,7 @@ function Harness({ start = "2026-11", selected = "2026-11-10" }: { start?: strin
       <h2 id="m">Month</h2>
       <button>before</button>
       <MonthGrid
+        busy={false}
         month={state.month}
         today="2026-11-12"
         selected={state.selected}
