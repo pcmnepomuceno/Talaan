@@ -77,10 +77,8 @@ export function MonthView() {
     if (next >= MIN_MONTH && next <= MAX_MONTH) go(next);
   };
 
-  const days = useMemo(() => {
-    if (view.kind !== "ready") return null;
-    return new Map(groupByPhtDay(view.items).map((g) => [g.day, g.items] as const));
-  }, [view]);
+  const items = view.kind === "ready" ? view.items : null;
+  const days = useMemo(() => (items ? new Map(groupByPhtDay(items).map((g) => [g.day, g.items] as const)) : null), [items]);
   const dayRows: readonly AgendaInterview[] = days?.get(selected) ?? [];
 
   const wakePending = view.kind === "loading" && !loadedOnce();
