@@ -15,7 +15,7 @@ Contract first. Applications (milestone 3) and interviews (milestone 4) CRUD are
 | POST | `/logout` | 204 |
 | GET | `/me` | current user |
 | POST | `/account/delete` | body `{"password"}`; 204; permanent, see Account deletion |
-| GET | `/applications` | paginated; `?status=` |
+| GET | `/applications` | paginated; `?status=`, or `?follow_up=true&days=` |
 | POST | `/applications` | 201 |
 | POST | `/applications/quick` | 201; quick-add |
 | GET/PATCH/DELETE | `/applications/{id}` | 200 / 200 / 204 |
@@ -80,7 +80,22 @@ Every list is paginated: `?limit=20&offset=0` (default 20, max 100). Response:
 ```json
 {"items": [], "total": 0, "limit": 20, "offset": 0}
 ```
-Interviews list oldest first: `scheduled_at` ascending, ties by `id` ascending (decided 2026-10-21). Applications filter with `?status=applied` (one of the enum values). Default order: newest `created_at` first, ties broken by `id` descending (decided 2026-10-21). A bad `status`, `limit` outside 1-100, or a negative or out-of-range `offset` gives 422.
+Interviews list oldest first: `scheduled_at` ascending, ties by `id` ascending (decided 2026-10-21). Applications filter with `?status=applied` (one of the enum values). Default order: newest `created_at` first, ties broken by `id` descending (decided 2026-10-21). A bad `status`, `limit` outside 1-100, or a negative or out-of-range `offset` gives 422, and so does `follow_up=true` together with `status`, or `days` without `follow_up=true` (see the follow-up list below).
+
+### Follow-up list: `GET /applications?follow_up=true&days=7`
+Applications that have gone quiet. Let `now` be the server clock and `today` the date of `now` in Asia/Manila (PHT, computed in Python, so the server's time zone never matters). An application is in the list when all of these hold:
+1. Its `status` is exactly `applied`. `saved` and the other eight statuses are never listed.
+2. It has no interview with `scheduled_at >= now`. An interview exactly at `now`, or later today, counts as upcoming, the same boundary as the agenda.
+3. `today` minus its last activity day is at least `days`. The last activity day is the later of two days: `date_applied` (or, when it is null, the PHT date of `created_at`; through the API an `applied` row always has `date_applied`) and the PHT date of its latest interview with `scheduled_at < now`. `updated_at` is never used, so editing a note does not reset the clock.
+
+A `date_applied` in the future gives a negative idle count, so that row is not listed.
+
+- `days` defaults to 7 and must be an integer from 1 to 90. It is never clamped: 0, 91 and a non-integer are 422.
+- `follow_up=true` with `status` is 422. `days` without `follow_up=true` is 422. `follow_up=false` or no `follow_up` behaves exactly like the normal list. `limit` and `offset` work as usual.
+- Order: last activity day ascending (quietest first), then `id` ascending.
+- Body: `{"items", "total", "limit", "offset"}`. Each item has every field of `GET /applications/{id}` plus `idle_days` (integer, `today` minus the last activity day, always at least `days`) and `last_activity` (`"applied"` or `"interview"`; `"interview"` when the interview day is the same as or later than the applied day). Items of the normal list gain no new keys.
+- There is no `as_of`. A row joins the list only at the end of the order (its last activity is exactly `today - days`, the newest allowed), so a clock crossing PHT midnight between two pages appends rows and never shifts an earlier offset. A page fetched after midnight shows `idle_days` one higher than page 1; that is accepted.
+- No migration: the existing `created_by` and `job_application_id` indexes serve the query (DECISIONS.md, F10).
 
 ## PATCH semantics
 Partial update. An omitted field is unchanged. `null` clears a nullable field; `null` on a NOT NULL field is 422. Server-managed fields (`id`, `created_by`, `created_at`, `updated_at`) are rejected with 422 (`extra=forbid`, also on POST). `company`, `job_name`, `status`, `mode_of_work` cannot be null; `salary`, `remarks`, `contact_*` and `date_applied` can.
