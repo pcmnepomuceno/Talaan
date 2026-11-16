@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { dateAppliedLabel, formatDate, formatDateTimePHT, formatDayHeading, formatPeso, plainSpaces } from "../src/lib/format";
+import { dateAppliedLabel, followUpCount, followUpLabel, formatDate, formatDateTimePHT, formatDayHeading, formatPeso, plainSpaces } from "../src/lib/format";
 import { sortInterviewsByDate } from "../src/lib/interviews";
 import type { Interview } from "../src/lib/types";
 
@@ -90,5 +90,21 @@ describe("formatDayHeading", () => {
   it("is null for an empty or impossible day", () => {
     expect(formatDayHeading("")).toBeNull();
     expect(formatDayHeading("2026-02-30")).toBeNull();
+  });
+});
+
+describe("follow-up texts", () => {
+  it("followUpLabel: applied and last interview, singular and plural", () => {
+    expect(followUpLabel({ idle_days: 12, last_activity: "applied" })).toBe("Applied 12 days ago");
+    expect(followUpLabel({ idle_days: 1, last_activity: "applied" })).toBe("Applied 1 day ago");
+    expect(followUpLabel({ idle_days: 9, last_activity: "interview" })).toBe("Last interview 9 days ago");
+    expect(followUpLabel({ idle_days: 1, last_activity: "interview" })).toBe("Last interview 1 day ago");
+  });
+  it("followUpLabel never crashes on 0 (the API sends at least 1)", () => {
+    expect(followUpLabel({ idle_days: 0, last_activity: "applied" })).toBe("Applied 0 days ago");
+  });
+  it("followUpCount: singular and plural", () => {
+    expect(followUpCount(1)).toBe("1 application needs a follow-up");
+    expect(followUpCount(4)).toBe("4 applications need a follow-up");
   });
 });

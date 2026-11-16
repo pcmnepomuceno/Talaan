@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getApplications } from "@/lib/api";
 import { getList, listFresh, listsSettled, listStamp, onApplicationStored, onCachesCleared, setList } from "@/lib/cache";
+import { followUpCount } from "@/lib/format";
 import type { ListFilter, ListRow } from "@/lib/types";
 
 // One filter (a status tab or the follow-up view) = one cached list, fetched 50 at a time from the server (the API pages and
@@ -59,6 +60,12 @@ export function useApplicationList(status: ListFilter | undefined) {
     return () => clearTimeout(t);
   }, [announcement]);
   const clearAnnouncement = useCallback(() => setAnnouncement(""), []);
+  // The follow-up count is announced once per selection of that view (DESIGN.md 6.5d), when its page 1
+  // first lands: not again after a refetch of the same selection. Choosing another filter resets it.
+  const countSaid = useRef(false);
+  useEffect(() => {
+    countSaid.current = false;
+  }, [status]);
   const keyRef = useRef(key);
   useEffect(() => {
     keyRef.current = key;
@@ -93,6 +100,10 @@ export function useApplicationList(status: ListFilter | undefined) {
         if (!listFresh(s)) return again();
         setList(status, { ...page, nextOffset: page.items.length });
         setFetched({ key, failed: false, refreshFailed: false, more: "idle" });
+        if (status === "follow_up" && page.total > 0 && !countSaid.current) {
+          countSaid.current = true;
+          setAnnouncement(followUpCount(page.total));
+        }
       },
       () => {
         if (!live) return;

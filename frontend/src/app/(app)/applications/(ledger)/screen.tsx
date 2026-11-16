@@ -15,6 +15,7 @@ import { useToast } from "@/components/toast";
 import { WakingUp } from "@/components/waking-up";
 import { deleteApplication, parseFilter } from "@/lib/api";
 import { loadedOnce } from "@/lib/cache";
+import { followUpCount, followUpLabel } from "@/lib/format";
 import { type DetailState, useApplicationDetail } from "./use-detail";
 import { useApplicationList } from "./use-list";
 
@@ -140,7 +141,17 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
             ) : view.kind === "failed" ? (
               <LoadError title="Couldn't load applications." onRetry={retry} />
             ) : view.total === 0 ? (
-              status === undefined ? (
+              status === "follow_up" ? (
+                <EmptyState
+                  title="Nothing to follow up on right now."
+                  message="Applications at Applied with no activity for 7 days or more show here."
+                  action={
+                    <Button variant="secondary" href={base}>
+                      Show all
+                    </Button>
+                  }
+                />
+              ) : status === undefined ? (
                 <EmptyState
                   title="No applications yet."
                   message="Add the first job you applied to."
@@ -159,6 +170,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
               )
             ) : (
               <>
+                {status === "follow_up" && <p className="mb-3 text-caption text-text-secondary">{followUpCount(view.total)}</p>}
                 {view.refreshFailed && (
                   <div className="mb-3">
                     <LoadError title="Couldn't refresh the list. Showing the last loaded rows." onRetry={retry} />
@@ -171,6 +183,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
                       application={a}
                       href={`/applications/${a.id}${qs}`}
                       selected={String(a.id) === id}
+                      note={status === "follow_up" && a.follow_up ? followUpLabel(a.follow_up) : undefined}
                     />
                   ))}
                 </LedgerSheet>
