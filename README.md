@@ -102,7 +102,7 @@ Limitations today:
 - The free-tier API sleeps when idle, so the first request can take about 20 seconds.
 - Philippine time and Philippine pesos only; there is no time zone or currency setting.
 - No email verification and no password reset.
-- Rate limits cover login, sign-up and account deletion only; the other authenticated routes have none yet (listed in the roadmap backlog).
+- Rate limits cover login, sign-up and account deletion; other authenticated routes are not rate limited (listed in the roadmap backlog).
 - Only the current status is stored, with no status history.
 - It is not installable as a PWA yet; nothing for that is built.
 
