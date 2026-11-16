@@ -1,6 +1,6 @@
 # Talaan Roadmap
 
-**Current milestone:** F9 calendar view (on `feature/f9-calendar`): `GET /interviews/calendar` (PHT date range, ascending, capped at 200), a Month view on the Interviews screen (`?view=month&month=YYYY-MM&day=YYYY-MM-DD`), keyboard date grid, DESIGN.md v2.5. F8 (agenda, `.ics`, import guide) is merged. Not in this batch: drag to reschedule, adding an interview from a day, week or day views, application dates in the grid, subscription feed, API tokens, a duration field, swipe actions, demo account, README screenshots.
+**Current milestone:** none open. F9 (calendar view, `GET /interviews/calendar`, Month view on the Interviews screen, DESIGN.md v2.5) is done and merged in PR #25, after F8 (agenda, `.ics`, import guide) in PR #24. Deferred, not in any batch: drag to reschedule, adding an interview from a day, week or day views, application dates in the grid, subscription feed, API tokens, a duration field, swipe actions, demo account, README screenshots.
 
 ## Roadmap
 
@@ -24,15 +24,15 @@ Next.js app in `frontend/`, built from `docs/DESIGN.md`. Each milestone is merge
 - F1: scaffold and tokens (Next.js, Tailwind theme from tokens, theme handling, font, logo, `/design`, contrast and no-hex tests, CI job).
 - F2: base components (buttons, fields, segmented control, stamps, filter tabs, ledger sheet, dialogs, toast, banner, empty state, skeleton).
 - F3 (done): app shell and responsive layout (bar, bottom nav, rail, side nav, two panes) with mock data.
-- F4 (done, in review on `feature/f4-auth`): auth screens wired to the API. The sign-up form field order is Invite code, Account name, Email, Password, and it sends `invite_code` (M9).
+- F4 (done and merged in PR #18): auth screens wired to the API. The sign-up form field order is Invite code, Account name, Email, Password, and it sends `invite_code` (M9).
   - F4 must proxy API calls through Next.js rewrites or route handlers (never call the Render API from the browser), forwarding cookies and `Origin`. The session cookie is first-party to the Vercel domain; `SameSite=None` to onrender.com was rejected (DECISIONS.md, M10).
   - The backend Origin check only helps when the browser's Origin reaches the API. If the frontend proxies through Next.js route handlers (server-side fetch), Origin is absent and SameSite=Lax is the actual CSRF protection; if it uses rewrites, verify that Origin, Sec-Fetch-Site and cookies are forwarded, and add a test for that. The deployed frontend origin must be in `ALLOWED_ORIGINS`.
   - Account screen: a delete-account flow. First modal states exactly what will be permanently deleted (the account, all applications, all interviews, all sessions) and that it cannot be undone. Second step requires typing the account email and the password; the final button stays disabled until the typed email matches. Calls `POST /account/delete`; 403 means wrong password (show it inline, do not log out), 401 means the session is gone.
   - Note for copy and tests: the account stays deleted even if the user later gets a new invite code; signing up again creates a fresh, empty account.
-- F5 (done, in review on `feature/f5-applications`): application list (server-side status filter, Load more), detail (stale-while-revalidate, isolated interviews error), create and edit form, delete. Interviews are read-only on the detail.
-- F6 (done, in review on `feature/f6-interviews`): interviews create, edit and delete (full-screen routes, times in PHT only, no automatic status change), Add interview on the detail, shared `TextAction`.
+- F5 (done and merged in PR #19): application list (server-side status filter, Load more), detail (stale-while-revalidate, isolated interviews error), create and edit form, delete. Interviews are read-only on the detail.
+- F6 (done and merged in PR #20): interviews create, edit and delete (full-screen routes, times in PHT only, no automatic status change), Add interview on the detail, shared `TextAction`.
 - F8 (done, merged in PR #24): interviews agenda across applications (Upcoming / Past, PHT day groups, Load more), per-interview `.ics` download built in the browser, import guide; third nav destination; no migration.
-- F9 (done, in review on `feature/f9-calendar`): month calendar view of the Interviews screen (`GET /interviews/calendar`, grid, keyboard navigation, PHT only); no migration.
+- F9 (done and merged in PR #25): month calendar view of the Interviews screen (`GET /interviews/calendar`, grid, keyboard navigation, PHT only); no migration.
 - F7 (done, 2026-11-09): live on Vercel + Render + Neon (https://talaan-phi.vercel.app); results and gotchas in docs/DEPLOY.md.
 
 ## Clients
@@ -73,6 +73,7 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - PR #24 review round 1, finding 8 (2026-11-12): the `.ics` has no `SEQUENCE` or `LAST-MODIFIED`, so a file downloaded again after an edit carries the same UID at revision 0, and Apple Calendar or Outlook may keep the old time. Deferred: the guide already tells people to delete the old event first, and `SEQUENCE` needs a counter the schema does not have (`updated_at` as `LAST-MODIFIED` is the cheap half).
 - PR #24 review round 1, finding 9 (2026-11-12): the detail decides "upcoming" (Add to calendar) with the device clock, the agenda with the server clock (`as_of`), so a skewed phone can disagree for a few minutes around an interview's start. Deferred: it only affects which interviews offer a file, never the data.
 - PR #24 review round 1, finding 10 (2026-11-12): `use-agenda.ts` is a near copy of `use-list.ts` (announcement, focus, key/tick refetch, Load more with de-dup). Extract one paged-list hook taking a fetcher and the cache get/set/version functions. Deferred: a refactor touching the applications list, which has its own status-write window; the agenda copy now has its own tests (`tests/use-agenda.test.tsx`).
+- Rate limits cover `/login` and `/signup` only, not authenticated routes
 - Backend: the agenda (`GET /interviews`), the calendar (`GET /interviews/calendar`) and the other authenticated routes have no rate limit (same backlog item as above).
 - Neutral banner variant for non-error notices (2026-11-13, F9): the truncated-calendar banner uses the error style; it is only reachable above 200 interviews in a range.
 - F9 (2026-11-12): a month with more than 200 interviews shows the first 200 and a banner, so a day's count can be low. Raise the cap or add a per-day count endpoint if it ever matters.
@@ -84,6 +85,20 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - PR #25 review 2, finding 8 (2026-11-15): `month-view.tsx` imports `ANNOUNCE_MS` from the applications screen's `(ledger)/use-list`, as `use-agenda.ts` has done since F8. Move it to `src/lib/` in the use-agenda/use-list merge (the backlog item for PR #24 finding 10).
 - PR #25 review 3, finding 4 (2026-11-16): a Next click followed by PageDown (or an arrow past the grid) inside one URL commit ends one month short. The keyboard path starts from the grid's own focused day, not from the page's `asked` queue, so the two presses do not add up. Deferred: the window is a few milliseconds.
 - `scripts/local-env.cjs` (2026-11-16): the e2e scripts start `next dev` on :3000 when it is free, which then collides with a later local `npm run dev`. Add an `E2E_WEB_PORT` override like `E2E_API_PORT`.
+- No-store middleware matches the prefix `/api/v1`, so a future `/api/v10` would match too; use `/api/v1/`
+- Signup reveals whether an email exists ("Email already exists"), but only to holders of a valid invite code (M9); email verification is the full fix
+- Stale stub docstrings in `app/` reference the old learning-mode rules and passlib; clean up.
+- Google OAuth signup: needs nullable `password_hash` + `auth_provider`/`google_id`
+  (or an `oauth_identities` table) and a rule for email collisions with local accounts
+- `/signup` returns 400/200 where API.md says 409/201; tests in `tests/auth/test_signup.py`
+  assert the current behavior and must change when aligned
+- `/signup` check-then-insert race: concurrent duplicate hits the unique constraint (500); catch `IntegrityError`
+- Successful logins count against the per-IP limit; a shared IP (campus, office) can hit it (accepted, DECISIONS.md 2026-11-03)
+- Tests: starlette warns `httpx` is deprecated for `TestClient` (suggests `httpx2`); revisit
+- Manually exercise the app end-to-end (2026-11-16, moved from the CLAUDE.md status list): walk through `/docs`, a curl cookie jar and psql against a local stack; the only open item of the old checklist.
+- Model docstrings (2026-11-16): `app/applications/models.py`, `app/interviews/models.py`, `app/auth/models.py` and `app/users/models.py` say "See the ... table in CLAUDE.md for the column spec", but the tables now live in the Schema section of docs/ARCHITECTURE.md; `app/auth/router.py`, `app/auth/schemas.py`, `app/auth/security.py` and `app/users/schemas.py` still cite "CLAUDE.md rule 2" from the learning-mode agreement. Fix them together with the stale-docstrings item above; not changed here because this PR is docs-only.
+- `e2e-auth.cjs` header (2026-11-16): still names `test-env.sh`; see the 2026-11-10 item above (the `scripts/e2e-auth.cjs` bullet). Until it is fixed, a session must not run it; see the last section of docs/FRONTEND.md.
+- Make `e2e-auth.cjs` and `screens-auth.cjs` use `local-env.cjs` (test DB, free ports, the `_test` guard) so a session can run them safely (2026-11-16). Code change, own PR.
 
 ## Maintenance
 

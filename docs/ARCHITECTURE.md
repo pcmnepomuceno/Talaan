@@ -26,7 +26,40 @@ erDiagram
     JOB_APPLICATIONS { int id PK int created_by FK string company string job_name enum status enum mode_of_work int salary date date_applied }
     INTERVIEWS { int id PK int job_application_id FK timestamptz scheduled_at enum mode enum outcome }
 ```
-Columns are abridged; the full schema is in CLAUDE.md.
+Columns are abridged; the full schema is in the Schema section below.
+
+## Schema
+
+Relationships: Users 1—N Job Applications 1—N Interviews; Users 1—N Sessions.
+FKs live on the "many" side only (query `created_by`, never store lists on Users).
+
+**Users** (matches model): id, email (UNIQUE), password_hash, account_name
+
+**Sessions** (matches model; `user_id` ON DELETE CASCADE, indexed): id, token_hash (UNIQUE, SHA-256 hex of the `session_token`
+HttpOnly cookie value; raw token never stored), user_id → Users.id, created_at, expires_at
+(both `DateTime(timezone=True)`)
+
+**InviteCodes** (matches model): id, code_hash (UNIQUE, SHA-256 hex of the normalized 12-char code; plaintext never stored),
+note?, created_at, expires_at, used_at?, used_by_user_id? → Users.id (`ON DELETE SET NULL`, indexed `ix_invite_codes_used_by_user_id`)
+
+**Job Applications** (matches model)
+id, company, job_name, contact_website?, contact_email?, status (ENUM),
+salary? (int), mode_of_work (ENUM), remarks, date_applied, created_at,
+updated_at, created_by → Users.id
+- `salary`: monthly gross, PHP, no currency column. `remarks` nullable. `date_applied` is a nullable `Date`; non-`saved` rows get today (Asia/Manila) if none is sent.
+  `saved` is first in the status ENUM.
+- ENUMs: status = applied/screening/interviewing/offered/accepted/rejected/withdrawn/ghosted;
+  mode_of_work = on_site/hybrid/remote.
+
+**Interviews** (matches model)
+id, job_application_id → Job Applications.id, interviewer, scheduled_at
+(tz-aware; spec renamed from `datetime`, model already uses `scheduled_at`),
+mode (ENUM: on_site/online/async), outcome (ENUM: good/bad/pending), remarks,
+created_at, updated_at
+- `interviewer` and `remarks` nullable. mode = on_site/online/async;
+  outcome = pending/good/bad (default pending).
+
+ENUM value lists and column choices are logged in DECISIONS.md (2026-10-20).
 
 ## Sessions vs OWASP Session Management
 Matches:
