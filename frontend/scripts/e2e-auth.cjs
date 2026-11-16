@@ -3,7 +3,7 @@
 //   NODE_PATH=<dir containing playwright> PW_CHROMIUM=<matching chrome> E2E_API_PORT=8100 node scripts/e2e-auth.cjs
 //
 // scripts/local-env.cjs does the setup and the teardown (free API port, *_test database, truncate on
-// exit, proof that the dev database and a foreign :8000 / :3000 process were untouched). It creates its
+// exit, proof that the dev database and a foreign :8000 process were untouched). It creates its
 // own invite with the real admin CLI and a throwaway account, and deletes that account through the UI.
 // Exit code 1 on any FAIL.
 const { chromium } = require("playwright");
