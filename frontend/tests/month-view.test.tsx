@@ -248,6 +248,23 @@ it("drops a response for a month that is no longer shown", async () => {
   expect(tinted()).toEqual(dec);
 });
 
+it("announces the month name while its data is loading", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  fake.on("GET", /^\/interviews\/calendar\?from=2026-11-29/, async () => {
+    await gate;
+    return json(200, { items: [], total: 0, truncated: false, from: "2026-11-29", to: "2027-01-02" });
+  });
+  mount();
+  await ready();
+  fireEvent.click(screen.getByRole("button", { name: "Next month" }));
+  await waitFor(() =>
+    expect(screen.getAllByRole("status")[0].textContent).toBe("December 2026. Loading interviews"),
+  );
+  await act(async () => release());
+  await waitFor(() => expect(screen.getAllByRole("status")[0].textContent).toBe("December 2026"));
+});
+
 it("stores nothing when the screen is gone before the answer", async () => {
   let release!: () => void;
   const gate = new Promise<void>((r) => (release = r));
@@ -348,7 +365,7 @@ it("Nov failed, Dec, Nov: the retry in flight shows loading, not the old error",
   const releaseNov = hold("2026-11-01", "2026-12-05");
   await user.click(screen.getByRole("button", { name: "Previous month" }));
   expect(alerts()).not.toContain("Couldn't load interviews.");
-  expect(screen.getAllByRole("status")[0].textContent).toBe("Loading interviews");
+  expect(screen.getAllByRole("status")[0].textContent).toBe("November 2026. Loading interviews");
   expect(grid().getAttribute("aria-busy")).toBe("true");
   await releaseNov();
   await ready();

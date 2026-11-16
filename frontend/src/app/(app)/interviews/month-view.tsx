@@ -96,7 +96,11 @@ export function MonthView() {
     <>
       {/* Always mounted, so changes are announced (a region added together with its text often is not). */}
       <div role="status" className="sr-only">
-        {view.kind === "loading" ? "Loading interviews" : announcement}
+        {view.kind === "loading"
+          ? announcement
+            ? `${announcement}. Loading interviews`
+            : "Loading interviews"
+          : announcement}
       </div>
       <WakingUp pending={wakePending} />
       <div className="mt-4 flex min-h-11 items-center justify-between gap-2">
