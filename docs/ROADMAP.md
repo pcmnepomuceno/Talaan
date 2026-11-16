@@ -97,6 +97,7 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - Tests: starlette warns `httpx` is deprecated for `TestClient` (suggests `httpx2`); revisit
 - Manually exercise the app end-to-end (2026-11-16, moved from the CLAUDE.md status list): walk through `/docs`, a curl cookie jar and psql against a local stack; the only open item of the old checklist.
 - Model docstrings (2026-11-16): `app/applications/models.py`, `app/interviews/models.py`, `app/auth/models.py` and `app/users/models.py` say "See the ... table in CLAUDE.md for the column spec", but the tables now live in the Schema section of docs/ARCHITECTURE.md; `app/auth/router.py`, `app/auth/schemas.py`, `app/auth/security.py` and `app/users/schemas.py` still cite "CLAUDE.md rule 2" from the learning-mode agreement. Fix them together with the stale-docstrings item above; not changed here because this PR is docs-only.
+- `e2e-auth.cjs` header (2026-11-16): it refers to `. ./test-env.sh`, which does not exist. Fix the header (and `screens-auth.cjs`, "same setup as e2e-auth.cjs") when frontend code is touched next; not fixed in the docs-only slimming PR. The setup that works is in the new section at the end of docs/FRONTEND.md.
 
 ## Maintenance
 

@@ -23,3 +23,18 @@ Next.js (App Router, TypeScript, Tailwind v4, npm) in `frontend/`; deploys to Ve
 - Local F5 e2e, seed and screenshots: `frontend/scripts/{e2e,seed,screens}-applications.cjs` (not in CI) share `local-env.cjs`, which starts the API on the `_test` database and `next dev` on free ports (an API port other than a busy :8000; `E2E_API_PORT=8100` keeps it off :8000 even when free), and on exit stops them, truncates the test database and prints that the dev database and a foreign :8000 process were untouched. Playwright via `NODE_PATH`; `PW_CHROMIUM` for a matching browser build.
 - Local auth e2e and screenshots: `frontend/scripts/e2e-auth.cjs`, `screens-auth.cjs` (Playwright from `NODE_PATH`, API on the `_test` database with `COOKIE_SECURE=false`, header comments list the setup). Check `ss -ltnp | grep :8000` first: a stray uvicorn from another session can already own the port and may run old code against the dev database.
 - Screenshots: run `HIDE_DEV_INDICATOR=1 npm run dev` (hides the Next dev badge). Playwright runs are saved in `frontend/.screenshots/` (gitignored), never committed.
+
+## Running e2e-auth.cjs and screens-auth.cjs without touching the dev stack
+Added 2026-11-16 (not part of the text moved from CLAUDE.md).
+
+1. Run `ss -ltnp | grep -E ':(8000|3000)\b'` and never stop what listens there.
+2. Use free ports, for example 8100 for the API and 3100 for Next.
+3. Run alembic on the test database only, printing the URL first: `DATABASE_URL=<test URL> .venv/bin/python -m alembic upgrade head`.
+4. Start the API with the test `DATABASE_URL`, `COOKIE_SECURE=false` and generous limits (`LOGIN_IP_LIMIT`, `LOGIN_EMAIL_LIMIT`, `SIGNUP_IP_LIMIT`): `DATABASE_URL=<test URL> COOKIE_SECURE=false LOGIN_IP_LIMIT=1000 LOGIN_EMAIL_LIMIT=1000 SIGNUP_IP_LIMIT=1000 .venv/bin/uvicorn app.main:app --port 8100 --no-proxy-headers`.
+5. Start Next: `cd frontend && BACKEND_URL=http://localhost:8100 npx next dev -p 3100`.
+6. Run `DATABASE_URL=<test URL> BASE_URL=http://localhost:3100 NODE_PATH=<dir containing playwright> node frontend/scripts/e2e-auth.cjs` (`PW_CHROMIUM` is optional).
+7. Stop the API and `next dev` you started.
+
+What the checks cover: the `local-env.cjs` check compares only the dev database's `users` and `job_applications` row counts and the :8000 pid, not `rate_limit_events`, `sessions` or `invite_codes`. On exit it truncates the whole test database, which also wipes the data of a hand-started test API running at the same time. `e2e-auth.cjs` guards only its own `DATABASE_URL` (must end `_test`), not the API's database, which is why step 4 sets it explicitly.
+
+The header of `e2e-auth.cjs` refers to `. ./test-env.sh`, which does not exist; use the variables in steps 3 to 6 instead.
