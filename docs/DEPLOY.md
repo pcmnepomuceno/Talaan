@@ -1,6 +1,6 @@
 # Deploy checklist
 
-Target: **Vercel** (Next, rewrites `/api/*`) -> **Render** (FastAPI, free web service) -> **Neon** (Postgres). Free `*.vercel.app` and `*.onrender.com` domains. The demo account is a separate, later milestone. F7 is live; results are below, and the checklist in section 4 is ticked where the live deploy proved it.
+Target: **Vercel** (Next, its proxy forwards `/api/*`) -> **Render** (FastAPI, free web service) -> **Neon** (Postgres). Free `*.vercel.app` and `*.onrender.com` domains. The demo account is a separate, later milestone. F7 is live; results are below, and the checklist in section 4 is ticked where the live deploy proved it.
 
 ## Verified on the live deploy (2026-11-09)
 
