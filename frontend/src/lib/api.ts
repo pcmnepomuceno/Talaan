@@ -20,6 +20,7 @@ import {
   fromApiInterview,
   fromApiPage,
   idOf,
+  MappingError,
   type InterviewInput,
   type Page,
   toCreateBody,
@@ -170,7 +171,9 @@ export async function getAgenda(when: AgendaKey, offset = 0, asOf?: string): Pro
  */
 export async function getCalendarRange(from: string, to: string): Promise<CalendarRange> {
   const q = new URLSearchParams({ from, to });
-  return fromApiCalendarRange(await request<unknown>(`${INTERVIEWS}/calendar?${q}`));
+  const r = fromApiCalendarRange(await request<unknown>(`${INTERVIEWS}/calendar?${q}`));
+  if (r.from !== from || r.to !== to) throw new MappingError("range"); // an answer for another range must not be cached under this one
+  return r;
 }
 
 /** null = not found (missing, or under another user's application). */

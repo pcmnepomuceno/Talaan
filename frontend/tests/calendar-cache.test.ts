@@ -64,6 +64,19 @@ it("getCalendarRange rejects a body it cannot map", async () => {
   }
 });
 
+it("getCalendarRange rejects a 200 that echoes a different range than the one asked for", async () => {
+  const ok = { items: [], total: 0, truncated: false };
+  const echoes = [
+    { from: "2026-12-01", to: "2026-11-30" }, // only from differs
+    { from: "2026-11-01", to: "2026-12-31" }, // only to differs
+    { from: "2026-12-01", to: "2026-12-31" }, // both differ
+  ];
+  for (const echo of echoes) {
+    fake.on("GET", /^\/interviews\/calendar/, () => json(200, { ...ok, ...echo }));
+    await expect(getCalendarRange("2026-11-01", "2026-11-30")).rejects.toBeInstanceOf(MappingError);
+  }
+});
+
 it("setCalendar and getCalendar keep one entry per range", () => {
   const e = { ...entry, total: 3 };
   setCalendar(KEY, e);
