@@ -82,6 +82,8 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - PR #25 review 2, finding 3b (2026-11-15): pressing Today on the current month moves the selected day to today without any announcement. Whether selection changes are announced is a design decision, so it is not changed here.
 - PR #25 review 2, finding 4 (2026-11-15): the real-day check exists three times, in `calendar.ts` (`isDay`, `toDate`/`toDay`, `phtToday`), `format.ts` (`DATE_ONLY` plus `onCalendar`) and `pht.ts` (the PHT offset and `pad`). The behavior is identical today. Refactor to one helper after F9 ships.
 - PR #25 review 2, finding 8 (2026-11-15): `month-view.tsx` imports `ANNOUNCE_MS` from the applications screen's `(ledger)/use-list`, as `use-agenda.ts` has done since F8. Move it to `src/lib/` in the use-agenda/use-list merge (the backlog item for PR #24 finding 10).
+- PR #25 review 3, finding 4 (2026-11-16): a Next click followed by PageDown (or an arrow past the grid) inside one URL commit ends one month short. The keyboard path starts from the grid's own focused day, not from the page's `asked` queue, so the two presses do not add up. Deferred: the window is a few milliseconds.
+- `scripts/local-env.cjs` (2026-11-16): the e2e scripts start `next dev` on :3000 when it is free, which then collides with a later local `npm run dev`. Add an `E2E_WEB_PORT` override like `E2E_API_PORT`.
 
 ## Maintenance
 
