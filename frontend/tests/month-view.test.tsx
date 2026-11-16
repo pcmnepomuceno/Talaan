@@ -283,12 +283,16 @@ it("keeps the month name when the load finishes while it is still showing; only 
   });
   mount();
   await ready();
+  vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+  vi.setSystemTime(new Date(NOW));
   fireEvent.click(screen.getByRole("button", { name: "Next month" }));
-  await waitFor(() => expect(loadingStatus().textContent).toBe("Loading interviews"));
+  await act(async () => {});
   expect(monthStatus().textContent).toBe("December 2026");
+  expect(loadingStatus().textContent).toBe("Loading interviews");
+  act(() => vi.advanceTimersByTime(ANNOUNCE_MS - 1)); // the last moment the name still shows
   await act(async () => release());
-  await waitFor(() => expect(loadingStatus().textContent).toBe(""));
-  expect(monthStatus().textContent).toBe("December 2026"); // well inside ANNOUNCE_MS (real timers, a few ms)
+  expect(loadingStatus().textContent).toBe("");
+  expect(monthStatus().textContent).toBe("December 2026");
 });
 
 it("stores nothing when the screen is gone before the answer", async () => {
