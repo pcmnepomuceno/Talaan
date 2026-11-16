@@ -22,7 +22,7 @@ npm run lint && npm run typecheck && npm test && npm run build
 - `src/lib/api.ts` is the client (applications and interviews: list, read, create, edit, delete); `src/lib/pht.ts` converts interview times to and from Philippine time; `src/lib/mappers.ts` owns the JSON shapes; `src/lib/cache.ts` holds the in-memory list and detail caches (never web storage), cleared by every write and by login, logout and account deletion.
 - The API pages at most 100 rows per request and filters by `status`, so each status tab is its own request (`limit=50`) plus a "Load more" button. A cached tab shows while page 1 refetches.
 - The form (`src/components/application-form.tsx`, rules in `src/lib/application-form.ts`) mirrors the backend limits. Leaving a dirty form asks "Discard changes?"; the browser Back button and the side/bottom nav links are not intercepted (reload and tab close get the browser's own prompt).
-- Local end-to-end check on the real backend (not in CI, no dependency): `NODE_PATH=<dir containing playwright> node scripts/e2e-applications.cjs`; `seed-applications.cjs` seeds sample data and keeps the stack up for manual looking; `screens-applications.cjs` writes the screenshots to `.screenshots/`. All three use `scripts/local-env.cjs`, which starts the API on the `_test` database and `next dev` on free ports, then stops them, truncates the test database and prints that the dev database and any foreign :8000 process were untouched.
+- Local end-to-end check on the real backend (not in CI, no dependency): `NODE_PATH=<dir containing playwright> node scripts/e2e-applications.cjs`; `seed-applications.cjs` seeds sample data and keeps the stack up for manual looking; `screens-applications.cjs` writes the screenshots to `.screenshots/`. These and the auth scripts all use `scripts/local-env.cjs`, which starts the API on the `_test` database and `next dev` on free ports, then stops them, truncates the test database and prints that the dev database and any foreign :8000 process were untouched.
 
 ## Auth and the API
 
@@ -32,7 +32,7 @@ The browser only calls `/api/...` on the Next origin; `next.config.ts` rewrites 
 - `src/lib/auth.ts`: `login`, `signup`, `logout`, `getMe`, `deleteAccount`.
 - `src/proxy.ts`: private paths need a `session_token` or `__Host-session_token` cookie (presence only), else `/login?next=...`. Never redirects `/login` or `/api`.
 - Local API: `COOKIE_SECURE=false` in the API's `.env` (plain http), `ALLOWED_ORIGINS` default `http://localhost:3000`, and raised `LOGIN_*`/`SIGNUP_*` limits (all browsers share one IP behind the rewrite). Invite: `python -m app.admin create-invite` in the repo root.
-- `scripts/e2e-auth.cjs` and `scripts/screens-auth.cjs` (not in CI, no dependency): run by hand with Playwright on `NODE_PATH`, the API on the `_test` database; the file headers list the steps.
+- `scripts/e2e-auth.cjs` and `scripts/screens-auth.cjs` (not in CI, no dependency): use `scripts/local-env.cjs` like the rest: no manual server setup, `E2E_API_PORT=8100` keeps the API off :8000, Playwright via `NODE_PATH`; the file headers list the steps.
 
 ## Components (`src/components/`)
 
