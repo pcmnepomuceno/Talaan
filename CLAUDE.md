@@ -77,35 +77,6 @@ Routers mount under `/api/v1` (`/api/v1/signup`, `/login`, `/logout`, `/me`).
 `/health` (SELECT 1, 503 on DB failure) and `/ping` (no DB) are unversioned at the root.
 `alembic/env.py` imports each domain's `models` module; add new domains there.
 
-## Status
-- [x] Users/Sessions models; Postgres via docker-compose
-- [x] `POST /signup`, `/login`, `/logout`; `get_current_user`; `GET /me`
-- [x] Real `/health` (SELECT 1, 503 on failure) and `/ping`, unversioned at root
-- [x] Alembic set up; baseline migration for all four tables
-- [x] `JobApplication`/`Interview` models match schema
-- [x] Login 401, no token in login body, idempotent logout 204
-- [x] Auth + health tests (pytest + httpx; 23 tests, `_test` database)
-- [x] M8: login/signup rate limiting in Postgres (`rate_limit_events`; per IP and per email; 429 + `Retry-After`; 503 fail closed), constant-work login (dummy hash), 72-byte login guard; tests: see CI. See DECISIONS.md 2026-11-03
-- [x] M9: invite-code signup (`invite_codes` table, hashed single-use codes with expiry, `python -m app.admin` CLI, atomic consume; see DECISIONS.md 2026-11-03)
-- [x] M10: account deletion (`POST /account/delete`), cookie flags + `__Host-` name, Origin/Sec-Fetch-Site check, `sessions.user_id` ON DELETE CASCADE; see DECISIONS.md 2026-11-03
-- [ ] Manually exercise the app end-to-end (`/docs`, curl cookie jar, psql)
-- [x] Domain layout move; routers under `/api/v1`
-- [x] Applications CRUD (ownership 404, pagination, status filter, `saved` migration; 64 tests)
-- [x] Interviews CRUD (ownership through the parent application; 127 tests)
-- [x] Dockerfile for the API; compose with db (non-root, slim, 1 worker)
-- [ ] Deploy
-- [x] Frontend F1: scaffold, tokens, theme, logo, `/design`, tests, CI job (see ROADMAP.md)
-- [x] Frontend F2a: icon, button, fields, segmented control, stamp, filter tabs (replaced by a select in P1), banner; `/design` gallery; RTL tests
-- [x] Frontend F2b: ledger rows, detail/interview rows, dialog + delete confirm, toasts, empty state, skeleton, PHT formatters, API types
-- [x] Frontend F3: app shell, responsive layout, login/applications/detail/account on mock data (`src/lib/api.ts`)
-- [x] Frontend F4: auth wired through Next rewrites (login, sign-up with invite, logout, `proxy.ts` guard, 401 handling, Account screen with real user and two-step delete); see DECISIONS.md 2026-11-03 (F4)
-- [x] Frontend F5: applications on the real API (list with server-side `?status=` and Load more, detail with stale-while-revalidate, create/edit form, delete); interviews were read-only until F6; see DECISIONS.md 2026-11-03 (F5)
-- [x] M11: client IP behind the Vercel rewrite (`PROXY_SECRET`, `X-Talaan-Client-IP`), `ENVIRONMENT=production` (docs off, refuses insecure config), `python -m app.admin purge` + daily GitHub Actions job; see DECISIONS.md 2026-11-09 and docs/DEPLOY.md
-- [x] Frontend P1 polish (in review): logo link, status select, Change status dialog (`changeStatus`: PATCH `{status}` only, the server's row patched into every cache, no skeleton, no refetch; busy keeps focus via aria-disabled; DECISIONS.md 2026-11-09 P1, superseded in part by 2026-11-10), waking-up line, interview writes clear one detail; DESIGN.md v2.3
-- [x] Frontend F8 (in review): `GET /interviews?when=upcoming|past` agenda endpoint (no migration), Interviews screen and third nav destination, per-interview `.ics` download (`src/lib/ics.ts`), import guide dialog; DESIGN.md v2.4; see DECISIONS.md 2026-11-11
-- [x] Frontend F9 (in review): `GET /interviews/calendar?from=&to=` (PHT date range, 62 days max, 200 rows + `truncated`, no migration), a Month view on the Interviews screen (`?view=month&month=&day=`, `MonthGrid`, `use-calendar.ts`, keyboard date grid, `router.replace` only), calendar range cache cleared with the agenda; DESIGN.md v2.5; see DECISIONS.md 2026-11-12 (F9)
-- [x] Frontend F6: interviews create, edit, delete (PHT-only times, full-screen routes, Add interview on the detail, shared `TextAction`); see DECISIONS.md 2026-11-04 (F6)
-
 ## Frontend
 
 Frontend reference (components, lib, routes, cache rules, auth wiring, e2e details): docs/FRONTEND.md. Look: docs/DESIGN.md.
@@ -117,17 +88,3 @@ Next.js (App Router, TypeScript, Tailwind v4, npm) in `frontend/`; deploys to Ve
 - Components: every control at least 44 x 44; status/outcome values equal the API enums; icons are inline SVG paths in `icon.tsx`; transitions at most 100ms; DOM tests start with `// @vitest-environment jsdom`. Component list and rules: docs/FRONTEND.md.
 - Auth: the browser only calls `/api/...` on the Next origin; all fetches go through `request` in `src/lib/http.ts`; `?next=` always goes through `safeNext`; never put tokens or user data in web storage.
 - Local e2e: `node frontend/scripts/e2e-<name>.cjs` (Playwright via `NODE_PATH`, matching chromium via `PW_CHROMIUM`); `scripts/local-env.cjs` starts the API on the `_test` database and `next dev` on free ports (`E2E_API_PORT=8100` keeps the API off :8000), and prints that the dev database was untouched. Screenshots: `HIDE_DEV_INDICATOR=1 npm run dev`, saved to gitignored `frontend/.screenshots/`. Details: docs/FRONTEND.md.
-
-## Backlog
-- PATCH has no optimistic concurrency (no ETag/version): concurrent edits are last-write-wins
-- No-store middleware matches the prefix `/api/v1`, so a future `/api/v10` would match too; use `/api/v1/`
-- Signup reveals whether an email exists ("Email already exists"), but only to holders of a valid invite code (M9); email verification is the full fix
-- Stale stub docstrings in `app/` reference the old learning-mode rules and passlib; clean up.
-- Google OAuth signup: needs nullable `password_hash` + `auth_provider`/`google_id`
-  (or an `oauth_identities` table) and a rule for email collisions with local accounts
-- `/signup` returns 400/200 where API.md says 409/201; tests in `tests/auth/test_signup.py`
-  assert the current behavior and must change when aligned
-- `/signup` check-then-insert race: concurrent duplicate hits the unique constraint (500); catch `IntegrityError`
-- Rate limits cover `/login` and `/signup` only, not authenticated routes
-- Successful logins count against the per-IP limit; a shared IP (campus, office) can hit it (accepted, DECISIONS.md 2026-11-03)
-- Tests: starlette warns `httpx` is deprecated for `TestClient` (suggests `httpx2`); revisit

@@ -73,6 +73,7 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - PR #24 review round 1, finding 8 (2026-11-12): the `.ics` has no `SEQUENCE` or `LAST-MODIFIED`, so a file downloaded again after an edit carries the same UID at revision 0, and Apple Calendar or Outlook may keep the old time. Deferred: the guide already tells people to delete the old event first, and `SEQUENCE` needs a counter the schema does not have (`updated_at` as `LAST-MODIFIED` is the cheap half).
 - PR #24 review round 1, finding 9 (2026-11-12): the detail decides "upcoming" (Add to calendar) with the device clock, the agenda with the server clock (`as_of`), so a skewed phone can disagree for a few minutes around an interview's start. Deferred: it only affects which interviews offer a file, never the data.
 - PR #24 review round 1, finding 10 (2026-11-12): `use-agenda.ts` is a near copy of `use-list.ts` (announcement, focus, key/tick refetch, Load more with de-dup). Extract one paged-list hook taking a fetcher and the cache get/set/version functions. Deferred: a refactor touching the applications list, which has its own status-write window; the agenda copy now has its own tests (`tests/use-agenda.test.tsx`).
+- Rate limits cover `/login` and `/signup` only, not authenticated routes
 - Backend: the agenda (`GET /interviews`), the calendar (`GET /interviews/calendar`) and the other authenticated routes have no rate limit (same backlog item as above).
 - Neutral banner variant for non-error notices (2026-11-13, F9): the truncated-calendar banner uses the error style; it is only reachable above 200 interviews in a range.
 - F9 (2026-11-12): a month with more than 200 interviews shows the first 200 and a banner, so a day's count can be low. Raise the cap or add a per-day count endpoint if it ever matters.
@@ -84,6 +85,18 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - PR #25 review 2, finding 8 (2026-11-15): `month-view.tsx` imports `ANNOUNCE_MS` from the applications screen's `(ledger)/use-list`, as `use-agenda.ts` has done since F8. Move it to `src/lib/` in the use-agenda/use-list merge (the backlog item for PR #24 finding 10).
 - PR #25 review 3, finding 4 (2026-11-16): a Next click followed by PageDown (or an arrow past the grid) inside one URL commit ends one month short. The keyboard path starts from the grid's own focused day, not from the page's `asked` queue, so the two presses do not add up. Deferred: the window is a few milliseconds.
 - `scripts/local-env.cjs` (2026-11-16): the e2e scripts start `next dev` on :3000 when it is free, which then collides with a later local `npm run dev`. Add an `E2E_WEB_PORT` override like `E2E_API_PORT`.
+- No-store middleware matches the prefix `/api/v1`, so a future `/api/v10` would match too; use `/api/v1/`
+- Signup reveals whether an email exists ("Email already exists"), but only to holders of a valid invite code (M9); email verification is the full fix
+- Stale stub docstrings in `app/` reference the old learning-mode rules and passlib; clean up.
+- Google OAuth signup: needs nullable `password_hash` + `auth_provider`/`google_id`
+  (or an `oauth_identities` table) and a rule for email collisions with local accounts
+- `/signup` returns 400/200 where API.md says 409/201; tests in `tests/auth/test_signup.py`
+  assert the current behavior and must change when aligned
+- `/signup` check-then-insert race: concurrent duplicate hits the unique constraint (500); catch `IntegrityError`
+- Successful logins count against the per-IP limit; a shared IP (campus, office) can hit it (accepted, DECISIONS.md 2026-11-03)
+- Tests: starlette warns `httpx` is deprecated for `TestClient` (suggests `httpx2`); revisit
+- Manually exercise the app end-to-end (2026-11-16, moved from the CLAUDE.md status list): walk through `/docs`, a curl cookie jar and psql against a local stack; the only open item of the old checklist.
+- Model docstrings (2026-11-16): `app/applications/models.py`, `app/interviews/models.py`, `app/auth/models.py` and `app/users/models.py` say "See the ... table in CLAUDE.md for the column spec", but the tables now live in the Schema section of docs/ARCHITECTURE.md; `app/auth/router.py`, `app/auth/schemas.py`, `app/auth/security.py` and `app/users/schemas.py` still cite "CLAUDE.md rule 2" from the learning-mode agreement. Fix them together with the stale-docstrings item above; not changed here because this PR is docs-only.
 
 ## Maintenance
 
