@@ -60,20 +60,27 @@ export function MonthView() {
     return () => clearTimeout(t);
   }, [announcement]);
 
-  // Previous/Next read the month last asked for, so presses faster than the URL can update still add up.
-  // ponytail: a press between the URL catching up halfway and the last update starts from the middle month.
-  const target = useRef(month);
+  // Months asked for whose URL has not been seen. A press starts from the last one, so fast presses add up.
+  // When the URL month lands on a month in the queue, its first occurrence and everything before it go; any other
+  // URL month clears the queue. A URL month that never lands as a change (a skipped or superseded replace, or a day
+  // click or Today in the shown month) leaves stale entries, so an external link to one of those months counts as a
+  // catch-up, not a reset; the next landed press repairs it.
+  const asked = useRef<Month[]>([]);
   useEffect(() => {
-    target.current = month;
+    const i = asked.current.indexOf(month);
+    asked.current = i < 0 ? [] : asked.current.slice(i + 1);
   }, [month]);
 
-  function go(next: Month, day?: Day) {
-    target.current = next;
-    setAnnouncement(formatMonthHeading(next));
+  function ask(next: Month, day?: Day) {
+    asked.current.push(next);
     router.replace(monthHref(next, day));
   }
+  function go(next: Month) {
+    setAnnouncement(formatMonthHeading(next));
+    ask(next);
+  }
   const step = (n: number) => {
-    const next = addMonths(target.current, n);
+    const next = addMonths(asked.current.at(-1) ?? month, n);
     if (next >= MIN_MONTH && next <= MAX_MONTH) go(next);
   };
 
@@ -121,8 +128,7 @@ export function MonthView() {
           labelledBy={headingId}
           onSelect={(d) => {
             if (monthOf(d) !== month) setAnnouncement(formatMonthHeading(monthOf(d)));
-            target.current = monthOf(d);
-            router.replace(monthHref(monthOf(d), d));
+            ask(monthOf(d), d);
           }}
           onMonth={(m) => go(m)}
         />

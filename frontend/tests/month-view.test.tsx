@@ -15,7 +15,13 @@ import { type Fake, installFake, json, makeApp, makeInterview } from "./helpers/
 let search = "";
 const subs = new Set<() => void>();
 const push = vi.fn();
+// When non-null, replace() records the URL here instead of applying it, so a test commits URLs one by one.
+let held: string[] | null = null;
 const replace = vi.fn((url: string) => {
+  if (held) {
+    held.push(url);
+    return;
+  }
   search = url.split("?")[1] ?? "";
   for (const f of [...subs]) f();
 });
@@ -56,6 +62,7 @@ beforeEach(() => {
   search = "view=month&month=2026-11";
   push.mockClear();
   replace.mockClear();
+  held = null;
   fake = installFake({ apps: [A, B], interviews: SEED.map((i) => ({ ...i })) });
 });
 afterEach(() => {
@@ -470,4 +477,108 @@ it("shows the slow-start line on the first load only", async () => {
   act(() => clearCaches());
   await act(() => vi.advanceTimersByTimeAsync(WAKE_MS * 2));
   expect(screen.queryByText(/Starting up/)).toBeNull();
+});
+
+// Month presses while the URL lags. replace() is held; commit() lets one held URL land.
+const commit = (url: string) =>
+  act(() => {
+    search = url.split("?")[1];
+    for (const f of [...subs]) f();
+  });
+const press = (name: string) => act(() => void fireEvent.click(screen.getByRole("button", { name })));
+const url = (m: string) => `/interviews?view=month&month=${m}`;
+
+it("a press after only the first of two URLs landed starts from the last month asked (Next, Next, commit Dec, Next)", async () => {
+  mount();
+  await ready();
+  held = [];
+  press("Next month");
+  press("Next month");
+  expect(held).toEqual([url("2026-12"), url("2027-01")]);
+  commit(held[0]);
+  press("Next month");
+  expect(replace).toHaveBeenLastCalledWith(url("2027-02"));
+});
+
+it("Previous after the middle URL landed starts from the last month asked", async () => {
+  mount();
+  await ready();
+  held = [];
+  press("Next month");
+  press("Next month");
+  commit(held[0]);
+  press("Previous month");
+  expect(replace).toHaveBeenLastCalledWith(url("2026-12"));
+});
+
+it("stops at 2200-12 and at 1900-01 without asking twice", async () => {
+  search = "view=month&month=2200-11";
+  const { unmount } = mount();
+  held = [];
+  press("Next month");
+  press("Next month");
+  expect(replace).toHaveBeenCalledTimes(1);
+  expect(replace).toHaveBeenLastCalledWith(url("2200-12"));
+  unmount();
+  replace.mockClear();
+  search = "view=month&month=1900-02";
+  mount();
+  press("Previous month");
+  press("Previous month");
+  expect(replace).toHaveBeenCalledTimes(1);
+  expect(replace).toHaveBeenLastCalledWith(url("1900-01"));
+});
+
+it("Today while presses are pending counts as the last month asked", async () => {
+  mount();
+  await ready();
+  held = [];
+  press("Next month");
+  press("Next month");
+  press("Today");
+  expect(replace).toHaveBeenLastCalledWith(url("2026-11"));
+  commit(held[0]);
+  press("Next month");
+  expect(replace).toHaveBeenLastCalledWith(url("2026-12"));
+});
+
+it("an external URL change to a month never asked resets the target to the URL", async () => {
+  mount();
+  await ready();
+  held = [];
+  press("Next month");
+  act(() => {
+    search = "view=month&month=2027-06";
+    for (const f of [...subs]) f();
+  });
+  press("Next month");
+  expect(replace).toHaveBeenLastCalledWith(url("2027-07"));
+});
+
+it("a duplicate month in the queue: the first landing is a catch-up, not a reset", async () => {
+  mount();
+  await ready();
+  held = [];
+  press("Next month");
+  press("Previous month");
+  press("Next month");
+  expect(held).toEqual([url("2026-12"), url("2026-11"), url("2026-12")]);
+  commit(held[0]);
+  press("Next month");
+  expect(replace).toHaveBeenLastCalledWith(url("2027-01"));
+  commit(held[1]);
+  commit(held[2]);
+  press("Next month");
+  expect(replace).toHaveBeenLastCalledWith(url("2027-02"));
+});
+
+it("a skipped intermediate URL (no duplicates) still ends on the last month asked", async () => {
+  mount();
+  await ready();
+  held = [];
+  press("Next month");
+  press("Next month");
+  commit(held[1]);
+  press("Next month");
+  expect(replace).toHaveBeenLastCalledWith(url("2027-02"));
 });
