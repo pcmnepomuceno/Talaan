@@ -1,9 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { dateAppliedLabel, formatDate, formatDateTimePHT, formatDayHeading, formatPeso } from "../src/lib/format";
+import { dateAppliedLabel, formatDate, formatDateTimePHT, formatDayHeading, formatPeso, plainSpaces } from "../src/lib/format";
 import { sortInterviewsByDate } from "../src/lib/interviews";
 import type { Interview } from "../src/lib/types";
 
 afterEach(() => vi.unstubAllEnvs());
+
+describe("plainSpaces", () => {
+  it("maps U+202F and U+00A0 to a plain space", () => {
+    expect(plainSpaces("2:00\u202fPM")).toBe("2:00 PM");
+    expect(plainSpaces("2:00\u00a0PM")).toBe("2:00 PM");
+  });
+});
 
 describe.each(["UTC", "America/Los_Angeles", "Pacific/Kiritimati"])("device zone %s", (tz) => {
   it("formats in Manila time", () => {

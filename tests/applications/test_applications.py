@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import pytest
 from sqlalchemy import event, text
 
-from app.applications.router import MANILA
+from app.config import MANILA
 from app.database import engine
 from app.interviews.models import Interview, InterviewMode
 from tests.conftest import as_user

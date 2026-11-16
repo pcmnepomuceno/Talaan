@@ -58,12 +58,24 @@ export function formatDayHeading(day: string): string | null {
   return DAY_HEADING.format(new Date(`${day}T00:00:00Z`));
 }
 
+const TIME = new Intl.DateTimeFormat("en-US", { timeZone: TZ, hour: "numeric", minute: "2-digit" });
+
+/** Maps a no-break space or U+202F (newer ICU puts it before AM/PM) to a plain space. */
+export function plainSpaces(s: string): string {
+  return s.replace(/[\u202f\u00a0]/g, " ");
+}
+
+/** "2:00 PM" in Manila (no zone suffix: the month view says PHT once). null on missing or invalid input. */
+export function formatTimePht(value: string | null | undefined): string | null {
+  const p = parse(value);
+  return p ? plainSpaces(TIME.format(p.date)) : null;
+}
+
 export function formatDateTimePHT(value: string | null | undefined): string | null {
   const p = parse(value);
   if (!p) return null;
   const s = DATE_TIME.format(p.date);
-  // Newer ICU puts U+202F before AM/PM.
-  return `${s.replace(/[  ]/g, " ")} PHT`;
+  return `${plainSpaces(s)} PHT`;
 }
 
 export const NOT_APPLIED_YET = "Not applied yet";

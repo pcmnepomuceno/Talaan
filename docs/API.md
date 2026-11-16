@@ -22,6 +22,7 @@ Contract first. Applications (milestone 3) and interviews (milestone 4) CRUD are
 | GET | `/applications/{id}/interviews` | paginated |
 | POST | `/applications/{id}/interviews` | 201 |
 | GET | `/interviews` | agenda: the caller's interviews across all applications; `?when=upcoming\|past` (required), paginated |
+| GET | `/interviews/calendar` | month grid: the caller's interviews in a PHT date range; `?from=&to=` (YYYY-MM-DD, both required), not paginated, capped at 200 |
 | GET/PATCH/DELETE | `/interviews/{id}` | ownership via parent application |
 | GET | `/health` | root (unversioned); DB check (`SELECT 1`); 503 on DB failure |
 | GET | `/ping` | root (unversioned); no DB; for uptime pinger |
@@ -92,6 +93,13 @@ Partial update. An omitted field is unchanged. `null` clears a nullable field; `
 
 ### Agenda: `GET /interviews?when=upcoming|past&limit=&offset=&as_of=`
 Every interview under the caller's applications (another user's never appear, in rows or in `total`). `when` is required; a missing or unknown value is 422, as are `limit` outside 1-100 and a negative or out-of-range `offset` (defaults 20 and 0, like `GET /applications`). `upcoming` is `scheduled_at >= now`, ordered `scheduled_at` ascending then `id` ascending; `past` is `scheduled_at < now`, ordered `scheduled_at` descending then `id` descending. `now` is the optional `as_of` (ISO 8601 date-time with a `Z` or `±HH:MM` offset, percent-encoded in the query string since `+` decodes to a space); without it the server clock is used. An `as_of` without an offset, or one that does not parse, is 422. The response echoes `as_of`; a client paging one list sends page 1's `as_of` with every later page so a row crossing the boundary between pages cannot shift the offsets (no skipped or repeated row). Body: `{"items", "total", "limit", "offset", "as_of"}` where each item has the interview fields of `GET /interviews/{id}` plus `company` and `job_name` of its application, so the client needs no per-row request. No migration: the query uses the existing `created_by` and `job_application_id` indexes (DECISIONS.md, F8).
+
+### Calendar: `GET /interviews/calendar?from=YYYY-MM-DD&to=YYYY-MM-DD`
+The caller's interviews whose Philippine calendar day (Asia/Manila, UTC+08:00, no DST) falls from `from` to `to`, both days included. The server converts the range to the UTC instants `[from 00:00 PHT, to + 1 day 00:00 PHT)`, so an interview at 23:30 PHT and one at 00:30 PHT the next day land on different days. Ordered `scheduled_at` ascending then `id` ascending. Another user's interviews never appear, in rows or in `total`.
+- It is a separate path from the agenda because its answer has another shape (a cap and a `truncated` flag instead of paging and `as_of`). The two modes do not mix: any of `when`, `limit`, `offset` or `as_of` on this route is 422, and `from` or `to` missing is 422.
+- `from` and `to` are real calendar dates in exactly the form `YYYY-MM-DD` (`20261101`, `2026-02-30` and `2026-13-01` are 422), years 1900-2200 (like the interview form). `from` must not be after `to`, and the range is at most 62 days (inclusive). Anything else is 422 with FastAPI's `detail` list.
+- Body: `{"items", "total", "truncated", "from", "to"}`. `items` has at most 200 rows with the same shape as an agenda item (interview fields plus `company` and `job_name`). `total` counts every match in the range; `truncated` is `total > 200`, in which case the later rows are missing and the client says so. `from` and `to` echo the request as dates.
+- No migration: same join and indexes as the agenda (DECISIONS.md, F9).
 
 ## Saved jobs
 New `application_status` value `saved` (first in order) and nullable `date_applied`, via a new migration (DECISIONS.md, 2026-10-20). When a row is not `saved` and `date_applied` is empty (create or PATCH), the server sets it to today in Asia/Manila; a client-sent date always wins. Moving back to `saved` keeps the date. Quick-add and the browser extension create `saved` rows.
