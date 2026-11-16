@@ -5,6 +5,7 @@
 //  - date-only strings ("2026-10-14") are passed through untouched, never via Date;
 //  - request bodies list their fields by name, so contact_email and server-managed fields
 //    (id, created_at, updated_at) can never be sent by accident.
+import { isDay } from "./calendar";
 import { fromPhtInput, toPhtInput } from "./pht";
 import {
   type Application,
@@ -275,6 +276,6 @@ export const toInterviewInput = (i: Interview): InterviewInput => fromInterviewF
 export function fromApiCalendarRange(v: unknown): CalendarRange {
   const r = obj(v, "calendar");
   if (typeof r.truncated !== "boolean") throw new MappingError("truncated");
-  for (const k of ["from", "to"]) if (!/^\d{4}-\d{2}-\d{2}$/.test(str(r, k))) throw new MappingError(k);
+  for (const k of ["from", "to"]) if (!isDay(str(r, k))) throw new MappingError(k);
   return { ...fromApiPage(v, fromApiAgendaInterview), truncated: r.truncated, from: str(r, "from"), to: str(r, "to") };
 }

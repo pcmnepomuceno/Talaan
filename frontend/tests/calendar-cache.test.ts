@@ -54,6 +54,8 @@ it("getCalendarRange rejects a body it cannot map", async () => {
     { ...ok, items: undefined },
     { ...ok, from: undefined },
     { ...ok, to: 5 },
+    { ...ok, from: "2026-13-45" },
+    { ...ok, to: "2026-02-30" },
     { ...ok, items: [{ nothing: true }] },
   ];
   for (const body of bad) {
