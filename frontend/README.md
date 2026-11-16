@@ -32,7 +32,7 @@ The browser only calls `/api/...` on the Next origin; `next.config.ts` rewrites 
 - `src/lib/auth.ts`: `login`, `signup`, `logout`, `getMe`, `deleteAccount`.
 - `src/proxy.ts`: private paths need a `session_token` or `__Host-session_token` cookie (presence only), else `/login?next=...`. Never redirects `/login` or `/api`.
 - Local API: `COOKIE_SECURE=false` in the API's `.env` (plain http), `ALLOWED_ORIGINS` default `http://localhost:3000`, and raised `LOGIN_*`/`SIGNUP_*` limits (all browsers share one IP behind the rewrite). Invite: `python -m app.admin create-invite` in the repo root.
-- `scripts/e2e-auth.cjs` and `scripts/screens-auth.cjs` (not in CI, no dependency): use `scripts/local-env.cjs` like the rest: no manual server setup, `E2E_API_PORT=8100` keeps the API off :8000, Playwright via `NODE_PATH`; the file headers list the steps.
+- `scripts/e2e-auth.cjs` and `scripts/screens-auth.cjs` (not in CI, no dependency): use `scripts/local-env.cjs` like the rest: no manual server setup, `E2E_API_PORT=8100` keeps the API off :8000, `E2E_WEB_PORT=3100` keeps `next dev` off :3000, Playwright via `NODE_PATH`; the file headers list the steps.
 
 ## Components (`src/components/`)
 

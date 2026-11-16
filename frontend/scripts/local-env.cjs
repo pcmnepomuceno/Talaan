@@ -109,7 +109,8 @@ async function withEnv(fn) {
   const devBefore = counts(db.dev); // read-only SELECT on the dev database
   // E2E_API_PORT: start the search elsewhere to leave :8000 alone even when it is free (default 8000).
   const apiPort = await freePort(Number(process.env.E2E_API_PORT) || 8000);
-  const webPort = await freePort(3000);
+  // E2E_WEB_PORT: start the search for the `next dev` port elsewhere to leave :3000 alone (default 3000).
+  const webPort = await freePort(Number(process.env.E2E_WEB_PORT) || 3000);
   const children = [];
   let cleaned = false;
 
