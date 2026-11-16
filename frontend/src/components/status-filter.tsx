@@ -3,7 +3,7 @@
 import { Select } from "./fields";
 import { STATUSES, type Status, stampLabel } from "./status-stamp";
 
-export type Filter = Status | "all";
+export type Filter = Status | "all" | "follow_up"; // "follow_up" has no option yet (the select gains it with the UI)
 
 // DESIGN.md 6.4: one native select (the 6.2 component), label "Status", All plus the nine statuses.
 // Full width on a phone, capped from 768.

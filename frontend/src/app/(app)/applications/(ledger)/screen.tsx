@@ -13,7 +13,7 @@ import { type Filter, StatusFilter } from "@/components/status-filter";
 import { ApplicationRow, LedgerSheet, LedgerSkeleton } from "@/components/ledger";
 import { useToast } from "@/components/toast";
 import { WakingUp } from "@/components/waking-up";
-import { deleteApplication, parseStatus } from "@/lib/api";
+import { deleteApplication, parseFilter } from "@/lib/api";
 import { loadedOnce } from "@/lib/cache";
 import { type DetailState, useApplicationDetail } from "./use-detail";
 import { useApplicationList } from "./use-list";
@@ -34,7 +34,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
   const router = useRouter();
   const toast = useToast();
   const id = useParams<{ id?: string }>().id;
-  const status = parseStatus(useSearchParams().get("status"));
+  const status = parseFilter(useSearchParams().get("status"));
   const qs = status ? `?status=${status}` : "";
 
   const [confirming, setConfirming] = useState(false);

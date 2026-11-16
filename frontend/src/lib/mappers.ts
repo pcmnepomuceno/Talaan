@@ -9,6 +9,7 @@ import { isDay } from "./calendar";
 import { fromPhtInput, toPhtInput } from "./pht";
 import {
   type Application,
+  type ListRow,
   type AgendaInterview,
   type CalendarRange,
   type Interview,
@@ -95,6 +96,14 @@ export function fromApiAgendaInterview(v: unknown): AgendaInterview {
 }
 
 export type Page<T> = { items: T[]; total: number };
+
+/** A row of the follow-up list: the application plus idle_days (an integer >= 0) and last_activity. */
+export function fromApiFollowUpRow(v: unknown): ListRow {
+  const r = obj(v, "application");
+  const idle = int(r, "idle_days");
+  if (idle < 0) throw new MappingError("idle_days");
+  return { ...fromApiApplication(v), follow_up: { idle_days: idle, last_activity: oneOf(r, "last_activity", ["applied", "interview"] as const) } };
+}
 
 /** An agenda page also carries `as_of`, the instant the server split upcoming from past at. */
 export function fromApiAgendaPage(v: unknown): Page<AgendaInterview> & { asOf: string } {

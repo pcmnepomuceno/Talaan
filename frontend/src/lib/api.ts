@@ -17,6 +17,7 @@ import {
   fromApiAgendaPage,
   fromApiApplication,
   fromApiCalendarRange,
+  fromApiFollowUpRow,
   fromApiInterview,
   fromApiPage,
   idOf,
@@ -28,7 +29,7 @@ import {
   toInterviewPatchBody,
   toPatchBody,
 } from "./mappers";
-import { type AgendaInterview, type Application, type CalendarRange, type Interview, STATUSES, type Status } from "./types";
+import { type AgendaInterview, type Application, type CalendarRange, type Interview, type ListFilter, type ListRow, STATUSES, type Status } from "./types";
 
 export const PAGE_SIZE = 50;
 export const INTERVIEWS_LIMIT = 100;
@@ -47,11 +48,20 @@ export function parseId(raw: string): number | null {
 export const parseStatus = (raw: string | null | undefined): Status | undefined =>
   STATUSES.find((s) => s === raw);
 
-/** One page, newest first. `total` counts every row matching the status filter, not just this page. */
-export async function getApplications(status?: Status, offset = 0): Promise<Page<Application>> {
+/** The list filter from a query string: a status or "follow_up"; anything else means "all". */
+export const parseFilter = (raw: string | null | undefined): ListFilter | undefined =>
+  raw === "follow_up" ? raw : parseStatus(raw);
+
+/**
+ * One page. `total` counts every row matching the filter, not just this page. A status (or none) lists
+ * newest first; "follow_up" sends follow_up=true (the server's default of 7 days) and lists the quiet
+ * `applied` rows, longest idle first, each with a `follow_up` part.
+ */
+export async function getApplications(filter?: ListFilter, offset = 0): Promise<Page<ListRow>> {
   const q = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) });
-  if (status) q.set("status", status);
-  return fromApiPage(await request<unknown>(`${BASE}?${q}`), fromApiApplication);
+  if (filter === "follow_up") q.set("follow_up", "true");
+  else if (filter) q.set("status", filter);
+  return fromApiPage(await request<unknown>(`${BASE}?${q}`), filter === "follow_up" ? fromApiFollowUpRow : fromApiApplication);
 }
 
 /** null = not found (missing, or another user's: the API answers 404 for both). */

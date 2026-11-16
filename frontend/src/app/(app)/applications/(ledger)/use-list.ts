@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getApplications } from "@/lib/api";
 import { getList, listFresh, listsSettled, listStamp, onApplicationStored, onCachesCleared, setList } from "@/lib/cache";
-import type { Application, Status } from "@/lib/types";
+import type { ListFilter, ListRow } from "@/lib/types";
 
-// One status tab = one cached list, fetched 50 at a time from the server (the API pages and
+// One filter (a status tab or the follow-up view) = one cached list, fetched 50 at a time from the server (the API pages and
 // filters). Cached rows show at once while page 1 is refetched; the fresh page 1 then REPLACES the
 // entry, dropping any extra pages the user had loaded, because their offsets may have shifted.
 // A full clear (clearCaches) empties the cache and refetches the current tab; a status change
@@ -18,7 +18,7 @@ export type ListView =
   | { kind: "failed" }
   | {
       kind: "ready";
-      items: Application[];
+      items: ListRow[];
       total: number;
       nextOffset: number;
       refreshing: boolean; // showing cached rows while page 1 is refetched
@@ -38,7 +38,7 @@ export function appendUnique<T extends { id: number }>(existing: T[], incoming: 
 /** How long "N more applications loaded" stays in the live region before it is cleared. */
 export const ANNOUNCE_MS = 5000;
 
-export function useApplicationList(status: Status | undefined) {
+export function useApplicationList(status: ListFilter | undefined) {
   const [tick, setTick] = useState(0);
   const [fetched, setFetched] = useState<Fetched | null>(null);
   const [announcement, setAnnouncement] = useState("");
@@ -72,8 +72,10 @@ export function useApplicationList(status: Status | undefined) {
     };
   }, []);
 
-  // Only a full clear refetches: an interview write clears one detail (an id is passed) and no list row changes.
-  useEffect(() => onCachesCleared((id) => id === undefined && setTick((n) => n + 1)), []);
+  // A full clear refetches. An interview write clears one detail (an id is passed) and no list row
+  // changes, except that it also drops the follow-up list (cache.ts), so a list dropped from under the
+  // screen is refetched too.
+  useEffect(() => onCachesCleared((id) => (id === undefined || !getList(status)) && setTick((n) => n + 1)), [status]);
 
   // A status change patched the cached lists in place (storeApplication): re-render from the cache,
   // or refetch when the list on screen was dropped (its order around the row was unknown).

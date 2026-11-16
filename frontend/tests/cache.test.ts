@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { cacheVersion, clearCaches, clearDetail, detailStamp, getDetail, getList, onApplicationStored, onCachesCleared, patchList, replaceDetail, setDetail, setList, storeApplication } from "../src/lib/cache";
+import { cacheVersion, clearCaches, clearDetail, detailStamp, getDetail, getList, listFresh, listStamp, onApplicationStored, onCachesCleared, patchList, replaceDetail, resetCaches, setDetail, setList, storeApplication } from "../src/lib/cache";
 import { makeApp } from "./helpers/fake-api";
 import { deleteAccount, login, logout } from "../src/lib/auth";
 
@@ -199,4 +199,60 @@ it("storeApplication patches every list and the detail before its listeners run,
   expect(cleared).not.toHaveBeenCalled();
   off();
   offC();
+});
+
+// ---- the follow-up list is dropped, never patched ----
+const followEntry = { items: [{ ...app(5, "applied"), follow_up: { idle_days: 9, last_activity: "applied" as const } }], total: 1, nextOffset: 1 };
+const withFollowUp = () => {
+  setList("follow_up", followEntry);
+  setList("applied", { items: [app(5, "applied"), app(4, "applied")], total: 2, nextOffset: 2 });
+};
+
+it("the follow_up list has its own key", () => {
+  withFollowUp();
+  expect(getList("follow_up")).toBe(followEntry);
+  expect(getList("applied")).not.toBe(followEntry);
+  expect(getList()).toBeUndefined();
+});
+
+it("clearCaches and resetCaches drop the follow_up list", () => {
+  withFollowUp();
+  clearCaches();
+  expect(getList("follow_up")).toBeUndefined();
+  withFollowUp();
+  resetCaches();
+  expect(getList("follow_up")).toBeUndefined();
+});
+
+it("storeApplication drops the follow_up list (never patches it) and still patches the applied list as before", () => {
+  withFollowUp();
+  const stamp = listStamp();
+  storeApplication(app(5, "offered"), "applied");
+  expect(getList("follow_up")).toBeUndefined();
+  expect(ids(getList("applied"))).toEqual([4]);
+  expect([getList("applied")!.total, getList("applied")!.nextOffset]).toEqual([1, 1]);
+  expect(listFresh(stamp)).toBe(false);
+});
+
+it("a status change on a row the follow_up list does not hold also drops it", () => {
+  withFollowUp();
+  storeApplication(app(99, "offered"), "saved");
+  expect(getList("follow_up")).toBeUndefined();
+});
+
+it.each([
+  ["clearDetail", () => clearDetail(5)],
+  ["replaceDetail", () => replaceDetail(5, { application: app(5, "applied"), interviews: { items: [], total: 0 } })],
+])("%s drops the follow_up list, keeps the other lists, and refuses a list page requested before", (_n, run) => {
+  withFollowUp();
+  const stamp = listStamp();
+  const fn = vi.fn();
+  const off = onCachesCleared((id) => fn(id, getList("follow_up")));
+  run();
+  expect(getList("follow_up")).toBeUndefined();
+  expect(fn).toHaveBeenCalledWith(5, undefined); // dropped before the listeners run
+  expect(ids(getList("applied"))).toEqual([5, 4]);
+  expect(listFresh(stamp)).toBe(false);
+  expect(listFresh(listStamp())).toBe(true);
+  off();
 });

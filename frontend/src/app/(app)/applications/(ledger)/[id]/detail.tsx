@@ -9,7 +9,7 @@ import { useToast } from "@/components/toast";
 import { LoadError } from "@/components/load-error";
 import { DetailRows, InterviewRow, LedgerSheet, LedgerSkeleton } from "@/components/ledger";
 import { NotFoundState } from "@/components/not-found-state";
-import { changeStatus, deleteInterview, parseStatus } from "@/lib/api";
+import { changeStatus, deleteInterview, parseFilter } from "@/lib/api";
 import { formatDateTimePHT } from "@/lib/format";
 import { ApiError, errorMessage } from "@/lib/http";
 import type { Interview, Status } from "@/lib/types";
@@ -22,7 +22,7 @@ const heading = "mb-2 text-section-title text-text-secondary";
 export function ApplicationDetail() {
   const state = useDetail();
   const toast = useToast();
-  const status = parseStatus(useSearchParams().get("status"));
+  const status = parseFilter(useSearchParams().get("status"));
   const qs = status ? `?status=${status}` : "";
   const [deleting, setDeleting] = useState<Interview | null>(null);
   const [busy, setBusy] = useState(false);
