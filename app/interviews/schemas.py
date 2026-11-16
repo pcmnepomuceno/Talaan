@@ -98,8 +98,6 @@ class AgendaPage(BaseModel):
 class CalendarRange(BaseModel):
     """The interviews of a PHT date range, capped; `truncated` says rows are missing from `items`."""
 
-    model_config = ConfigDict(populate_by_name=True)
-
     items: list[AgendaItem]
     total: int
     truncated: bool

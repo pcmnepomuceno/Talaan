@@ -131,7 +131,7 @@ def _pht_day(name: str, raw: str) -> date:
     return d
 
 
-@router.get("/interviews/calendar", response_model=CalendarRange, response_model_by_alias=True)
+@router.get("/interviews/calendar", response_model=CalendarRange)
 def list_calendar(
     request: Request,
     frm: str = Query(alias="from"),
