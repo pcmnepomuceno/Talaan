@@ -24,17 +24,8 @@ Next.js (App Router, TypeScript, Tailwind v4, npm) in `frontend/`; deploys to Ve
 - Local auth e2e and screenshots: `frontend/scripts/e2e-auth.cjs`, `screens-auth.cjs` (Playwright from `NODE_PATH`, API on the `_test` database with `COOKIE_SECURE=false`, header comments list the setup). Check `ss -ltnp | grep :8000` first: a stray uvicorn from another session can already own the port and may run old code against the dev database.
 - Screenshots: run `HIDE_DEV_INDICATOR=1 npm run dev` (hides the Next dev badge). Playwright runs are saved in `frontend/.screenshots/` (gitignored), never committed.
 
-## Running e2e-auth.cjs and screens-auth.cjs without touching the dev stack
+## Do not run e2e-auth.cjs or screens-auth.cjs
+
 Added 2026-11-16 (not part of the text moved from CLAUDE.md).
 
-1. Run `ss -ltnp | grep -E ':(8000|3000)\b'` and never stop what listens there.
-2. Use free ports, for example 8100 for the API and 3100 for Next.
-3. Run alembic on the test database only, printing the URL first: `DATABASE_URL=<test URL> .venv/bin/python -m alembic upgrade head`.
-4. Start the API with the test `DATABASE_URL`, `COOKIE_SECURE=false` and generous limits (`LOGIN_IP_LIMIT`, `LOGIN_EMAIL_LIMIT`, `SIGNUP_IP_LIMIT`): `DATABASE_URL=<test URL> COOKIE_SECURE=false LOGIN_IP_LIMIT=1000 LOGIN_EMAIL_LIMIT=1000 SIGNUP_IP_LIMIT=1000 .venv/bin/uvicorn app.main:app --port 8100 --no-proxy-headers`.
-5. Start Next: `cd frontend && BACKEND_URL=http://localhost:8100 npx next dev -p 3100`.
-6. Run `DATABASE_URL=<test URL> BASE_URL=http://localhost:3100 NODE_PATH=<dir containing playwright> node frontend/scripts/e2e-auth.cjs` (`PW_CHROMIUM` is optional).
-7. Stop the API and `next dev` you started.
-
-What the checks cover: the `local-env.cjs` check compares only the dev database's `users` and `job_applications` row counts and the :8000 pid, not `rate_limit_events`, `sessions` or `invite_codes`. On exit it truncates the whole test database, which also wipes the data of a hand-started test API running at the same time. `e2e-auth.cjs` guards only its own `DATABASE_URL` (must end `_test`), not the API's database, which is why step 4 sets it explicitly.
-
-The header of `e2e-auth.cjs` refers to `. ./test-env.sh`, which does not exist; use the variables in steps 3 to 6 instead.
+`e2e-auth.cjs` and `screens-auth.cjs` do NOT use `scripts/local-env.cjs`, and they default to the dev stack (`BASE_URL` http://localhost:3000, whose Next proxy defaults to the API on :8000). They can therefore write to the dev database: signup records its rate-limit row before it checks the invite, so even a failed run writes there, and their `_test` guard checks only their own `DATABASE_URL`, not the API's. A session must not run them; ask Czed. Also, the header of `e2e-auth.cjs` refers to `. ./test-env.sh`, which does not exist. And Next 16 allows one `next dev` per checkout (lock in `frontend/.next/dev/`), so a second dev server exits with "Another next dev server is already running." if :3000 is a `next dev` from this checkout.
