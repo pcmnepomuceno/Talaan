@@ -134,6 +134,7 @@ export function MonthView() {
             if (monthOf(d) !== month) setAnnouncement(formatMonthHeading(monthOf(d)));
             ask(monthOf(d), d);
           }}
+          // A keyboard month change resets the selection on purpose (DESIGN 8.8, DECISIONS 2026-11-12: focus moves, selection is explicit).
           onMonth={(m) => go(m)}
         />
       </div>
