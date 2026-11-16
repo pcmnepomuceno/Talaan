@@ -4,7 +4,7 @@ Personal job-application tracker (log applications, status changes, interview ro
 
 Scope: `docs/ROADMAP.md`; read its **Current milestone** before a task. Reference lives in docs/ and is read on demand (no @-imports):
 - Schema: docs/ARCHITECTURE.md. Auth decisions: docs/AUTH.md. Frontend reference: docs/FRONTEND.md.
-- Roadmap and backlog: docs/ROADMAP.md. Design: docs/DESIGN.md. Deploy: docs/DEPLOY.md. API contract: docs/API.md.
+- Roadmap and backlog: docs/ROADMAP.md. Design: docs/DESIGN.md. Deploy: docs/DEPLOY.md. API contract (before CRUD): docs/API.md.
 
 ## Stack
 - FastAPI (Python), SQLAlchemy, PostgreSQL 16 (Docker)
@@ -32,6 +32,7 @@ Auth decisions (sessions, cookies, invites, rate limits, origin check, account d
 - The session cookie's name and attributes live only in `app/auth/cookies.py`. Tokens never go in the response body or in web storage.
 - `BCRYPT_ROUNDS` stays fixed after launch; never lower it outside tests.
 - Production refuses to start with insecure config (`production_problems()` in `app/config.py`).
+- Read docs/AUTH.md before changing `app/auth/`, `app/security.py`, `app/users/router.py` or `app/config.py`.
 
 ## Working Agreement (build mode)
 1. **Claude Code implements**: models, schemas, routes, validation, auth,

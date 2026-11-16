@@ -24,4 +24,3 @@ Moved from CLAUDE.md on 2026-11-16. The every-session rules are repeated as one-
   `get_current_user` (`created_by`; interviews via their parent application).
 
 - **Production mode** (`app/config.py`, `app/main.py`): `ENVIRONMENT=production` hides `/docs`, `/redoc`, `/openapi.json` and refuses to start unless `production_problems()` is empty (`COOKIE_SECURE` true, `BCRYPT_ROUNDS` >= 12, `PROXY_SECRET` set, `ALLOWED_ORIGINS` set to non-local https origins). Checked in `main.py` only, so the admin CLI and alembic need just `DATABASE_URL`.
-
