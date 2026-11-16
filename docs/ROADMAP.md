@@ -62,7 +62,6 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - No keep-alive ping that touches the database (2026-11-09, F7): it would burn Neon free compute hours. Check Neon's current free limits before adding any keep-alive; a ping to `/ping` (no DB) only wakes Render.
 - Check Vercel usage once after the first week (2026-11-09, F7): see the last item of docs/DEPLOY.md section 4.
 - PR #23 review item 8 (2026-11-10): Change status blocks a double submit four times (the `savingStatus` ref, `statusBusy`, the `if (!busy)` in StatusDialog's onSubmit, and aria-disabled controls). Since the busy controls use aria-disabled instead of `disabled`, the onSubmit check is the one that blocks Enter; the ref covers two clicks in one tick. Fold the rest into those two.
-- `scripts/e2e-auth.cjs` (2026-11-10): start its stack through `local-env.cjs` like the other e2e scripts (free ports, `_test` database, teardown with proof the dev database was untouched), and fix its header and any docs that mention `test-env.sh`, which does not exist.
 - `DeleteConfirm` (2026-11-10, PR #23 review): `busy` sets `disabled` on the focused confirm button, which drops focus to `<body>`; a failed delete leaves the open dialog with no focus. Use the StatusDialog approach (aria-disabled, focus back on failure).
 - Waking-up line (2026-11-10): shown only before the first data in a tab. If the free-tier API sleeps again mid-session, a later slow reload gets no explanation. Accepted for now.
 - PR #23 review round 3, finding 1 (2026-11-10): optimistic concurrency for PATCH, an `updated_at` precondition (409 on mismatch). A status PATCH the server saves after the client's 60 s timeout lands after the refetch, so the screen keeps the old status, and a retry can lose to the late save. Deferred: it needs a backend contract change; the client alone cannot close the window.
@@ -97,8 +96,6 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - Tests: starlette warns `httpx` is deprecated for `TestClient` (suggests `httpx2`); revisit
 - Manually exercise the app end-to-end (2026-11-16, moved from the CLAUDE.md status list): walk through `/docs`, a curl cookie jar and psql against a local stack; the only open item of the old checklist.
 - Model docstrings (2026-11-16): `app/applications/models.py`, `app/interviews/models.py`, `app/auth/models.py` and `app/users/models.py` say "See the ... table in CLAUDE.md for the column spec", but the tables now live in the Schema section of docs/ARCHITECTURE.md; `app/auth/router.py`, `app/auth/schemas.py`, `app/auth/security.py` and `app/users/schemas.py` still cite "CLAUDE.md rule 2" from the learning-mode agreement. Fix them together with the stale-docstrings item above; not changed here because this PR is docs-only.
-- `e2e-auth.cjs` header (2026-11-16): still names `test-env.sh`; see the 2026-11-10 item above (the `scripts/e2e-auth.cjs` bullet). Until it is fixed, a session must not run it; see the last section of docs/FRONTEND.md.
-- Make `e2e-auth.cjs` and `screens-auth.cjs` use `local-env.cjs` (test DB, free ports, the `_test` guard) so a session can run them safely (2026-11-16). Code change, own PR.
 
 ## Maintenance
 
