@@ -1,4 +1,4 @@
-// Shared by the local Playwright scripts (e2e-applications, screens-applications, seed-applications).
+// Shared by the local Playwright scripts (every e2e-, screens- and seed- script).
 // NOT part of package.json or CI. It starts, on free ports, everything a run needs and removes it again:
 //   - the API (uvicorn, COOKIE_SECURE=false, generous rate limits) on the *_test database only,
 //   - `next dev` with BACKEND_URL pointing at that API,
@@ -48,14 +48,14 @@ function sql(url, code) {
 const PY_HEAD = "import os\nfrom sqlalchemy import create_engine, text\ne = create_engine(os.environ['URL'])\n";
 
 function counts(url) {
-  return sql(url, PY_HEAD + "with e.connect() as c:\n  print(c.execute(text('select (select count(*) from users), (select count(*) from job_applications)')).one())");
+  return sql(url, PY_HEAD + "with e.connect() as c:\n  print(c.execute(text('select (select count(*) from users), (select count(*) from job_applications), (select count(*) from rate_limit_events), (select count(*) from sessions), (select count(*) from invite_codes)')).one())");
 }
 
 function truncateAll(url) {
   return sql(
     url,
     PY_HEAD +
-      "with e.begin() as c:\n  for (t,) in c.execute(text(\"select tablename from pg_tables where schemaname='public' and tablename<>'alembic_version'\")).all():\n    c.execute(text('TRUNCATE TABLE \"%s\" RESTART IDENTITY CASCADE' % t))\n  print(c.execute(text('select (select count(*) from users), (select count(*) from job_applications)')).one())",
+      "with e.begin() as c:\n  for (t,) in c.execute(text(\"select tablename from pg_tables where schemaname='public' and tablename<>'alembic_version'\")).all():\n    c.execute(text('TRUNCATE TABLE \"%s\" RESTART IDENTITY CASCADE' % t))\n  print(c.execute(text('select (select count(*) from users), (select count(*) from job_applications), (select count(*) from rate_limit_events), (select count(*) from sessions), (select count(*) from invite_codes)')).one())",
   );
 }
 
@@ -123,8 +123,8 @@ async function withEnv(fn) {
     const devAfter = counts(db.dev);
     console.log("\n--- cleanup ---");
     console.log(`stopped: API :${apiPort}, next dev :${webPort} (${children.length} processes started by this run)`);
-    console.log(`test database ${db.testName} truncated; (users, job_applications) now ${left}`);
-    console.log(`dev database ${db.devName} not written to: (users, job_applications) before ${devBefore}, after ${devAfter}: ${devBefore === devAfter ? "unchanged" : "CHANGED"}`);
+    console.log(`test database ${db.testName} truncated; (users, job_applications, rate_limit_events, sessions, invite_codes) now ${left}`);
+    console.log(`dev database ${db.devName} not written to: (users, job_applications, rate_limit_events, sessions, invite_codes) before ${devBefore}, after ${devAfter}: ${devBefore === devAfter ? "unchanged" : "CHANGED"}`);
     const after8000 = listener(8000);
     if (foreign8000 === null) console.log(`:8000: nothing was listening before; ${after8000 === null ? "nothing now" : "pid " + after8000 + " now (not started by this run)"}`);
     else console.log(`:8000: pid ${foreign8000} was already listening and was not started by this run; ${after8000 === foreign8000 ? "still the same pid, untouched" : "NOW DIFFERENT"}`);
