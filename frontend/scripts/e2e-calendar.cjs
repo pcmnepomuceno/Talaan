@@ -146,7 +146,7 @@ withEnv(async ({ base, createInvite }) => {
     await page.getByRole("button", { name: "Next month" }).click();
     await monthIs(heading(addMonth(M, 1)));
     check("Next month: heading and URL", (await h2()) === heading(addMonth(M, 1)) && pathOf(page.url()) === `/interviews?view=month&month=${addMonth(M, 1)}`);
-    await page.waitForFunction((t) => document.querySelector('main [role="status"]')?.textContent === t, heading(addMonth(M, 1)));
+    await page.waitForFunction((t) => document.querySelector('main [role="status"][aria-label="Month"]')?.textContent === t, heading(addMonth(M, 1)));
     check("the new month is announced in the polite status region", true);
     await page.getByRole("button", { name: "Next month" }).click();
     await page.getByRole("button", { name: "Next month" }).click();

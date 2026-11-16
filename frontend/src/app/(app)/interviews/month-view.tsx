@@ -94,13 +94,13 @@ export function MonthView() {
 
   return (
     <>
-      {/* Always mounted, so changes are announced (a region added together with its text often is not). */}
-      <div role="status" className="sr-only">
-        {view.kind === "loading"
-          ? announcement
-            ? `${announcement}. Loading interviews`
-            : "Loading interviews"
-          : announcement}
+      {/* Always mounted, so changes are announced (a region added together with its text often is not).
+          Each region changes only for its own reason, so neither is re-read when the other changes. */}
+      <div role="status" aria-label="Month" className="sr-only">
+        {announcement}
+      </div>
+      <div role="status" aria-label="Loading" className="sr-only">
+        {view.kind === "loading" ? "Loading interviews" : ""}
       </div>
       <WakingUp pending={wakePending} />
       <div className="mt-4 flex min-h-11 items-center justify-between gap-2">

@@ -5,6 +5,7 @@ import { useMemo, useSyncExternalStore } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AgendaScreen } from "../src/app/(app)/interviews/agenda-screen";
 import { ToastProvider } from "../src/components/toast";
+import { ANNOUNCE_MS } from "../src/app/(app)/applications/(ledger)/use-list";
 import { WAKE_MS } from "../src/components/waking-up";
 import { createInterview, deleteApplication } from "../src/lib/api";
 import { clearCaches, forgetLoaded, getCalendar } from "../src/lib/cache";
@@ -77,6 +78,8 @@ const mount = () =>
     </ToastProvider>,
   );
 const grid = () => screen.getByRole("grid");
+const monthStatus = () => screen.getByRole("status", { name: "Month" });
+const loadingStatus = () => screen.getByRole("status", { name: "Loading" });
 const cell = (d: string) => grid().querySelector<HTMLElement>(`button[data-day="${d}"]`)!;
 const tinted = () => [...grid().querySelectorAll<HTMLElement>("button.bg-primary-tint")].map((b) => b.dataset.day);
 const rows = () => [...document.querySelectorAll<HTMLAnchorElement>("a[data-interview-id]")];
@@ -188,7 +191,7 @@ it("Previous, Next and Today change the month with replace and announce it polit
   await user.click(next);
   expect(replace).toHaveBeenLastCalledWith("/interviews?view=month&month=2026-12");
   expect(heading("December 2026")).toBeTruthy();
-  await waitFor(() => expect(screen.getAllByRole("status")[0].textContent).toBe("December 2026"));
+  await waitFor(() => expect(monthStatus().textContent).toBe("December 2026"));
   await user.click(prev);
   await user.click(prev);
   expect(heading("October 2026")).toBeTruthy();
@@ -248,7 +251,30 @@ it("drops a response for a month that is no longer shown", async () => {
   expect(tinted()).toEqual(dec);
 });
 
-it("announces the month name while its data is loading", async () => {
+it("announces the month name while its data is loading, each region for its own reason", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  fake.on("GET", /^\/interviews\/calendar\?from=2026-11-29/, async () => {
+    await gate;
+    return json(200, { items: [], total: 0, truncated: false, from: "2026-11-29", to: "2027-01-02" });
+  });
+  mount();
+  await ready();
+  vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+  vi.setSystemTime(new Date(NOW));
+  fireEvent.click(screen.getByRole("button", { name: "Next month" }));
+  await act(async () => {});
+  expect(monthStatus().textContent).toBe("December 2026");
+  expect(loadingStatus().textContent).toBe("Loading interviews");
+  act(() => vi.advanceTimersByTime(ANNOUNCE_MS)); // the month name clears; the response is still held
+  expect(monthStatus().textContent).toBe("");
+  expect(loadingStatus().textContent).toBe("Loading interviews");
+  await act(async () => release());
+  expect(loadingStatus().textContent).toBe("");
+  expect(monthStatus().textContent).toBe("");
+});
+
+it("keeps the month name when the load finishes while it is still showing; only Loading changes", async () => {
   let release!: () => void;
   const gate = new Promise<void>((r) => (release = r));
   fake.on("GET", /^\/interviews\/calendar\?from=2026-11-29/, async () => {
@@ -258,11 +284,11 @@ it("announces the month name while its data is loading", async () => {
   mount();
   await ready();
   fireEvent.click(screen.getByRole("button", { name: "Next month" }));
-  await waitFor(() =>
-    expect(screen.getAllByRole("status")[0].textContent).toBe("December 2026. Loading interviews"),
-  );
+  await waitFor(() => expect(loadingStatus().textContent).toBe("Loading interviews"));
+  expect(monthStatus().textContent).toBe("December 2026");
   await act(async () => release());
-  await waitFor(() => expect(screen.getAllByRole("status")[0].textContent).toBe("December 2026"));
+  await waitFor(() => expect(loadingStatus().textContent).toBe(""));
+  expect(monthStatus().textContent).toBe("December 2026"); // well inside ANNOUNCE_MS (real timers, a few ms)
 });
 
 it("stores nothing when the screen is gone before the answer", async () => {
@@ -291,7 +317,8 @@ it("shows the loading state, with the grid in place and no markers, until the fi
   mount();
   expect(grid().getAttribute("aria-busy")).toBe("true");
   expect(grid().querySelectorAll("button")).toHaveLength(35);
-  expect(screen.getAllByRole("status")[0].textContent).toBe("Loading interviews");
+  expect(loadingStatus().textContent).toBe("Loading interviews");
+  expect(monthStatus().textContent).toBe("");
   expect(tinted()).toEqual([]);
   await act(async () => release());
   await ready();
@@ -365,7 +392,8 @@ it("Nov failed, Dec, Nov: the retry in flight shows loading, not the old error",
   const releaseNov = hold("2026-11-01", "2026-12-05");
   await user.click(screen.getByRole("button", { name: "Previous month" }));
   expect(alerts()).not.toContain("Couldn't load interviews.");
-  expect(screen.getAllByRole("status")[0].textContent).toBe("November 2026. Loading interviews");
+  expect(monthStatus().textContent).toBe("November 2026");
+  expect(loadingStatus().textContent).toBe("Loading interviews");
   expect(grid().getAttribute("aria-busy")).toBe("true");
   await releaseNov();
   await ready();
