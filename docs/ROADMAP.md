@@ -79,6 +79,9 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - F9 (2026-11-12): `use-calendar.ts` is a third near copy of the cache-version/refetch pattern (with `use-agenda.ts` and `use-list.ts`); fold into one hook in the same refactor as the agenda item above.
 - F9 (2026-11-12): the month view computes "today" on each render and does not re-render at midnight PHT; the outline moves on the next interaction. Accepted.
 - PR #25 review, finding 8 (2026-11-15): the calendar range cache in `cache.ts` keeps one entry per month visited for the life of the tab. Deferred: entries are bounded by hand navigation, and every write and auth event clears them.
+- PR #25 review 2, finding 3b (2026-11-15): pressing Today on the current month moves the selected day to today without any announcement. Whether selection changes are announced is a design decision, so it is not changed here.
+- PR #25 review 2, finding 4 (2026-11-15): the real-day check exists three times, in `calendar.ts` (`isDay`, `toDate`/`toDay`, `phtToday`), `format.ts` (`DATE_ONLY` plus `onCalendar`) and `pht.ts` (the PHT offset and `pad`). The behavior is identical today. Refactor to one helper after F9 ships.
+- PR #25 review 2, finding 8 (2026-11-15): `month-view.tsx` imports `ANNOUNCE_MS` from the applications screen's `(ledger)/use-list`, as `use-agenda.ts` has done since F8. Move it to `src/lib/` in the use-agenda/use-list merge (the backlog item for PR #24 finding 10).
 
 ## Maintenance
 
