@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getApplications } from "@/lib/api";
-import { getList, listFresh, listsSettled, listStamp, onApplicationStored, onCachesCleared, setList } from "@/lib/cache";
+import { getList, listFresh, listsSettled, listStale, listStamp, onApplicationStored, onCachesCleared, setList } from "@/lib/cache";
 import { followUpCount } from "@/lib/format";
 import { FOLLOW_UP, type ListFilter, type ListRow } from "@/lib/types";
 
@@ -82,12 +82,12 @@ export function useApplicationList(status: ListFilter | undefined) {
   // A full clear refetches. An interview write clears one detail (an id is passed) and no list row
   // changes, except that it also drops the follow-up list (cache.ts), so a list dropped from under the
   // screen is refetched too.
-  useEffect(() => onCachesCleared((id) => (id === undefined || !getList(status)) && setTick((n) => n + 1)), [status]);
+  useEffect(() => onCachesCleared((id) => (id === undefined || status === FOLLOW_UP) && setTick((n) => n + 1)), [status]);
 
   // A status change patched the cached lists in place (storeApplication): re-render from the cache,
   // or refetch when the list on screen was dropped (its order around the row was unknown).
   const [, setPatched] = useState(0);
-  useEffect(() => onApplicationStored(() => (getList(status) ? setPatched((n) => n + 1) : setTick((n) => n + 1))), [status]);
+  useEffect(() => onApplicationStored(() => (status !== FOLLOW_UP && getList(status) ? setPatched((n) => n + 1) : setTick((n) => n + 1))), [status]);
 
   useEffect(() => {
     let live = true;
@@ -139,6 +139,12 @@ export function useApplicationList(status: ListFilter | undefined) {
         await listsSettled();
         const cur = getList(status);
         if (!here() || !cur) return;
+        if (listStale(status)) {
+          // Known out of date (an interview write, a status change, or a failed refetch): ask for page 1, append nothing.
+          mark("idle");
+          setTick((n) => n + 1);
+          return;
+        }
         const s = listStamp();
         const page = await getApplications(status, cur.nextOffset);
         if (!here()) return;

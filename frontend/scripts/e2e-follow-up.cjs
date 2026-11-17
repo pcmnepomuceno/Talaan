@@ -211,6 +211,42 @@ withEnv(async ({ base, createInvite }) => {
       await ctx.close();
     }
 
+    // ---------------- Account C at 1280: a status change from the detail pane keeps the list on screen ----------------
+    // Two panes: the list stays mounted beside the detail. The follow-up rows are marked stale and refetched,
+    // never dropped to a skeleton; the list ends on the server's answer (50 of 54 rows after one leaves).
+    {
+      const { ctx, page } = await open(C);
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.goto(`${base}/applications?status=follow_up`);
+      await page.waitForFunction((n) => document.querySelectorAll('ul[aria-label="Applications"] a').length === n, PAGE_SIZE);
+      const target = list(page).getByRole("link").first();
+      const targetHref = await target.getAttribute("href");
+      await target.click();
+      await page.waitForURL(/\/applications\/\d+\?status=follow_up$/);
+      await page.getByRole("button", { name: "Change status" }).waitFor();
+      await page.getByText("No interviews yet.").waitFor();
+      await page.evaluate(() => {
+        window.__sk = 0;
+        const look = () => {
+          for (const el of document.querySelectorAll(".animate-ledger-pulse")) if (el.closest('section[aria-label="Applications"]')) window.__sk++;
+        };
+        window.__skObs = new MutationObserver(look);
+        window.__skObs.observe(document.body, { subtree: true, childList: true, attributes: true });
+      });
+      await page.getByRole("button", { name: "Change status" }).click();
+      await page.getByRole("radio", { name: "Screening" }).check();
+      await page.getByRole("button", { name: "Update status" }).click();
+      await page.getByRole("dialog").waitFor({ state: "detached" });
+      const c54 = await countIs(page, "54 applications need a follow-up");
+      await page.waitForTimeout(800);
+      const sk = await page.evaluate(() => (window.__skObs.disconnect(), window.__sk));
+      check("1280 status change: the follow-up list pane never shows a skeleton", sk === 0, String(sk));
+      check('1280 status change: ends on "54 applications need a follow-up"', c54 === "54 applications need a follow-up", c54);
+      const hrefs = await list(page).getByRole("link").evaluateAll((ls) => ls.map((l) => l.getAttribute("href")));
+      check("1280 status change: the changed row left the list, 50 rows shown", hrefs.length === PAGE_SIZE && !hrefs.includes(targetHref), `${hrefs.length} rows`);
+      await ctx.close();
+    }
+
     check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
   } finally {
     await browser.close();

@@ -43,6 +43,7 @@ export type AgendaEntry = { items: AgendaInterview[]; total: number; nextOffset:
 export type CalendarEntry = { items: AgendaInterview[]; total: number; truncated: boolean };
 
 const lists = new Map<string, ListEntry>();
+const stale = new Set<string>(); // list keys whose rows may be out of date: only setList() (a stored server answer) clears one
 const calendar = new Map<string, CalendarEntry>();
 const agenda = new Map<AgendaKey, AgendaEntry>();
 let agendaEpoch = 0; // bumped whenever the agenda is dropped: guards in-flight agenda responses
@@ -64,7 +65,10 @@ export const getList = (status?: string) => lists.get(listKey(status));
 export const setList = (status: string | undefined, entry: ListEntry) => {
   loaded = true;
   lists.set(listKey(status), entry);
+  stale.delete(listKey(status));
 };
+/** The cached list may be out of date (the follow-up list after a write): refetch it, never append a page to it. */
+export const listStale = (status?: string) => stale.has(listKey(status));
 export const getDetail = (id: number) => details.get(id);
 export const setDetail = (id: number, entry: DetailEntry) => {
   loaded = true;
@@ -102,6 +106,7 @@ export function onCachesCleared(fn: (id?: number) => void) {
 
 export function clearCaches() {
   lists.clear();
+  stale.clear();
   details.clear();
   dropAgenda();
   version++;
@@ -224,8 +229,9 @@ export function onApplicationStored(fn: (row: Application) => void) {
  */
 export function storeApplication(row: Application, oldStatus: string) {
   listEpoch++;
-  lists.delete(FOLLOW_UP); // never patched: see the header
+  markFollowUpStale();
   for (const [key, entry] of [...lists]) {
+    if (key === FOLLOW_UP) continue; // never patched: see the header
     const next = patchList(key, entry, row, oldStatus);
     if (next === undefined) lists.delete(key);
     else if (next !== entry) lists.set(key, next);
@@ -235,8 +241,13 @@ export function storeApplication(row: Application, oldStatus: string) {
   for (const fn of [...stored]) fn(row);
 }
 
+// Kept, not dropped, so the screen shows its rows while it refetches page 1 (never patched: see the header).
+function markFollowUpStale() {
+  if (lists.has(FOLLOW_UP)) stale.add(FOLLOW_UP);
+}
+
 function bumpDetail(id: number) {
-  lists.delete(FOLLOW_UP); // an interview time decides who is on it (never patched: see the header)
+  markFollowUpStale(); // an interview time decides who is on the follow-up list
   listEpoch++;
   dropAgenda();
   detailBumps.set(id, detailStamp(id) + 1);
