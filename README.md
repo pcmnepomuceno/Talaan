@@ -35,6 +35,7 @@ One decision worth knowing (details in [DECISIONS.md](DECISIONS.md)): the browse
 - Applications: create, edit and delete, with nine statuses (saved, applied, screening, interviewing, offered, accepted, rejected, withdrawn, ghosted), a status filter and Load more.
 - Interviews per application: mode, outcome, interviewer and notes, with times in Philippine time.
 - An agenda of interviews across all applications (Upcoming and Past) and a month calendar with keyboard navigation.
+- A Needs follow-up view that lists applications at Applied with no activity for 7 days or more and no interview ahead.
 - An `.ics` file for each upcoming interview, built in the browser, with a short guide to importing it.
 - Light and dark theme that follows the system, with an override on the account screen.
 - Phone, tablet and desktop layouts, with the list and detail side by side from 1280px.
@@ -105,8 +106,9 @@ Limitations today:
 - Rate limits cover login, sign-up and account deletion; other authenticated routes are not rate limited (listed in the roadmap backlog).
 - Only the current status is stored, with no status history.
 - It is not installable as a PWA yet; nothing for that is built.
+- The follow-up view lists applications at Applied whose last activity (the apply date or the latest past interview, in Philippine days) is 7 or more days ago and that have no interview ahead. The 7 days cannot be changed in the app (the API takes `days`, 1 to 90). There are no reminders, notifications or emails, and no way to mark a row as followed up.
 
-Planned, not built (from the roadmap): a follow-up list for applications with no update, a documents checklist per application, and a rule-based scam red-flag check.
+Planned, not built (from the roadmap): a documents checklist per application and a rule-based scam red-flag check.
 
 ## License and contact
 

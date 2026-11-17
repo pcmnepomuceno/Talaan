@@ -1,13 +1,13 @@
 # Talaan Roadmap
 
-**Current milestone:** none open. F9 (calendar view, `GET /interviews/calendar`, Month view on the Interviews screen, DESIGN.md v2.5) is done and merged in PR #25, after F8 (agenda, `.ics`, import guide) in PR #24. Deferred, not in any batch: drag to reschedule, adding an interview from a day, week or day views, application dates in the grid, subscription feed, API tokens, a duration field, swipe actions, demo account, README screenshots.
+**Current milestone:** none open. F10 (follow-up list, `GET /applications?follow_up=true&days=`, the Needs follow-up view in the Status select, DESIGN.md v2.6) is done on branch feature/f10-follow-up, not merged yet. F9 (calendar view, `GET /interviews/calendar`, Month view on the Interviews screen, DESIGN.md v2.5) is done and merged in PR #25, after F8 (agenda, `.ics`, import guide) in PR #24. Deferred, not in any batch: drag to reschedule, adding an interview from a day, week or day views, application dates in the grid, subscription feed, API tokens, a duration field, swipe actions, demo account, README screenshots.
 
 ## Roadmap
 
 Committed:
 - v1a core tracker: auth fixes + tests; domain layout move; applications CRUD with status filter + pagination; `saved` application status + nullable `date_applied` (new migration); interviews; per-user isolation; real /health with a DB check; Docker; CI.
 - v1b multi-user hardening, then DEPLOY: invite-code signup via env var behind a swappable check_signup_allowed(); rate limiting on login/signup; account deletion (sessions.user_id ON DELETE CASCADE migration + delete-account endpoint); hashed session tokens (token -> token_hash migration); SameSite=Lax and Secure via config; deploy to Render + Neon. Ship here before v1c.
-- v1c Filipino job-seeker features: interview export as .ics plus an "Add to Google Calendar" link (no OAuth); follow-up list (applied N days ago, no update); documents checklist per application (NBI, TIN, SSS, PhilHealth, Pag-IBIG, TOR, diploma); rule-based scam red-flag check (asks for fees, personal-email domain, no company details).
+- v1c Filipino job-seeker features: interview export as .ics plus an "Add to Google Calendar" link (no OAuth); follow-up list (applied N days ago, no update; done in F10, on branch feature/f10-follow-up, not merged yet); documents checklist per application (NBI, TIN, SSS, PhilHealth, Pag-IBIG, TOR, diploma); rule-based scam red-flag check (asks for fees, personal-email domain, no company details).
 - v1.1: hashed personal API tokens + browser extension (desktop capture path: user-initiated capture of the page the user is viewing); PWA share target and quick-add (mobile capture path); scam checks on captured jobs.
 
 Optional (decide after 3-5 friends have used it):
@@ -33,6 +33,7 @@ Next.js app in `frontend/`, built from `docs/DESIGN.md`. Each milestone is merge
 - F6 (done and merged in PR #20): interviews create, edit and delete (full-screen routes, times in PHT only, no automatic status change), Add interview on the detail, shared `TextAction`.
 - F8 (done, merged in PR #24): interviews agenda across applications (Upcoming / Past, PHT day groups, Load more), per-interview `.ics` download built in the browser, import guide; third nav destination; no migration.
 - F9 (done and merged in PR #25): month calendar view of the Interviews screen (`GET /interviews/calendar`, grid, keyboard navigation, PHT only); no migration.
+- F10 (done on branch feature/f10-follow-up, not merged yet): follow-up list (`GET /applications?follow_up=true&days=`, Needs follow-up in the Status select); no migration.
 - F7 (done, 2026-11-09): live on Vercel + Render + Neon (https://talaan-phi.vercel.app); results and gotchas in docs/DEPLOY.md.
 
 ## Clients
@@ -97,6 +98,11 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - Manually exercise the app end-to-end (2026-11-16, moved from the CLAUDE.md status list): walk through `/docs`, a curl cookie jar and psql against a local stack; the only open item of the old checklist.
 - Model docstrings (2026-11-16): `app/applications/models.py`, `app/interviews/models.py`, `app/auth/models.py` and `app/users/models.py` say "See the ... table in CLAUDE.md for the column spec", but the tables now live in the Schema section of docs/ARCHITECTURE.md; `app/auth/router.py`, `app/auth/schemas.py`, `app/auth/security.py` and `app/users/schemas.py` still cite "CLAUDE.md rule 2" from the learning-mode agreement. Fix them together with the stale-docstrings item above; not changed here because this PR is docs-only.
 - Script headers (2026-11-16): `e2e-calendar.cjs:6` (and any other header with the same wording; grep for "/ :3000") says a foreign ":8000 / :3000" process is checked, but `local-env.cjs` checks only :8000; fix the wording when those files are next touched.
+- F10 (2026-11-17): holding or rapidly repeating an arrow key on the Status select starts each step from a stale value, because every key triggers `router.replace`. It applies to every status choice, not only Needs follow-up, and was found while writing the e2e. Deferred.
+- F10 (2026-11-17): the follow-up threshold is fixed at 7 days in the UI; the API already takes `days` (1 to 90). A setting is deferred.
+- F10 (2026-11-17): no "mark as followed up". It needs a new column, so it is not built.
+- F10 (2026-11-17): no reminders, notifications or emails; the view only lists rows when it is opened.
+- F10 (2026-11-17): the empty-state sentence does not say that an application with an interview ahead is also left out of the view.
 - `local-env.cjs` (2026-11-16): a cleanup error (for example `truncateAll` failing in the finally) can hide the original error; the exit code is still 1; low priority.
 
 ## Maintenance
