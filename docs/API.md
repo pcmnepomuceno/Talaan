@@ -80,7 +80,7 @@ Every list is paginated: `?limit=20&offset=0` (default 20, max 100). Response:
 ```json
 {"items": [], "total": 0, "limit": 20, "offset": 0}
 ```
-Interviews list oldest first: `scheduled_at` ascending, ties by `id` ascending (decided 2026-10-21). Applications filter with `?status=applied` (one of the enum values). Default order: newest `created_at` first, ties broken by `id` descending (decided 2026-10-21). A bad `status`, `limit` outside 1-100, or a negative or out-of-range `offset` gives 422, and so does `follow_up=true` together with `status`, or `days` without `follow_up=true` (see the follow-up list below).
+Interviews list oldest first: `scheduled_at` ascending, ties by `id` ascending (decided 2026-10-21). Applications filter with `?status=applied` (one of the enum values). Default order: newest `created_at` first, ties broken by `id` descending (decided 2026-10-21). A bad `status`, `limit` outside 1-100, or a negative or out-of-range `offset` gives 422, and so does `follow_up=true` together with `status`, or `days` without `follow_up=true` (alone, or with `follow_up=false`; see the follow-up list below).
 
 ### Follow-up list: `GET /applications?follow_up=true&days=7`
 Applications that have gone quiet. Let `now` be the server clock and `today` the date of `now` in Asia/Manila (PHT, computed in Python, so the server's time zone never matters). An application is in the list when all of these hold:
@@ -91,7 +91,7 @@ Applications that have gone quiet. Let `now` be the server clock and `today` the
 A `date_applied` in the future gives a negative idle count, so that row is not listed.
 
 - `days` defaults to 7 and must be an integer from 1 to 90. It is never clamped: 0, 91 and a non-integer are 422.
-- `follow_up=true` with `status` is 422. `days` without `follow_up=true` is 422. `follow_up=false` or no `follow_up` behaves exactly like the normal list. `limit` and `offset` work as usual.
+- `follow_up=true` with `status` is 422. `days` is only valid with `follow_up=true`: `days` alone, or `follow_up=false` with `days`, is 422. Without `days`, `follow_up=false` or no `follow_up` behaves exactly like the normal list. `limit` and `offset` work as usual.
 - Order: last activity day ascending (quietest first), then `id` ascending.
 - Body: `{"items", "total", "limit", "offset"}`. Each item has every field of `GET /applications/{id}` plus `idle_days` (integer, `today` minus the last activity day, always at least `days`) and `last_activity` (`"applied"` or `"interview"`; `"interview"` when the interview day is the same as or later than the applied day). Items of the normal list gain no new keys.
 - There is no `as_of`. Through the clock alone, a row joins the list only at the end of the order (its last activity is exactly `today - days`, the newest allowed), so a clock crossing PHT midnight between two pages appends rows and never shifts an earlier offset. Writes (a status set back to applied, a deleted upcoming interview, an edited `date_applied`) can add a row anywhere, and the client drops its cached follow-up list on every such write. A page fetched after midnight shows `idle_days` one higher than page 1; that is accepted.
