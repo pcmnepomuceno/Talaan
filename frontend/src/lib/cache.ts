@@ -28,7 +28,7 @@
 //     moves, and changeStatus brackets the PATCH with beginMove()/endMove() (see listFresh).
 // Each of these sets the new state before notifying listeners, in one synchronous call, so no
 // caller has to win a race against React's next render.
-import type { AgendaInterview, Application, Interview, ListRow } from "./types";
+import { type AgendaInterview, type Application, FOLLOW_UP, type Interview, type ListRow } from "./types";
 
 // nextOffset = the server offset of the next page: offset + rows the server sent, which can be more
 // than items.length when de-duplication dropped rows. Load more is offered while it is below total.
@@ -52,7 +52,6 @@ const listeners = new Set<(id?: number) => void>();
 let version = 0; // bumped by clearCaches() only: guards in-flight detail responses (lists: listStamp)
 const detailBumps = new Map<number, number>(); // per id, bumped by clearDetail() and replaceDetail(): guards in-flight detail responses
 
-const FOLLOW_UP = "follow_up";
 export const listKey = (status?: string) => status ?? "all";
 // Set by the first list or detail the server sent in this tab and never reset (a clear included):
 // once anything has loaded the API is awake, so the slow-start line (DESIGN.md 6.12) is not shown again.

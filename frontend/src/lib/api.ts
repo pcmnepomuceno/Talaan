@@ -29,7 +29,7 @@ import {
   toInterviewPatchBody,
   toPatchBody,
 } from "./mappers";
-import { type AgendaInterview, type Application, type CalendarRange, type Interview, type ListFilter, type ListRow, STATUSES, type Status } from "./types";
+import { type AgendaInterview, type Application, type CalendarRange, FOLLOW_UP, type Interview, type ListFilter, type ListRow, STATUSES, type Status } from "./types";
 
 export const PAGE_SIZE = 50;
 export const INTERVIEWS_LIMIT = 100;
@@ -50,7 +50,7 @@ export const parseStatus = (raw: string | null | undefined): Status | undefined 
 
 /** The list filter from a query string: a status or "follow_up"; anything else means "all". */
 export const parseFilter = (raw: string | null | undefined): ListFilter | undefined =>
-  raw === "follow_up" ? raw : parseStatus(raw);
+  raw === FOLLOW_UP ? raw : parseStatus(raw);
 
 /**
  * One page. `total` counts every row matching the filter, not just this page. A status (or none) lists
@@ -59,9 +59,9 @@ export const parseFilter = (raw: string | null | undefined): ListFilter | undefi
  */
 export async function getApplications(filter?: ListFilter, offset = 0): Promise<Page<ListRow>> {
   const q = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) });
-  if (filter === "follow_up") q.set("follow_up", "true");
+  if (filter === FOLLOW_UP) q.set("follow_up", "true");
   else if (filter) q.set("status", filter);
-  return fromApiPage(await request<unknown>(`${BASE}?${q}`), filter === "follow_up" ? fromApiFollowUpRow : fromApiApplication);
+  return fromApiPage(await request<unknown>(`${BASE}?${q}`), filter === FOLLOW_UP ? fromApiFollowUpRow : fromApiApplication);
 }
 
 /** null = not found (missing, or another user's: the API answers 404 for both). */

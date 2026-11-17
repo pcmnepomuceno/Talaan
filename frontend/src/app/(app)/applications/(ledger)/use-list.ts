@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getApplications } from "@/lib/api";
 import { getList, listFresh, listsSettled, listStamp, onApplicationStored, onCachesCleared, setList } from "@/lib/cache";
 import { followUpCount } from "@/lib/format";
-import type { ListFilter, ListRow } from "@/lib/types";
+import { FOLLOW_UP, type ListFilter, type ListRow } from "@/lib/types";
 
 // One filter (a status tab or the follow-up view) = one cached list, fetched 50 at a time from the server (the API pages and
 // filters). Cached rows show at once while page 1 is refetched; the fresh page 1 then REPLACES the
@@ -100,7 +100,7 @@ export function useApplicationList(status: ListFilter | undefined) {
         if (!listFresh(s)) return again();
         setList(status, { ...page, nextOffset: page.items.length });
         setFetched({ key, failed: false, refreshFailed: false, more: "idle" });
-        if (status === "follow_up" && page.total > 0 && !countSaid.current) {
+        if (status === FOLLOW_UP && page.total > 0 && !countSaid.current) {
           countSaid.current = true;
           setAnnouncement(followUpCount(page.total));
         }

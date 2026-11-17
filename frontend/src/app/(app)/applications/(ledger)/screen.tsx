@@ -16,6 +16,7 @@ import { WakingUp } from "@/components/waking-up";
 import { deleteApplication, parseFilter } from "@/lib/api";
 import { loadedOnce } from "@/lib/cache";
 import { followUpCount, followUpLabel } from "@/lib/format";
+import { FOLLOW_UP } from "@/lib/types";
 import { type DetailState, useApplicationDetail } from "./use-detail";
 import { useApplicationList } from "./use-list";
 
@@ -141,7 +142,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
             ) : view.kind === "failed" ? (
               <LoadError title="Couldn't load applications." onRetry={retry} />
             ) : view.total === 0 ? (
-              status === "follow_up" ? (
+              status === FOLLOW_UP ? (
                 <EmptyState
                   title="Nothing to follow up on right now."
                   message="Applications at Applied with no activity for 7 days or more, and no interview ahead, show here."
@@ -170,7 +171,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
               )
             ) : (
               <>
-                {status === "follow_up" && <p className="mb-3 text-caption text-text-secondary">{followUpCount(view.total)}</p>}
+                {status === FOLLOW_UP && <p className="mb-3 text-caption text-text-secondary">{followUpCount(view.total)}</p>}
                 {view.refreshFailed && (
                   <div className="mb-3">
                     <LoadError title="Couldn't refresh the list. Showing the last loaded rows." onRetry={retry} />
@@ -183,7 +184,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
                       application={a}
                       href={`/applications/${a.id}${qs}`}
                       selected={String(a.id) === id}
-                      note={status === "follow_up" && a.follow_up ? followUpLabel(a.follow_up) : undefined}
+                      note={status === FOLLOW_UP && a.follow_up ? followUpLabel(a.follow_up) : undefined}
                     />
                   ))}
                 </LedgerSheet>

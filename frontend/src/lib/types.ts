@@ -60,7 +60,8 @@ export type Application = {
 export type FollowUp = { idle_days: number; last_activity: "applied" | "interview" };
 export type ListRow = Application & { follow_up?: FollowUp };
 // The Applications list's filter: one status, or the follow-up view. Never a status value itself.
-export type ListFilter = Status | "follow_up";
+export const FOLLOW_UP = "follow_up" as const;
+export type ListFilter = Status | typeof FOLLOW_UP;
 
 export type Interview = {
   id: number;
