@@ -166,7 +166,7 @@ Track height 44, bg `color-surface-subtle`, 1px `color-border-subtle`, radius `r
 
 ### 6.4 Status stamp and status filter
 - **Status stamp**: height 28, padding 4 x 10, radius `radius-xs`, Stamp type, sentence case label, uses the status tokens (text, bg, 1px border). It is a flat rectangle, never a pill, and has no dot or icon. Interview outcome stamps use the same component.
-- **Status filter** (v2.3, replaces the filter tabs): one native select from 6.2 (48px, same tokens and states), label "Status", options "All", then the nine statuses in enum order (Saved first), then "Needs follow-up" last (v2.6), label only, no counts. Default All. "Needs follow-up" is a view, not a status: it lists applications at Applied that have had no activity for 7 days or more, quietest first, and it is kept in `?status=follow_up` like a status. Full width under 768; from 768 it is at most 320px wide.
+- **Status filter** (v2.3, replaces the filter tabs): one native select from 6.2 (48px, same tokens and states), label "Status", options "All", then the nine statuses in enum order (Saved first), then "Needs follow-up" last (v2.6), label only, no counts. Default All. "Needs follow-up" is a view, not a status: it lists applications at Applied that have no interview ahead and no activity for 7 days or more, quietest first, and it is kept in `?status=follow_up` like a status. Full width under 768; from 768 it is at most 320px wide.
 
 ### 6.5 Ledger sheet and application row
 The applications list is one ledger sheet: a single container (bg `color-surface-card`, 1px `color-border-subtle`, radius `radius-sm`, no shadow) holding rows separated by 1px `color-border-subtle` rules. Rows are not separate cards. Each row is at least 44px tall, tappable as a whole, padding 16:
