@@ -3,10 +3,12 @@
 // caches itself (cache.ts), so no screen can forget to. The rules:
 //   - create, edit, delete of an application: clearCaches()
 //   - status change: storeApplication(row, from) patches every cache from the server's row (no
-//     refetch), inside beginMove()/endMove() so no list page can straddle the PATCH; clearCaches()
+//     refetch; the follow-up list is only marked stale), inside beginMove()/endMove() so no list page can straddle the PATCH; clearCaches()
 //     when that response cannot be mapped, on a 404, or with no answer (network error, 60 s timeout)
-//   - interview create and edit: clearDetail(applicationId)
-//   - interview delete: replaceDetail(applicationId, page minus the row) (the detail still refetches)
+//   - interview create and edit: clearDetail(applicationId), which also marks the follow-up list stale
+//     (kept on screen, refetched by the screen, never patched)
+//   - interview delete: replaceDetail(applicationId, page minus the row) (the detail still refetches);
+//     it marks the follow-up list stale the same way
 //   - any 404 on a write: clearCaches() (the row, or its application, may be gone)
 //   - the agenda and calendar caches (cache.ts) are dropped by clearCaches, clearDetail and replaceDetail, so
 //     every rule above that calls one of them also drops them; changeStatus's storeApplication keeps them

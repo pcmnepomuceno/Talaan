@@ -10,7 +10,9 @@ import { FOLLOW_UP, type ListFilter, type ListRow } from "@/lib/types";
 // filters). Cached rows show at once while page 1 is refetched; the fresh page 1 then REPLACES the
 // entry, dropping any extra pages the user had loaded, because their offsets may have shifted.
 // A full clear (clearCaches) empties the cache and refetches the current tab; a status change
-// (storeApplication) patches the cached rows, which the view reads directly. A page that may straddle
+// (storeApplication) patches the cached rows, which the view reads directly, except the follow-up list:
+// an interview write or a status change marks it stale (cache.ts), its old rows stay on screen and page 1
+// is refetched; a stored server answer clears the mark. A page that may straddle
 // a status write (listFresh false) is never stored: it is re-issued once the write ends. Load more asks for
 // nextOffset (rows the server has sent), not items.length (rows left after de-duplication); a
 // page that adds no new row means the offsets shifted, so Load more is withdrawn and page 1 refetched.
@@ -80,12 +82,13 @@ export function useApplicationList(status: ListFilter | undefined) {
   }, []);
 
   // A full clear refetches. An interview write clears one detail (an id is passed) and no list row
-  // changes, except that it also drops the follow-up list (cache.ts), so a list dropped from under the
-  // screen is refetched too.
+  // changes, except that it also marks the follow-up list stale (cache.ts): its old rows stay on screen
+  // and the list is refetched, so that list is refetched here too.
   useEffect(() => onCachesCleared((id) => (id === undefined || status === FOLLOW_UP) && setTick((n) => n + 1)), [status]);
 
   // A status change patched the cached lists in place (storeApplication): re-render from the cache,
-  // or refetch when the list on screen was dropped (its order around the row was unknown).
+  // or refetch when the list on screen was dropped, or is the follow-up list (marked stale, never
+  // patched: its old rows stay on screen while page 1 is refetched).
   const [, setPatched] = useState(0);
   useEffect(() => onApplicationStored(() => (status !== FOLLOW_UP && getList(status) ? setPatched((n) => n + 1) : setTick((n) => n + 1))), [status]);
 

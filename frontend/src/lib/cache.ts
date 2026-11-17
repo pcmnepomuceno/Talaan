@@ -6,7 +6,8 @@
 //   - resetCaches(): clearCaches() and every status window ends (login, logout and account deletion:
 //     one user's rows never reach the next, and a write cut off by a 401 never blocks the lists).
 //   - clearDetail(id): one detail is dropped and refetched (interview create and edit). An interview
-//     changes nothing a list row shows, so the lists and every other detail stay valid.
+//     changes nothing a list row shows, so the lists and every other detail stay valid (the follow-up
+//     list is only marked stale, see below).
 //   - replaceDetail(id, entry): like clearDetail, but the entry is replaced in the same step, so the
 //     detail never shows a skeleton while it refetches (interview delete).
 //   - The interviews agenda (getAgenda) is dropped, and its version bumped, by clearCaches() and by
@@ -18,10 +19,12 @@
 //     or onto another page.
 //   - The month view's ranges (getCalendar) go exactly where the agenda goes (dropAgenda) and share its
 //     version: the same writes change what a day shows, and a status change does not.
-//   - The follow-up list (key "follow_up") is dropped, never patched: its membership depends on interview
-//     times and the clock, which a row from a status PATCH does not carry. storeApplication drops it
-//     before patching the others, and clearDetail/replaceDetail (every interview write) drop it too;
-//     each moves the list epoch, so a follow-up page requested before is refused and asked again.
+//   - The follow-up list (key "follow_up") is marked stale, never patched: its membership depends on
+//     interview times and the clock, which a row from a status PATCH does not carry. A stale list is
+//     kept (the screen shows its rows) and refetched by the screen; setList (a stored server answer)
+//     clears the mark. storeApplication marks it before patching the others, and clearDetail/replaceDetail
+//     (every interview write) mark it too; each moves the list epoch, so a follow-up page requested before
+//     is refused and asked again. listStale tells Load more to ask for page 1 instead of appending.
 //     clearCaches (and so resetCaches) drops it with every other list.
 //   - storeApplication(row, from): a status change. Every list and the detail are patched from the
 //     server's row; only a list whose result cannot be known is dropped (patchList). The list stamp
