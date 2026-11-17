@@ -218,7 +218,7 @@ Radius `radius-sm`, padding 16, 1px border. Error banner uses the three error to
 ### 6.11 Empty state
 Centered, padding 48 24, 48px outline icon (Material Symbol "description") in `color-text-muted`, title Section Title, one plain sentence in Caption `color-text-muted` (no exclamation marks), one standard 48px primary Button. Example: "No applications yet. Add the first job you applied to." with a button "Add application".
 
-**Follow-up empty state (v2.6)**: title "Nothing to follow up on right now.", one plain Caption sentence "Applications at Applied with no activity for 7 days or more show here.", and a secondary 48px button "Show all" (back to All, like the status empty state). No exclamation mark, no praise.
+**Follow-up empty state (v2.6)**: title "Nothing to follow up on right now.", one plain Caption sentence "Applications at Applied with no activity for 7 days or more, and no interview ahead, show here.", and a secondary 48px button "Show all" (back to All, like the status empty state). No exclamation mark, no praise.
 
 ### 6.12 Loading skeleton
 Rows keep their ledger sheet and rules; each row shows three bars. Base `color-border-subtle`, highlight `color-surface-subtle`. Gentle opacity pulse 0.6 to 1.0 over 1.8s. Radius 4.

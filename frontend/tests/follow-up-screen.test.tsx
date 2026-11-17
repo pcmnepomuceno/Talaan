@@ -100,7 +100,7 @@ it("empty: title, one plain sentence, Show all back to the full list; no count l
   install([]);
   render(ui());
   await screen.findByRole("heading", { name: "Nothing to follow up on right now." });
-  expect(screen.getByText("Applications at Applied with no activity for 7 days or more show here.")).toBeTruthy();
+  expect(screen.getByText("Applications at Applied with no activity for 7 days or more, and no interview ahead, show here.")).toBeTruthy();
   expect(screen.getByRole("link", { name: "Show all" }).getAttribute("href")).toBe("/applications");
   expect(screen.queryByText(/need a follow-up|needs a follow-up/)).toBeNull();
   expect(region().textContent).toBe(""); // left to the visible empty state

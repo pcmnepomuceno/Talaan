@@ -144,7 +144,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
               status === "follow_up" ? (
                 <EmptyState
                   title="Nothing to follow up on right now."
-                  message="Applications at Applied with no activity for 7 days or more show here."
+                  message="Applications at Applied with no activity for 7 days or more, and no interview ahead, show here."
                   action={
                     <Button variant="secondary" href={base}>
                       Show all

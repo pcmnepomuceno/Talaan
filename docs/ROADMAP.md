@@ -102,7 +102,6 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - F10 (2026-11-17): the follow-up threshold is fixed at 7 days in the UI; the API already takes `days` (1 to 90). A setting is deferred.
 - F10 (2026-11-17): no "mark as followed up". It needs a new column, so it is not built.
 - F10 (2026-11-17): no reminders, notifications or emails; the view only lists rows when it is opened.
-- F10 (2026-11-17): the empty-state sentence (the app string and DESIGN.md 6.11) does not say that an application with an interview ahead is also left out of the view; DESIGN.md 6.4 is already fixed.
 - `local-env.cjs` (2026-11-16): a cleanup error (for example `truncateAll` failing in the finally) can hide the original error; the exit code is still 1; low priority.
 
 ## Maintenance
