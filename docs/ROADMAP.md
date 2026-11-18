@@ -105,6 +105,7 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - F10 (2026-11-17): no "mark as followed up". It needs a new column, so it is not built.
 - F10 (2026-11-17): no reminders, notifications or emails; the view only lists rows when it is opened.
 - `local-env.cjs` (2026-11-16): a cleanup error (for example `truncateAll` failing in the finally) can hide the original error; the exit code is still 1; low priority.
+- `local-env.cjs` (2026-11-18): on a cold start the e2e scripts sometimes report "next dev did not come up" or a signup timeout and pass on retry; consider a longer or readiness-based wait.
 
 ## Maintenance
 
