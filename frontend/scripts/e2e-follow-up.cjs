@@ -166,6 +166,9 @@ withEnv(async ({ base, createInvite }) => {
       }
       await page.waitForURL(/\/applications\?status=follow_up$/, { timeout: 10000 }).catch(() => {});
       check("ArrowDown to the last option selects Needs follow-up", pathOf(page.url()) === "/applications?status=follow_up", pathOf(page.url()));
+      check("select holds follow_up after the burst", (await page.getByLabel("Status", { exact: true }).inputValue()) === "follow_up");
+      const cK = await countIs(page, "1 application needs a follow-up");
+      check("follow-up view shown after the burst", cK === "1 application needs a follow-up", cK);
       await ctx.close();
     }
 

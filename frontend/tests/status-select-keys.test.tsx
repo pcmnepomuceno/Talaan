@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 // The Status select under fast arrow keys: it holds its own choice, the URL follows (replace lags behind).
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ApplicationsScreen } from "../src/app/(app)/applications/(ledger)/screen";
@@ -45,6 +44,7 @@ const wait = async (name: string) => {
   await screen.findByText(name);
 };
 
+// userEvent.keyboard does not move a select in jsdom, so the helper steps selectedIndex.
 // What a browser does on ArrowDown/ArrowUp: step from the select's CURRENT DOM value, clamped, no event when clamped.
 const arrow = (dir: 1 | -1) => {
   const el = select();
@@ -58,15 +58,6 @@ const land = (r: { rerender: (u: React.ReactNode) => void }, q: string) => {
   search = q;
   r.rerender(ui());
 };
-
-it("jsdom check: userEvent.keyboard does not move a select, so the helper steps selectedIndex", async () => {
-  const r = render(ui());
-  await screen.findByRole("list", { name: "Applications" });
-  select().focus();
-  await userEvent.keyboard("{ArrowDown}");
-  expect(select().value).toBe("all");
-  r.unmount();
-});
 
 it("a burst of arrow keys lands on the right option, one replace each, one fetch for the final status", async () => {
   const r = render(ui());
