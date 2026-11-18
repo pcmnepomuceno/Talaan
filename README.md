@@ -23,6 +23,14 @@ A job-application tracker for job seekers in the Philippines: log each applicati
 
 Live at https://talaan-phi.vercel.app. Sign-up is invite-only and there is no demo account. The first request can take about 20 seconds while the free API server wakes up (a login after 20 idle minutes took 19 seconds, see `docs/DEPLOY.md`).
 
+## Getting started
+
+Signing up needs an invite code. Ask Prince, who owns this repository, for one. Each code works once and expires, after 14 days by default. The first page load can take up to a minute while the free server wakes up. There is no password reset yet, so keep your password somewhere safe. You can delete your account and all its data from Account.
+
+## What Talaan stores
+
+Talaan stores the applications and interviews you enter, your account name and email, and a bcrypt hash of your password (never the password itself). While you are logged in it also keeps a hashed session token. Rate limiting keeps short-lived records: those keyed by IP address stay for up to 7 days, and those keyed by a hash of your email are deleted with your account. It does not store CV files. Deleting your account removes the account, its applications, interviews and sessions. The invite code you used stays marked as used and keeps its note; it is only unlinked from your account.
+
 ## Why it exists
 
 Looking for a job in the Philippines usually means many applications at once. This app answers three questions: where does each application stand, when is the next interview, and can I check both from my phone. Times are shown in Philippine time and salaries are in pesos.
