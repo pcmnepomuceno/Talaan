@@ -1,4 +1,4 @@
-import type { Status } from "./types";
+import type { FollowUp, Status } from "./types";
 
 const TZ = "Asia/Manila";
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
@@ -83,4 +83,16 @@ export const NOT_APPLIED_YET = "Not applied yet";
 // Saved rows without a date say so; other rows without a date show nothing.
 export function dateAppliedLabel(date: string | null | undefined, status: Status): string | null {
   return formatDate(date) ?? (status === "saved" ? NOT_APPLIED_YET : null);
+}
+
+const days = (n: number) => `${n} ${n === 1 ? "day" : "days"} ago`;
+
+/** Line 3 of a follow-up row (DESIGN.md 6.5), in place of the date applied. */
+export function followUpLabel(f: FollowUp): string {
+  return `${f.last_activity === "interview" ? "Last interview" : "Applied"} ${days(f.idle_days)}`;
+}
+
+/** The count line of the follow-up view (DESIGN.md 6.5d); also what the status region announces. */
+export function followUpCount(total: number): string {
+  return total === 1 ? "1 application needs a follow-up" : `${total} applications need a follow-up`;
 }

@@ -1,7 +1,7 @@
 """Pydantic schemas: Job Application request/response bodies."""
 
 from datetime import date, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import (
     BaseModel,
@@ -80,6 +80,18 @@ class ApplicationRead(BaseModel):
 
 class ApplicationPage(BaseModel):
     items: list[ApplicationRead]
+    total: int
+    limit: int
+    offset: int
+
+
+class FollowUpItem(ApplicationRead):
+    idle_days: int
+    last_activity: Literal["applied", "interview"]
+
+
+class FollowUpPage(BaseModel):
+    items: list[FollowUpItem]
     total: int
     limit: int
     offset: int

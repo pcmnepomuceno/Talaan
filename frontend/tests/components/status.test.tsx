@@ -61,7 +61,7 @@ function Harness() {
 it("StatusFilter: labelled select, All plus nine statuses, reachable by Tab, changes value", async () => {
   render(<Harness />);
   const select = screen.getByRole("combobox", { name: "Status" }) as HTMLSelectElement;
-  expect([...select.options].map((o) => o.textContent)).toEqual(["All", ...STATUSES.map((s) => labels[s])]);
+  expect([...select.options].map((o) => o.textContent)).toEqual(["All", ...STATUSES.map((s) => labels[s]), "Needs follow-up"]);
   expect(select.value).toBe("all");
   const user = userEvent.setup();
   await user.tab();
@@ -69,6 +69,25 @@ it("StatusFilter: labelled select, All plus nine statuses, reachable by Tab, cha
   // user-event does not emulate a native select's arrow keys; the keyboard path is in the e2e.
   await user.selectOptions(select, "applied");
   expect(select.value).toBe("applied");
+});
+
+it("StatusFilter: \"Needs follow-up\" is the last option, selecting it reports follow_up, keyboard works", async () => {
+  const onChange = vi.fn();
+  render(<StatusFilter value="all" onChange={onChange} />);
+  const select = screen.getByRole("combobox", { name: "Status" }) as HTMLSelectElement;
+  const opts = [...select.options];
+  expect(opts).toHaveLength(11);
+  expect(opts.at(-1)!.textContent).toBe("Needs follow-up");
+  expect(opts.at(-1)!.value).toBe("follow_up");
+  const user = userEvent.setup();
+  await user.tab();
+  expect(document.activeElement).toBe(select);
+  await user.selectOptions(select, "follow_up");
+  expect(onChange).toHaveBeenCalledWith("follow_up");
+  render(<Harness />);
+  const [, second] = screen.getAllByRole("combobox", { name: "Status" }) as HTMLSelectElement[];
+  await user.selectOptions(second, "Needs follow-up");
+  expect(second.value).toBe("follow_up");
 });
 
 it("Banner is an alert with title and text", () => {

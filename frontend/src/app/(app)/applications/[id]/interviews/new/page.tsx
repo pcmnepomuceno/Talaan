@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { parseId, parseStatus } from "@/lib/api";
+import { parseId, parseFilter } from "@/lib/api";
 import { AppBar } from "@/components/app-bar";
 import { NotFoundState } from "@/components/not-found-state";
 import { NewInterviewScreen } from "./new-screen";
@@ -15,7 +15,7 @@ export default async function Page({
 }) {
   const { id } = await params;
   const raw = (await searchParams).status;
-  const status = parseStatus(typeof raw === "string" ? raw : undefined);
+  const status = parseFilter(typeof raw === "string" ? raw : undefined);
   const qs = status ? `?status=${status}` : "";
   const n = parseId(id);
   if (n === null) {

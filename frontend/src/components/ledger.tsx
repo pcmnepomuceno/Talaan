@@ -21,15 +21,17 @@ export function LedgerSheet({ children, label }: { children: ReactNode; label?: 
 
 type RowTarget = { href: string; onSelect?: undefined } | { href?: undefined; onSelect: () => void };
 
-// The whole row is the link or button (min 44px tall; padding makes it far taller).
+// The whole row is the link or button (min 44px tall; padding makes it far taller). `note` (the
+// follow-up idle text, DESIGN.md 6.5) takes the place of the date on line 3.
 export function ApplicationRow({
   application: a,
   selected = false,
+  note,
   ...target
-}: { application: Application; selected?: boolean } & RowTarget) {
+}: { application: Application; selected?: boolean; note?: string } & RowTarget) {
   const salary = formatPeso(a.salary);
   const mode = workModeLabel(a.mode_of_work);
-  const date = dateAppliedLabel(a.date_applied, a.status);
+  const date = note ?? dateAppliedLabel(a.date_applied, a.status);
   const cls = `flex w-full min-h-11 flex-col gap-1 p-4 text-left focus-visible:-outline-offset-2 ${
     selected ? "bg-primary-tint" : ""
   }`;

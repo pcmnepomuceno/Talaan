@@ -7,6 +7,7 @@ import {
   toInterviewFormValues,
   toInterviewPatchBody,
   fromApiApplication,
+  fromApiFollowUpRow,
   fromApiInterview,
   fromApiPage,
   fromFormValues,
@@ -151,4 +152,26 @@ it("interview bodies: create lists its five fields; patch only the changed ones"
   expect(toInterviewPatchBody(init, { ...init })).toEqual({});
   expect(toInterviewPatchBody(init, { ...init, outcome: "bad" })).toEqual({ outcome: "bad" });
   expect(toInterviewPatchBody(init, { ...init, interviewer: null, remarks: "x" })).toEqual({ interviewer: null, remarks: "x" });
+});
+
+it("fromApiFollowUpRow maps the application and the follow-up part", () => {
+  expect(fromApiFollowUpRow({ ...raw, idle_days: 12, last_activity: "applied" })).toEqual({ ...raw, follow_up: { idle_days: 12, last_activity: "applied" } });
+  expect(fromApiFollowUpRow({ ...raw, idle_days: 9, last_activity: "interview" }).follow_up).toEqual({ idle_days: 9, last_activity: "interview" });
+});
+
+it.each([
+  ["a string", { idle_days: "12" }],
+  ["a float", { idle_days: 1.5 }],
+  ["negative", { idle_days: -1 }],
+  ["missing", { idle_days: undefined }],
+  ["unsafe", { idle_days: 2 ** 60 }],
+  ["last_activity unknown", { last_activity: "added" }],
+  ["last_activity missing", { last_activity: undefined }],
+  ["last_activity wrong type", { last_activity: 1 }],
+])("fromApiFollowUpRow throws MappingError for %s", (_n, bad) => {
+  expect(() => fromApiFollowUpRow({ ...raw, idle_days: 12, last_activity: "applied", ...bad })).toThrow(MappingError);
+});
+
+it("fromApiFollowUpRow still rejects a bad application field", () => {
+  expect(() => fromApiFollowUpRow({ ...raw, status: "hired", idle_days: 12, last_activity: "applied" })).toThrow(MappingError);
 });

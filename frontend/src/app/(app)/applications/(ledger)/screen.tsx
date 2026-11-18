@@ -13,8 +13,10 @@ import { type Filter, StatusFilter } from "@/components/status-filter";
 import { ApplicationRow, LedgerSheet, LedgerSkeleton } from "@/components/ledger";
 import { useToast } from "@/components/toast";
 import { WakingUp } from "@/components/waking-up";
-import { deleteApplication, parseStatus } from "@/lib/api";
+import { deleteApplication, parseFilter } from "@/lib/api";
 import { loadedOnce } from "@/lib/cache";
+import { followUpCount, followUpLabel } from "@/lib/format";
+import { FOLLOW_UP } from "@/lib/types";
 import { type DetailState, useApplicationDetail } from "./use-detail";
 import { useApplicationList } from "./use-list";
 
@@ -34,7 +36,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
   const router = useRouter();
   const toast = useToast();
   const id = useParams<{ id?: string }>().id;
-  const status = parseStatus(useSearchParams().get("status"));
+  const status = parseFilter(useSearchParams().get("status"));
   const qs = status ? `?status=${status}` : "";
 
   const [confirming, setConfirming] = useState(false);
@@ -140,7 +142,17 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
             ) : view.kind === "failed" ? (
               <LoadError title="Couldn't load applications." onRetry={retry} />
             ) : view.total === 0 ? (
-              status === undefined ? (
+              status === FOLLOW_UP ? (
+                <EmptyState
+                  title="Nothing to follow up on right now."
+                  message="Applications at Applied with no activity for 7 days or more, and no interview ahead, show here."
+                  action={
+                    <Button variant="secondary" href={base}>
+                      Show all
+                    </Button>
+                  }
+                />
+              ) : status === undefined ? (
                 <EmptyState
                   title="No applications yet."
                   message="Add the first job you applied to."
@@ -159,6 +171,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
               )
             ) : (
               <>
+                {status === FOLLOW_UP && <p className="mb-3 text-caption text-text-secondary">{followUpCount(view.total)}</p>}
                 {view.refreshFailed && (
                   <div className="mb-3">
                     <LoadError title="Couldn't refresh the list. Showing the last loaded rows." onRetry={retry} />
@@ -171,6 +184,7 @@ export function ApplicationsScreen({ children }: { children: ReactNode }) {
                       application={a}
                       href={`/applications/${a.id}${qs}`}
                       selected={String(a.id) === id}
+                      note={status === FOLLOW_UP && a.follow_up ? followUpLabel(a.follow_up) : undefined}
                     />
                   ))}
                 </LedgerSheet>

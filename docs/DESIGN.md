@@ -1,4 +1,4 @@
-# Talaan Design System v2.5 (Design.md)
+# Talaan Design System v2.6 (Design.md)
 
 This file is the single source of truth for Talaan's look. Screens must use these exact token values. Do not substitute a Material 3 palette or any color not listed here. Do not copy the layout, content or branding of any other product.
 
@@ -30,7 +30,7 @@ Screens may only show data that exists in the product. Never invent fields.
 - **Account fields**: account name, email, password, invite code (sign up only).
 - **Not in v1, do not design**: notification bell, search field, per-status counts, "total" or "active interviews" summary banners, location or city, industry, interview "stage x of y", meeting links, draft state, profile photos, social login.
 - **Navigation**: exactly three destinations, `Applications`, `Interviews` and `Account` (v2.4; `Interviews` is the agenda of 8.8).
-- **Filtering**: the list can be filtered by status only (tabs show the status name, no counts).
+- **Filtering** (v2.6): the list can be filtered by status (the select shows the status name, no counts) and by one extra view, "Needs follow-up" (6.4). That view's count line (6.5d) is the only count in the app; the ban on per-status counts stays.
 
 ---
 
@@ -166,14 +166,19 @@ Track height 44, bg `color-surface-subtle`, 1px `color-border-subtle`, radius `r
 
 ### 6.4 Status stamp and status filter
 - **Status stamp**: height 28, padding 4 x 10, radius `radius-xs`, Stamp type, sentence case label, uses the status tokens (text, bg, 1px border). It is a flat rectangle, never a pill, and has no dot or icon. Interview outcome stamps use the same component.
-- **Status filter** (v2.3, replaces the filter tabs): one native select from 6.2 (48px, same tokens and states), label "Status", options "All" then the nine statuses in enum order (Saved first), label only, no counts. Default All. Full width under 768; from 768 it is at most 320px wide.
+- **Status filter** (v2.3, replaces the filter tabs): one native select from 6.2 (48px, same tokens and states), label "Status", options "All", then the nine statuses in enum order (Saved first), then "Needs follow-up" last (v2.6), label only, no counts. Default All. "Needs follow-up" is a view, not a status: it lists applications at Applied that have no interview ahead and no activity for 7 days or more, quietest first, and it is kept in `?status=follow_up` like a status. Full width under 768; from 768 it is at most 320px wide.
 
 ### 6.5 Ledger sheet and application row
 The applications list is one ledger sheet: a single container (bg `color-surface-card`, 1px `color-border-subtle`, radius `radius-sm`, no shadow) holding rows separated by 1px `color-border-subtle` rules. Rows are not separate cards. Each row is at least 44px tall, tappable as a whole, padding 16:
 1. Line 1: job title (Row Title, `color-text-primary`) and the status stamp at the right.
 2. Line 2: company name (Caption, `color-text-secondary`).
 3. Line 3: work mode and salary on the left (Caption Bold for salary, format `Hybrid · ₱85,000 / month`) and date applied on the right (Caption, `color-text-muted`, format `Oct 14, 2026`). When status is Saved and there is no date, show "Not applied yet".
+   - **Follow-up rows (v2.6)**: in the "Needs follow-up" view the date on the right of line 3 is replaced by the idle text, `Applied 12 days ago` or `Last interview 9 days ago` (`Applied 1 day ago` for one day). Same Caption, `color-text-muted`, tabular numbers, no color change. Nothing else in the row differs.
 On desktop the selected row has bg `color-primary-tint` (no accent stripe).
+
+### 6.5d Follow-up count line (v2.6)
+Shown only in the "Needs follow-up" view, once the list has loaded and has rows: one Caption line in `color-text-secondary` between the select and the ledger sheet, for example `4 applications need a follow-up` or `1 application needs a follow-up`. The number is the server's total, not the rows loaded so far, and it stays while Load more appends rows. It does not explain the rule (the empty state does, once). The same sentence is announced once, politely, through the screen's existing status region when page 1 of the view first loads (Load more announces only "N more applications loaded").
+This view uses no red or any error, warning or danger token, no urgency wording ("overdue", "urgent", "late", "behind"), no exclamation marks, no badges, no streaks and no new tokens.
 
 ### 6.5b Detail rows
 The detail screen's key details are ruled rows in one ledger sheet: label in Body `color-text-secondary` on the left, value in Body at weight 600 `color-text-primary` on the right with tabular numbers. A row whose value is missing (no salary, no website, no date) is omitted, never shown as a zero or a dash.
@@ -212,6 +217,8 @@ Radius `radius-sm`, padding 16, 1px border. Error banner uses the three error to
 
 ### 6.11 Empty state
 Centered, padding 48 24, 48px outline icon (Material Symbol "description") in `color-text-muted`, title Section Title, one plain sentence in Caption `color-text-muted` (no exclamation marks), one standard 48px primary Button. Example: "No applications yet. Add the first job you applied to." with a button "Add application".
+
+**Follow-up empty state (v2.6)**: title "Nothing to follow up on right now.", one plain Caption sentence "Applications at Applied with no activity for 7 days or more, and no interview ahead, show here.", and a secondary 48px button "Show all" (back to All, like the status empty state). No exclamation mark, no praise.
 
 ### 6.12 Loading skeleton
 Rows keep their ledger sheet and rules; each row shows three bars. Base `color-border-subtle`, highlight `color-surface-subtle`. Gentle opacity pulse 0.6 to 1.0 over 1.8s. Radius 4.
@@ -255,7 +262,7 @@ The month view of the Interviews screen (8.8). Existing tokens only: no dots, no
    - Failed sign up messages (amended in F4; the API tells the user which field to fix): invite code field "Invalid or expired invite code."; email field "Email already exists."; any password or format rule from the API on its own field. Too many attempts: banner "Too many attempts. Try again in about N minutes." Server or network trouble: banner "Talaan isn't responding right now. Try again in a moment."
    - Invite code field: hint "Paste the code you were given; dashes are optional", no spellcheck, capital letters on mobile keyboards.
    - Notices under the segmented control: "Your session expired. Log in again." and "Your account has been deleted."
-2. **Applications list**: app bar, status filter select (label "Status", All plus each status, label only), the ledger sheet of application rows, floating add button, empty state, loading skeletons. Rows load 50 at a time per status filter; a secondary "Load more" button below the sheet appends the next 50 and disappears when every row is shown. "No applications yet." (filter All, no rows) and "No applications with this status." (a status chosen, no rows) are different states.
+2. **Applications list**: app bar, status filter select (label "Status", All plus each status, label only), the ledger sheet of application rows, floating add button, empty state, loading skeletons. Rows load 50 at a time per status filter; a secondary "Load more" button below the sheet appends the next 50 and disappears when every row is shown. "No applications yet." (filter All, no rows) and "No applications with this status." (a status chosen, no rows) are different states. The "Needs follow-up" view (v2.6) adds the select option, the idle text on line 3 of its rows (6.5), a count line (6.5d) and its own empty state (6.11); it pages 50 at a time like any other filter.
 3. **Application detail**: a full page (not an overlay) with a back arrow in the app bar; header block (job title and company at the full card width, then below a 1px `color-border-subtle` rule one row with the status stamp on the left and a Secondary "Change status" button on the right, so a long title never loses width to the button; the button opens the status change dialog of 6.8b; the same header is used in the 1280 detail pane), Key details (monthly gross salary, work mode, date applied, website link), Notes, Interviews as ledger rows in date order with an "Add interview" button in the section header (the empty state "No interviews yet." carries the same button), Edit and Delete as text buttons in the app bar. Delete opens the confirmation sheet.
 4. **Add / edit application form** (amended in F5): one shared form. Fields in order: Job title (required), Company (required), Status (select of all nine statuses, default Saved on create), Date applied (the browser's native date input; helper "Leave blank to use today's date." for every status except Saved, where it reads "Leave blank if you haven't applied."), Work mode (required segmented control with **nothing selected on create**; edit pre-selects the stored value), Monthly gross salary (PHP) with `₱` prefix, `/ month` suffix, `inputmode="numeric"`, digits only and helper "Enter the amount before tax", Company website, Notes. The contact email is not in the form. Buttons: Primary "Save application" (shows "Saving…" at the same width while the request runs) and a separate Secondary "Cancel".
    - Rules mirror the API: Job title and Company are trimmed, 1 to 200 characters; website is an http(s) address up to 2000 characters; notes up to 5000; salary a whole number from 0 to 2,147,483,647 (empty sends nothing; a pasted "85,000" is accepted, "-5" and "1.5" are rejected). Lengths count code points, so emoji count once; the inputs' own `maxLength` is twice the limit as a typing cap only.

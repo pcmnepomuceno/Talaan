@@ -2,14 +2,17 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getApplications } from "@/lib/api";
-import { getList, listFresh, listsSettled, listStamp, onApplicationStored, onCachesCleared, setList } from "@/lib/cache";
-import type { Application, Status } from "@/lib/types";
+import { getList, listFresh, listsSettled, listStale, listStamp, onApplicationStored, onCachesCleared, setList } from "@/lib/cache";
+import { followUpCount } from "@/lib/format";
+import { FOLLOW_UP, type ListFilter, type ListRow } from "@/lib/types";
 
-// One status tab = one cached list, fetched 50 at a time from the server (the API pages and
+// One filter (a status tab or the follow-up view) = one cached list, fetched 50 at a time from the server (the API pages and
 // filters). Cached rows show at once while page 1 is refetched; the fresh page 1 then REPLACES the
 // entry, dropping any extra pages the user had loaded, because their offsets may have shifted.
 // A full clear (clearCaches) empties the cache and refetches the current tab; a status change
-// (storeApplication) patches the cached rows, which the view reads directly. A page that may straddle
+// (storeApplication) patches the cached rows, which the view reads directly, except the follow-up list:
+// an interview write or a status change marks it stale (cache.ts), its old rows stay on screen and page 1
+// is refetched; a stored server answer clears the mark. A page that may straddle
 // a status write (listFresh false) is never stored: it is re-issued once the write ends. Load more asks for
 // nextOffset (rows the server has sent), not items.length (rows left after de-duplication); a
 // page that adds no new row means the offsets shifted, so Load more is withdrawn and page 1 refetched.
@@ -18,7 +21,7 @@ export type ListView =
   | { kind: "failed" }
   | {
       kind: "ready";
-      items: Application[];
+      items: ListRow[];
       total: number;
       nextOffset: number;
       refreshing: boolean; // showing cached rows while page 1 is refetched
@@ -38,7 +41,7 @@ export function appendUnique<T extends { id: number }>(existing: T[], incoming: 
 /** How long "N more applications loaded" stays in the live region before it is cleared. */
 export const ANNOUNCE_MS = 5000;
 
-export function useApplicationList(status: Status | undefined) {
+export function useApplicationList(status: ListFilter | undefined) {
   const [tick, setTick] = useState(0);
   const [fetched, setFetched] = useState<Fetched | null>(null);
   const [announcement, setAnnouncement] = useState("");
@@ -59,6 +62,12 @@ export function useApplicationList(status: Status | undefined) {
     return () => clearTimeout(t);
   }, [announcement]);
   const clearAnnouncement = useCallback(() => setAnnouncement(""), []);
+  // The follow-up count is announced once per selection of that view (DESIGN.md 6.5d), when its page 1
+  // first lands: not again after a refetch of the same selection. Choosing another filter resets it.
+  const countSaid = useRef(false);
+  useEffect(() => {
+    countSaid.current = false;
+  }, [status]);
   const keyRef = useRef(key);
   useEffect(() => {
     keyRef.current = key;
@@ -72,13 +81,16 @@ export function useApplicationList(status: Status | undefined) {
     };
   }, []);
 
-  // Only a full clear refetches: an interview write clears one detail (an id is passed) and no list row changes.
-  useEffect(() => onCachesCleared((id) => id === undefined && setTick((n) => n + 1)), []);
+  // A full clear refetches. An interview write clears one detail (an id is passed) and no list row
+  // changes, except that it also marks the follow-up list stale (cache.ts): its old rows stay on screen
+  // and the list is refetched, so that list is refetched here too.
+  useEffect(() => onCachesCleared((id) => (id === undefined || status === FOLLOW_UP) && setTick((n) => n + 1)), [status]);
 
   // A status change patched the cached lists in place (storeApplication): re-render from the cache,
-  // or refetch when the list on screen was dropped (its order around the row was unknown).
+  // or refetch when the list on screen was dropped, or is the follow-up list (marked stale, never
+  // patched: its old rows stay on screen while page 1 is refetched).
   const [, setPatched] = useState(0);
-  useEffect(() => onApplicationStored(() => (getList(status) ? setPatched((n) => n + 1) : setTick((n) => n + 1))), [status]);
+  useEffect(() => onApplicationStored(() => (status !== FOLLOW_UP && getList(status) ? setPatched((n) => n + 1) : setTick((n) => n + 1))), [status]);
 
   useEffect(() => {
     let live = true;
@@ -91,6 +103,10 @@ export function useApplicationList(status: Status | undefined) {
         if (!listFresh(s)) return again();
         setList(status, { ...page, nextOffset: page.items.length });
         setFetched({ key, failed: false, refreshFailed: false, more: "idle" });
+        if (status === FOLLOW_UP && page.total > 0 && !countSaid.current) {
+          countSaid.current = true;
+          setAnnouncement(followUpCount(page.total));
+        }
       },
       () => {
         if (!live) return;
@@ -126,6 +142,12 @@ export function useApplicationList(status: Status | undefined) {
         await listsSettled();
         const cur = getList(status);
         if (!here() || !cur) return;
+        if (listStale(status)) {
+          // Known out of date (an interview write, a status change, or a failed refetch): ask for page 1, append nothing.
+          mark("idle");
+          setTick((n) => n + 1);
+          return;
+        }
         const s = listStamp();
         const page = await getApplications(status, cur.nextOffset);
         if (!here()) return;
@@ -158,7 +180,9 @@ export function useApplicationList(status: Status | undefined) {
 
   let view: ListView;
   const rows = getList(status);
-  if (fetched?.key === key) {
+  // A stale entry whose outcome belongs to this key but not to a refetch of it (the filter was left and re-entered
+  // before another list landed) is still refreshing; a failed refetch keeps its banner.
+  if (fetched?.key === key && (!listStale(status) || fetched.refreshFailed)) {
     view = fetched.failed
       ? { kind: "failed" }
       : rows

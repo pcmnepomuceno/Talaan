@@ -6,7 +6,8 @@
 //   - resetCaches(): clearCaches() and every status window ends (login, logout and account deletion:
 //     one user's rows never reach the next, and a write cut off by a 401 never blocks the lists).
 //   - clearDetail(id): one detail is dropped and refetched (interview create and edit). An interview
-//     changes nothing a list row shows, so the lists and every other detail stay valid.
+//     changes nothing a list row shows, so the lists and every other detail stay valid (the follow-up
+//     list is only marked stale, see below).
 //   - replaceDetail(id, entry): like clearDetail, but the entry is replaced in the same step, so the
 //     detail never shows a skeleton while it refetches (interview delete).
 //   - The interviews agenda (getAgenda) is dropped, and its version bumped, by clearCaches() and by
@@ -18,16 +19,23 @@
 //     or onto another page.
 //   - The month view's ranges (getCalendar) go exactly where the agenda goes (dropAgenda) and share its
 //     version: the same writes change what a day shows, and a status change does not.
+//   - The follow-up list (key "follow_up") is marked stale, never patched: its membership depends on
+//     interview times and the clock, which a row from a status PATCH does not carry. A stale list is
+//     kept (the screen shows its rows) and refetched by the screen; setList (a stored server answer)
+//     clears the mark. storeApplication marks it before patching the others, and clearDetail/replaceDetail
+//     (every interview write) mark it too; each moves the list epoch, so a follow-up page requested before
+//     is refused and asked again. listStale tells Load more to ask for page 1 instead of appending.
+//     clearCaches (and so resetCaches) drops it with every other list.
 //   - storeApplication(row, from): a status change. Every list and the detail are patched from the
 //     server's row; only a list whose result cannot be known is dropped (patchList). The list stamp
 //     moves, and changeStatus brackets the PATCH with beginMove()/endMove() (see listFresh).
 // Each of these sets the new state before notifying listeners, in one synchronous call, so no
 // caller has to win a race against React's next render.
-import type { AgendaInterview, Application, Interview } from "./types";
+import { type AgendaInterview, type Application, FOLLOW_UP, type Interview, type ListRow } from "./types";
 
 // nextOffset = the server offset of the next page: offset + rows the server sent, which can be more
 // than items.length when de-duplication dropped rows. Load more is offered while it is below total.
-export type ListEntry = { items: Application[]; total: number; nextOffset: number };
+export type ListEntry = { items: ListRow[]; total: number; nextOffset: number };
 export type DetailEntry = { application: Application; interviews: { items: Interview[]; total: number } | null };
 
 export type AgendaKey = "upcoming" | "past";
@@ -38,6 +46,7 @@ export type AgendaEntry = { items: AgendaInterview[]; total: number; nextOffset:
 export type CalendarEntry = { items: AgendaInterview[]; total: number; truncated: boolean };
 
 const lists = new Map<string, ListEntry>();
+const stale = new Set<string>(); // list keys whose rows may be out of date: only setList() (a stored server answer) clears one
 const calendar = new Map<string, CalendarEntry>();
 const agenda = new Map<AgendaKey, AgendaEntry>();
 let agendaEpoch = 0; // bumped whenever the agenda is dropped: guards in-flight agenda responses
@@ -59,7 +68,10 @@ export const getList = (status?: string) => lists.get(listKey(status));
 export const setList = (status: string | undefined, entry: ListEntry) => {
   loaded = true;
   lists.set(listKey(status), entry);
+  stale.delete(listKey(status));
 };
+/** The cached list may be out of date (the follow-up list after a write): refetch it, never append a page to it. */
+export const listStale = (status?: string) => stale.has(listKey(status));
 export const getDetail = (id: number) => details.get(id);
 export const setDetail = (id: number, entry: DetailEntry) => {
   loaded = true;
@@ -97,6 +109,7 @@ export function onCachesCleared(fn: (id?: number) => void) {
 
 export function clearCaches() {
   lists.clear();
+  stale.clear();
   details.clear();
   dropAgenda();
   version++;
@@ -109,7 +122,7 @@ export function clearCaches() {
 // last change to the lists (listStamp unchanged) and no status write is in flight when it lands. A
 // page the server answered after the commit but that lands before the PATCH response would otherwise
 // get the change applied twice by patchList. A refused page is re-issued once the writes end.
-// listEpoch is bumped by clearCaches() and storeApplication(). Not by beginMove(): a page landing during the PATCH
+// listEpoch is bumped by clearCaches(), storeApplication() and bumpDetail() (clearDetail, replaceDetail). Not by beginMove(): a page landing during the PATCH
 // is refused by `moving`, and a PATCH that fails (4xx/500) changed nothing, so an earlier page is still good.
 let listEpoch = 0;
 let moving = 0; // status writes in flight
@@ -219,7 +232,9 @@ export function onApplicationStored(fn: (row: Application) => void) {
  */
 export function storeApplication(row: Application, oldStatus: string) {
   listEpoch++;
+  markFollowUpStale();
   for (const [key, entry] of [...lists]) {
+    if (key === FOLLOW_UP) continue; // never patched: see the header
     const next = patchList(key, entry, row, oldStatus);
     if (next === undefined) lists.delete(key);
     else if (next !== entry) lists.set(key, next);
@@ -229,7 +244,14 @@ export function storeApplication(row: Application, oldStatus: string) {
   for (const fn of [...stored]) fn(row);
 }
 
+// Kept, not dropped, so the screen shows its rows while it refetches page 1 (never patched: see the header).
+function markFollowUpStale() {
+  if (lists.has(FOLLOW_UP)) stale.add(FOLLOW_UP);
+}
+
 function bumpDetail(id: number) {
+  markFollowUpStale(); // an interview time decides who is on the follow-up list
+  listEpoch++;
   dropAgenda();
   detailBumps.set(id, detailStamp(id) + 1);
   for (const fn of [...listeners]) fn(id);

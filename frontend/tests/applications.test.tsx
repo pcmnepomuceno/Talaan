@@ -66,11 +66,11 @@ it("invalid status falls back to all, selected and unfiltered", async () => {
   expect(fake.calls[0].path).toBe("/applications?limit=50&offset=0");
 });
 
-it("the select offers All and the nine statuses, label only", async () => {
+it("the select offers All, the nine statuses, then Needs follow-up, label only", async () => {
   screenUnderTest();
   await rows();
   expect([...statusSelect().options].map((o) => o.textContent)).toEqual([
-    "All", "Saved", "Applied", "Screening", "Interviewing", "Offered", "Accepted", "Rejected", "Withdrawn", "Ghosted",
+    "All", "Saved", "Applied", "Screening", "Interviewing", "Offered", "Accepted", "Rejected", "Withdrawn", "Ghosted", "Needs follow-up",
   ]);
   expect(statusSelect().value).toBe("all");
 });

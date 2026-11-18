@@ -27,6 +27,7 @@ withEnv(async ({ base, createInvite }) => {
   });
   const full = await seedAccount({ base, invite: createInvite("f5 screens"), email: `shots-${Date.now()}@example.com` });
   const empty = await seedAccount({ base, invite: createInvite("f5 screens empty"), email: `empty-${Date.now()}@example.com`, generic: 0, hand: false });
+  const followUp = await seedAccount({ base, invite: createInvite("f10 screens"), email: `followup-${Date.now()}@example.com`, generic: 0, hand: false, followUp: true });
   const browser = await chromium.launch(chromiumOptions());
   let shots = 0;
 
@@ -50,6 +51,25 @@ withEnv(async ({ base, createInvite }) => {
         await page.getByLabel("Job title").waitFor();
         await page.waitForFunction(() => !document.body.innerText.includes("Loading application"));
       };
+
+      // ---- F10 follow-up view (390 and 1280 only) ----
+      if (width !== 768) {
+        {
+          const { ctx, page, shot } = await open(followUp);
+          await page.goto(`${base}/applications?status=follow_up`);
+          await page.locator("p", { hasText: "4 applications need a follow-up" }).waitFor();
+          await rowsReady(page);
+          await shot("list-follow-up");
+          await ctx.close();
+        }
+        {
+          const { ctx, page, shot } = await open(empty);
+          await page.goto(`${base}/applications?status=follow_up`);
+          await page.getByText("Nothing to follow up on right now.").waitFor();
+          await shot("list-follow-up-empty");
+          await ctx.close();
+        }
+      }
 
       // ---- account with data ----
       {

@@ -3,10 +3,12 @@
 // caches itself (cache.ts), so no screen can forget to. The rules:
 //   - create, edit, delete of an application: clearCaches()
 //   - status change: storeApplication(row, from) patches every cache from the server's row (no
-//     refetch), inside beginMove()/endMove() so no list page can straddle the PATCH; clearCaches()
+//     refetch; the follow-up list is only marked stale), inside beginMove()/endMove() so no list page can straddle the PATCH; clearCaches()
 //     when that response cannot be mapped, on a 404, or with no answer (network error, 60 s timeout)
-//   - interview create and edit: clearDetail(applicationId)
-//   - interview delete: replaceDetail(applicationId, page minus the row) (the detail still refetches)
+//   - interview create and edit: clearDetail(applicationId), which also marks the follow-up list stale
+//     (kept on screen, refetched by the screen, never patched)
+//   - interview delete: replaceDetail(applicationId, page minus the row) (the detail still refetches);
+//     it marks the follow-up list stale the same way
 //   - any 404 on a write: clearCaches() (the row, or its application, may be gone)
 //   - the agenda and calendar caches (cache.ts) are dropped by clearCaches, clearDetail and replaceDetail, so
 //     every rule above that calls one of them also drops them; changeStatus's storeApplication keeps them
@@ -17,6 +19,7 @@ import {
   fromApiAgendaPage,
   fromApiApplication,
   fromApiCalendarRange,
+  fromApiFollowUpRow,
   fromApiInterview,
   fromApiPage,
   idOf,
@@ -28,7 +31,7 @@ import {
   toInterviewPatchBody,
   toPatchBody,
 } from "./mappers";
-import { type AgendaInterview, type Application, type CalendarRange, type Interview, STATUSES, type Status } from "./types";
+import { type AgendaInterview, type Application, type CalendarRange, FOLLOW_UP, type Interview, type ListFilter, type ListRow, STATUSES, type Status } from "./types";
 
 export const PAGE_SIZE = 50;
 export const INTERVIEWS_LIMIT = 100;
@@ -47,11 +50,20 @@ export function parseId(raw: string): number | null {
 export const parseStatus = (raw: string | null | undefined): Status | undefined =>
   STATUSES.find((s) => s === raw);
 
-/** One page, newest first. `total` counts every row matching the status filter, not just this page. */
-export async function getApplications(status?: Status, offset = 0): Promise<Page<Application>> {
+/** The list filter from a query string: a status or "follow_up"; anything else means "all". */
+export const parseFilter = (raw: string | null | undefined): ListFilter | undefined =>
+  raw === FOLLOW_UP ? raw : parseStatus(raw);
+
+/**
+ * One page. `total` counts every row matching the filter, not just this page. A status (or none) lists
+ * newest first; "follow_up" sends follow_up=true (the server's default of 7 days) and lists the quiet
+ * `applied` rows, longest idle first, each with a `follow_up` part.
+ */
+export async function getApplications(filter?: ListFilter, offset = 0): Promise<Page<ListRow>> {
   const q = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) });
-  if (status) q.set("status", status);
-  return fromApiPage(await request<unknown>(`${BASE}?${q}`), fromApiApplication);
+  if (filter === FOLLOW_UP) q.set("follow_up", "true");
+  else if (filter) q.set("status", filter);
+  return fromApiPage(await request<unknown>(`${BASE}?${q}`), filter === FOLLOW_UP ? fromApiFollowUpRow : fromApiApplication);
 }
 
 /** null = not found (missing, or another user's: the API answers 404 for both). */

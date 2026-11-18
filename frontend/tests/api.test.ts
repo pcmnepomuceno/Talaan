@@ -10,6 +10,7 @@ import {
   getApplication,
   getApplications,
   getInterviews,
+  parseFilter,
   parseId,
   parseStatus,
   updateApplication,
@@ -45,6 +46,46 @@ it("getApplications returns the page's rows and the filtered total", async () =>
   expect(page.items.map((a) => a.id)).toEqual([2]);
   expect(page.total).toBe(1);
   expect((await getApplications()).items.map((a) => a.id)).toEqual([5, 4, 3, 2, 1]);
+});
+
+const followRow = (id: number, rest = {}) => ({ ...makeApp(id), idle_days: 12, last_activity: "applied", ...rest });
+
+it("getApplications follow_up: sends follow_up=true and no days or status, and maps the follow-up part", async () => {
+  fake.on("GET", /follow_up=true/, () => json(200, { items: [followRow(3), followRow(2, { idle_days: 9, last_activity: "interview" })], total: 2, limit: 50, offset: 0 }));
+  const page = await getApplications("follow_up", 50);
+  expect(fake.calls[0].path).toBe("/applications?limit=50&offset=50&follow_up=true");
+  expect(fake.calls[0].path).not.toMatch(/days=|status=/);
+  expect(page.items.map((a) => a.follow_up)).toEqual([
+    { idle_days: 12, last_activity: "applied" },
+    { idle_days: 9, last_activity: "interview" },
+  ]);
+  expect(page.items[0].company).toBe("Company 3");
+});
+
+it("getApplications follow_up rejects a row without the follow-up part; a normal list rows carry none", async () => {
+  fake.on("GET", /follow_up=true/, () => json(200, { items: [makeApp(3)], total: 1, limit: 50, offset: 0 }));
+  await expect(getApplications("follow_up")).rejects.toBeInstanceOf(MappingError);
+  expect((await getApplications("applied")).items.every((a) => !("follow_up" in a))).toBe(true);
+});
+
+it.each([
+  ["follow_up", "follow_up"],
+  ["applied", "applied"],
+  ["saved", "saved"],
+  ["ghosted", "ghosted"],
+  ["all", undefined],
+  ["", undefined],
+  ["Follow_up", undefined],
+  ["follow-up", undefined],
+  ["follow_up,applied", undefined],
+  ["bogus", undefined],
+  [null, undefined],
+  [undefined, undefined],
+])("parseFilter(%j) is %j", (raw, want) => {
+  expect(parseFilter(raw)).toBe(want);
+});
+it("parseFilter accepts the nine statuses", () => {
+  for (const s of ["saved", "applied", "screening", "interviewing", "offered", "accepted", "rejected", "withdrawn", "ghosted"]) expect(parseFilter(s)).toBe(s);
 });
 
 it("getApplication: 404 is null, other errors throw", async () => {

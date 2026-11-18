@@ -1,9 +1,20 @@
 """Job Application routes. Every route is scoped to the caller (`created_by`)."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy import func
+from fastapi.exceptions import RequestValidationError
+from sqlalchemy import (
+    Date,
+    Integer,
+    case,
+    cast,
+    exists,
+    func,
+    literal,
+    select,
+    type_coerce,
+)
 from sqlalchemy.orm import Session as DBSession
 
 from app.applications.dependencies import get_owned_application
@@ -14,13 +25,56 @@ from app.applications.schemas import (
     ApplicationPage,
     ApplicationRead,
     ApplicationUpdate,
+    FollowUpItem,
+    FollowUpPage,
 )
 from app.auth.dependencies import get_current_user
 from app.config import MANILA
 from app.database import get_db
+from app.interviews.models import Interview
 from app.users.models import User
 
 router = APIRouter(prefix="/applications", tags=["applications"])
+
+
+def _now() -> datetime:
+    """The follow-up list's clock (a function so tests can pin it)."""
+    return datetime.now(timezone.utc)
+
+
+def _bad(name: str, msg: str) -> RequestValidationError:
+    return RequestValidationError([{"type": "value_error", "loc": ("query", name), "msg": msg, "input": None}])
+
+
+def _pht_day(col):
+    return cast(func.timezone("Asia/Manila", col), Date)
+
+
+def _follow_up(db: DBSession, user: User, days: int):
+    """Applied rows with no upcoming interview whose last activity (apply date or latest past
+    interview, in PHT days) is at least `days` days before today (PHT, computed here)."""
+    now = _now()
+    today = now.astimezone(MANILA).date()
+    applied_day = func.coalesce(JobApplication.date_applied, _pht_day(JobApplication.created_at))
+    interview_day = (
+        select(_pht_day(func.max(Interview.scheduled_at)))
+        .where(Interview.job_application_id == JobApplication.id, Interview.scheduled_at < now)
+        .correlate(JobApplication)
+        .scalar_subquery()
+    )
+    last_day = func.greatest(applied_day, interview_day)  # GREATEST ignores NULL
+    idle = type_coerce(literal(today, Date) - last_day, Integer)
+    upcoming = exists().where(Interview.job_application_id == JobApplication.id, Interview.scheduled_at >= now)
+    q = (
+        db.query(JobApplication, idle, case((interview_day >= applied_day, "interview"), else_="applied"))
+        .filter(
+            JobApplication.created_by == user.id,
+            JobApplication.status == ApplicationStatus.APPLIED,
+            ~upcoming,
+            idle >= days,
+        )
+    )
+    return q, last_day
 
 
 def _fill_date(row: JobApplication) -> None:
@@ -49,14 +103,29 @@ def create_application(
     return row
 
 
-@router.get("", response_model=ApplicationPage)
+@router.get("", response_model=ApplicationPage | FollowUpPage)
 def list_applications(
+    follow_up: bool = False,
+    days: int | None = Query(None, ge=1, le=90),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0, le=INT4_MAX),
     status: ApplicationStatus | None = None,
     user: User = Depends(get_current_user),
     db: DBSession = Depends(get_db),
 ):
+    if follow_up:
+        if status is not None:
+            raise _bad("status", "status cannot be combined with follow_up")
+        q, last_day = _follow_up(db, user, 7 if days is None else days)
+        total = q.with_entities(func.count(JobApplication.id)).scalar()
+        rows = q.order_by(last_day.asc(), JobApplication.id.asc()).limit(limit).offset(offset).all()
+        items = [
+            FollowUpItem(**ApplicationRead.model_validate(r).model_dump(), idle_days=i, last_activity=a)
+            for r, i, a in rows
+        ]
+        return FollowUpPage(items=items, total=total, limit=limit, offset=offset)
+    if days is not None:
+        raise _bad("days", "days needs follow_up=true")
     q = db.query(JobApplication).filter(JobApplication.created_by == user.id)
     if status is not None:
         q = q.filter(JobApplication.status == status)

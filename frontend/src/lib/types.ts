@@ -55,6 +55,14 @@ export type Application = {
   updated_at: string;
 };
 
+// The follow-up list (GET /applications?follow_up=true): each row is an application plus how long it
+// has been quiet. Rows of every other list carry no follow_up part.
+export type FollowUp = { idle_days: number; last_activity: "applied" | "interview" };
+export type ListRow = Application & { follow_up?: FollowUp };
+// The Applications list's filter: one status, or the follow-up view. Never a status value itself.
+export const FOLLOW_UP = "follow_up" as const;
+export type ListFilter = Status | typeof FOLLOW_UP;
+
 export type Interview = {
   id: number;
   job_application_id: number;

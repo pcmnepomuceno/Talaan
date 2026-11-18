@@ -28,8 +28,34 @@ const HAND = [
   ] },
 ];
 
-/** Signs up and seeds; returns the credentials and what was created. */
-async function seedAccount({ base, invite, email = `seed-${Date.now()}@example.com`, name = "Ana Cruz", generic = 50, hand = true }) {
+// A PHT calendar day `n` days from today, as YYYY-MM-DD.
+const phtDay = (n) => new Date(Date.now() + 8 * 3600e3 + n * 864e5).toISOString().slice(0, 10);
+
+// followUp: true. Dates count back from today in PHT, so the rows keep qualifying (or not) on any day.
+// Included, in list order: Liwayway (21 idle days), Tala (12), Sampaguita (9, last activity = interview), Banaag (8).
+function followUpRows() {
+  const row = (company, job_name, date_applied, extra = {}) => ({
+    company, job_name, status: "applied", mode_of_work: "remote", salary: null, date_applied, contact_website: null, ...extra,
+  });
+  const at = (n) => `${phtDay(n)}T10:00:00+08:00`;
+  const iv = (n) => [{ scheduled_at: at(n), mode: "online", outcome: "pending", interviewer: null, remarks: null }];
+  return [
+    row("Liwayway Analytics", "Data Analyst", phtDay(-21), { contact_website: "https://liwayway.example.ph" }),
+    row("Tala Robotics", "Embedded Engineer", phtDay(-12), { contact_website: "https://tala.example.ph" }),
+    row("Sampaguita Cloud", "Platform Engineer", phtDay(-30), { interviews: iv(-9) }),
+    row("Banaag Health Tech", "Backend Developer", phtDay(-8)),
+    // Excluded, one per reason.
+    row("Mabilis Delivery", "Support Engineer", phtDay(-3)), // too recent
+    row("Hiraya Systems", "QA Engineer", phtDay(-20), { status: "screening" }), // status
+    row("Kalikasan Foods", "Product Designer", null, { status: "saved" }), // status
+    row("Umaga Labs", "ML Engineer", phtDay(-20), { interviews: iv(1) }), // interview ahead
+    row("Dalisay Payments", "Security Engineer", phtDay(-25), { interviews: iv(-2) }), // recent interview
+    row("Habagat Media", "Site Reliability Engineer", phtDay(5)), // date_applied in the future
+  ];
+}
+
+/** Signs up and seeds; returns the credentials and what was created. followUp adds the follow-up rows (off by default). */
+async function seedAccount({ base, invite, email = `seed-${Date.now()}@example.com`, name = "Ana Cruz", generic = 50, hand = true, followUp = false }) {
   const ctx = await request.newContext({ baseURL: base });
   const must = async (res, what) => {
     if (!res.ok()) throw new Error(`${what} failed: ${res.status()} ${await res.text()}`);
@@ -55,7 +81,7 @@ async function seedAccount({ base, invite, email = `seed-${Date.now()}@example.c
     );
     apps++;
   }
-  for (const { interviews: ivs = [], ...body } of hand ? HAND : []) {
+  for (const { interviews: ivs = [], ...body } of [...(hand ? HAND : []), ...(followUp ? followUpRows() : [])]) {
     const row = await must(await ctx.post("/api/v1/applications", { data: body }), "create application");
     apps++;
     for (const iv of ivs) {
