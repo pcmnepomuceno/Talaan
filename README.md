@@ -110,8 +110,8 @@ Limitations today:
 
 Planned, not built (from the roadmap): a documents checklist per application and a rule-based scam red-flag check.
 
-## License and contact
+## Licence and contact
 
-No license has been chosen yet; all rights reserved.
+MIT, see [LICENSE](LICENSE).
 
 Contact: GitHub, https://github.com/pcmnepomuceno
