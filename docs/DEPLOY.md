@@ -39,7 +39,7 @@ DATABASE_URL="$NEON_URL" python -m app.admin create-invite
 unset NEON_URL
 ```
 
-The code prints once. Options: `--note TEXT` (who the code is for) and `--expires-in Nd|Nh` (1 hour to 365 days, default `14d`). `list-invites` and `revoke-invite ID` work the same way.
+The code prints once. Options: `--note TEXT` (who the code is for) and `--expires-in Nd|Nh` (1 hour to 365 days, default `14d`). `list-invites` and `revoke-invite ID` work the same way. `list-invites` also prints when each code was used and the account name that used it (`(deleted)` after account deletion), never an email, code or hash.
 
 ## 1. Secrets and env vars
 
