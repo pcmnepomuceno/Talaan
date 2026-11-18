@@ -106,6 +106,8 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 - F10 (2026-11-17): no reminders, notifications or emails; the view only lists rows when it is opened.
 - `local-env.cjs` (2026-11-16): a cleanup error (for example `truncateAll` failing in the finally) can hide the original error; the exit code is still 1; low priority.
 - `local-env.cjs` (2026-11-18): on a cold start the e2e scripts sometimes report "next dev did not come up" or a signup timeout and pass on retry; consider a longer or readiness-based wait.
+- `eslint-config-next` (2026-11-18): still 16.4.3 while `next` is 16.4.6; align the two (separate change, dev-only).
+- `docs/FRONTEND.md` (2026-11-18): line 20 says chromium build 1243 wants Playwright 1.63.0, but the F9 entry in DECISIONS.md records 1.64.1 working with 1243 (confirmed again for the next 16.4.6 bump); fix the line. Also document the values used for the local e2e scripts: `NODE_PATH=~/.npm/_npx/e41f203b7505f1fb/node_modules`, `PW_CHROMIUM=~/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome`.
 
 ## Maintenance
 
