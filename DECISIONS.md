@@ -571,3 +571,13 @@
 - **Alternatives.** Resync on every URL change: snaps the select back when an intermediate replace lands (shown by a test). A queue of pending values, as `month-view.tsx` does: more state for a control with one writer. `useOptimistic` in a transition: reverts to the URL value as soon as the transition ends, so it depends on Next keeping the transition pending. A debounce or timer: delays the URL for no gain.
 - **Scope.** The Status select only. The Agenda/Month and Upcoming/Past `SegmentedControl`s have the same pattern and are a Backlog line in docs/ROADMAP.md. Known gaps (four cases, see the 2026-11-18 line below): a Back landing on an earlier asked value; a late landing of an earlier replace after Down then Up; a burst a, b, a; a replace that never lands.
 - **2026-11-18, after /code-review round 1 (PR #31).** Findings 1-4 (a Back landing on an earlier asked value; a late landing of an earlier replace after Down then Up; a burst a, b, a; a replace that never lands) are accepted as known gaps. Each is a transient mismatch of a few milliseconds that converges on the URL when the last replace lands, except a navigation that fails, which leaves the select on the chosen value until the next change or reload. Redesign options are rejected for now as more state than the problem: a sequence queue with a watchdog, and `startTransition` with `useOptimistic` (unproven in Next, because no source line shows what happens to the outer transition when a newer navigation supersedes it).
+
+---
+
+# Decision: Licence and friend-trial prep
+- **Date:** 2026-11-18
+- **MIT licence**, chosen by the owner (no alternatives discussed).
+- **No-reset warning, not a reset flow.** The sign-up form shows a plain warning under the password field that there is no password reset. A reset flow is not planned for the trial.
+- **`list-invites` shows who used a code.** It now prints `used_at` and the account name (`users.account_name`), or "(deleted)" when the user was removed. It never prints an email, a code or a hash.
+- **README documents what is stored**, including that the invite note survives account deletion and that IP-keyed rate-limit rows stay up to 7 days.
+- **A1 admin page deferred** until after the friend trial. It will reverse the 2026-11-03 no-admin-endpoint rule, so it needs its own entry when built.

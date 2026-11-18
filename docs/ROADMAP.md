@@ -1,13 +1,13 @@
 # Talaan Roadmap
 
-**Current milestone:** none open. F10 (follow-up list, `GET /applications?follow_up=true&days=`, the Needs follow-up view in the Status select, DESIGN.md v2.6) is done on branch feature/f10-follow-up, not merged yet. F9 (calendar view, `GET /interviews/calendar`, Month view on the Interviews screen, DESIGN.md v2.5) is done and merged in PR #25, after F8 (agenda, `.ics`, import guide) in PR #24. Deferred, not in any batch: drag to reschedule, adding an interview from a day, week or day views, application dates in the grid, subscription feed, API tokens, a duration field, swipe actions, demo account, README screenshots.
+**Current milestone:** friend-trial prep (licence, first-visit wording, invitee README, clearer invite listing) on branch chore/licence-and-trial. F10 (follow-up list, `GET /applications?follow_up=true&days=`, the Needs follow-up view in the Status select, DESIGN.md v2.6) is done and merged in PR #29. F9 (calendar view, `GET /interviews/calendar`, Month view on the Interviews screen, DESIGN.md v2.5) is done and merged in PR #25, after F8 (agenda, `.ics`, import guide) in PR #24. Deferred, not in any batch: drag to reschedule, adding an interview from a day, week or day views, application dates in the grid, subscription feed, API tokens, a duration field, swipe actions, demo account, README screenshots.
 
 ## Roadmap
 
 Committed:
 - v1a core tracker: auth fixes + tests; domain layout move; applications CRUD with status filter + pagination; `saved` application status + nullable `date_applied` (new migration); interviews; per-user isolation; real /health with a DB check; Docker; CI.
 - v1b multi-user hardening, then DEPLOY: invite-code signup via env var behind a swappable check_signup_allowed(); rate limiting on login/signup; account deletion (sessions.user_id ON DELETE CASCADE migration + delete-account endpoint); hashed session tokens (token -> token_hash migration); SameSite=Lax and Secure via config; deploy to Render + Neon. Ship here before v1c.
-- v1c Filipino job-seeker features: interview export as .ics plus an "Add to Google Calendar" link (no OAuth); follow-up list (applied N days ago, no update; done in F10, on branch feature/f10-follow-up, not merged yet); documents checklist per application (NBI, TIN, SSS, PhilHealth, Pag-IBIG, TOR, diploma); rule-based scam red-flag check (asks for fees, personal-email domain, no company details).
+- v1c Filipino job-seeker features: interview export as .ics plus an "Add to Google Calendar" link (no OAuth); follow-up list (applied N days ago, no update; done in F10, merged in PR #29); documents checklist per application (NBI, TIN, SSS, PhilHealth, Pag-IBIG, TOR, diploma); rule-based scam red-flag check (asks for fees, personal-email domain, no company details).
 - v1.1: hashed personal API tokens + browser extension (desktop capture path: user-initiated capture of the page the user is viewing); PWA share target and quick-add (mobile capture path); scam checks on captured jobs.
 
 Optional (decide after 3-5 friends have used it):
@@ -33,8 +33,17 @@ Next.js app in `frontend/`, built from `docs/DESIGN.md`. Each milestone is merge
 - F6 (done and merged in PR #20): interviews create, edit and delete (full-screen routes, times in PHT only, no automatic status change), Add interview on the detail, shared `TextAction`.
 - F8 (done, merged in PR #24): interviews agenda across applications (Upcoming / Past, PHT day groups, Load more), per-interview `.ics` download built in the browser, import guide; third nav destination; no migration.
 - F9 (done and merged in PR #25): month calendar view of the Interviews screen (`GET /interviews/calendar`, grid, keyboard navigation, PHT only); no migration.
-- F10 (done on branch feature/f10-follow-up, not merged yet): follow-up list (`GET /applications?follow_up=true&days=`, Needs follow-up in the Status select); no migration.
+- F10 (done, merged in PR #29): follow-up list (`GET /applications?follow_up=true&days=`, Needs follow-up in the Status select); no migration.
 - F7 (done, 2026-11-09): live on Vercel + Render + Neon (https://talaan-phi.vercel.app); results and gotchas in docs/DEPLOY.md.
+
+## Admin
+
+- A1: Admin page for invites (after the friend trial, not started). List invites; create an invite with a show-once code and a copy button; revoke an unused invite. Access is gated by an `ADMIN_EMAILS` setting, no migration. Creating needs a password re-check, and the routes are rate limited. It reverses the 2026-11-03 "no admin endpoint" rule (docs/AUTH.md, DECISIONS.md), so it needs a new DECISIONS.md entry when built.
+
+Friend trial checklist:
+- Invite 3 to 5 people, one code each: `python -m app.admin create-invite --note "<name>" --expires-in 14d`.
+- Ask for feedback after a week.
+- Ask them to try add application, add interview, and Needs follow-up.
 
 ## Clients
 
