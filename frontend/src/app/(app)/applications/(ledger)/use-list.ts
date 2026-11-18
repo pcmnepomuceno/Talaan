@@ -180,7 +180,9 @@ export function useApplicationList(status: ListFilter | undefined) {
 
   let view: ListView;
   const rows = getList(status);
-  if (fetched?.key === key) {
+  // A stale entry whose outcome belongs to this key but not to a refetch of it (the filter was left and re-entered
+  // before another list landed) is still refreshing; a failed refetch keeps its banner.
+  if (fetched?.key === key && (!listStale(status) || fetched.refreshFailed)) {
     view = fetched.failed
       ? { kind: "failed" }
       : rows

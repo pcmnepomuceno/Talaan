@@ -246,3 +246,32 @@ it("two quick interview writes: the last request's answer wins, an earlier answe
   await act(async () => {});
   expect(rowIds()).toEqual([4]);
 });
+
+it("(g) back on the follow-up view while another filter's first load is pending and the entry went stale: rows stay, Load more is off, page 1 is asked", async () => {
+  install(many(60));
+  const r = mount();
+  await waitFor(() => expect(rowIds()).toHaveLength(50));
+  fake.on("GET", /status=applied/, () => new Promise<Response>(() => {}), false); // the first load never lands
+  search = "status=applied";
+  r.rerender(
+    <ToastProvider>
+      <ApplicationsScreen>{null}</ApplicationsScreen>
+    </ToastProvider>,
+  );
+  await waitFor(() => expect(fake.callsTo("GET", /status=applied/)).toHaveLength(1));
+  act(() => clearDetail(100)); // an interview write while the other filter is on screen: no tick for it
+  expect(listStale("follow_up")).toBe(true);
+  const before = followGets().length;
+  defer = true;
+  search = "status=follow_up";
+  r.rerender(
+    <ToastProvider>
+      <ApplicationsScreen>{null}</ApplicationsScreen>
+    </ToastProvider>,
+  );
+  await act(async () => {});
+  expect(rowIds()).toHaveLength(50);
+  expect((within(listPane()).getByRole("button", { name: "Load more" }) as HTMLButtonElement).disabled).toBe(true);
+  expect(followGets()).toHaveLength(before + 1);
+  expect(held[0].offset).toBe(0);
+});
