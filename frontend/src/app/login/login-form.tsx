@@ -251,6 +251,7 @@ export function LoginForm({
             autoComplete={mode === "login" ? "current-password" : "new-password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            helper={mode === "signup" ? "There is no password reset yet. Keep your password somewhere safe." : undefined}
             error={err("password")}
           />
           {mode === "signup" && <p className="text-body text-text-secondary">Access is by invitation for now.</p>}

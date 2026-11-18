@@ -1,4 +1,4 @@
-# Talaan Design System v2.6 (Design.md)
+# Talaan Design System v2.7 (Design.md)
 
 This file is the single source of truth for Talaan's look. Screens must use these exact token values. Do not substitute a Material 3 palette or any color not listed here. Do not copy the layout, content or branding of any other product.
 
@@ -225,6 +225,8 @@ Rows keep their ledger sheet and rules; each row shows three bars. Base `color-b
 
 **Slow start note (v2.3).** The free-tier API can take a minute to wake. When a login or sign-up request, or the first list or detail load, is still pending after 3 seconds, one Caption line in `color-text-muted` appears: "Starting up. This can take up to a minute the first time." It sits in a polite live region (present from the start, so the text is announced when it appears) and is removed when the request settles, whether it succeeds or fails. Nothing is shown before 3 seconds.
 
+The line already covers the first login and sign-up, and is unchanged in v2.7.
+
 ### 6.13 Month grid (v2.5)
 The month view of the Interviews screen (8.8). Existing tokens only: no dots, no counts as badges, no pills, no new colors.
 - **Month header**: h2 with the month and year (`November 2026`, Section Title) at the left; at the right the icon buttons "Previous month" and "Next month" (chevrons, 44 x 44, accessible names exactly those) and the text action "Today" (`TextAction`, 44px). At 1900-01 and 2200-12 the matching button is `aria-disabled` (not `disabled`, so a focused button keeps focus) in `color-text-muted`.
@@ -257,7 +259,7 @@ The month view of the Interviews screen (8.8). Existing tokens only: no dots, no
 ---
 
 ## 8. Screens (reference list)
-1. **Sign up / Log in**: an ink-blue band at the top (`color-bar-bg`, about 200px tall) with the logo mark, the wordmark "Talaan" and one plain line, "Track every application in one place." Below it on paper, a two-option segmented control (Log in, Create account). Sign up fields: Invite code, Account name, Email, Password (with show/hide), plus the plain line "Access is by invitation for now." Log in fields: Email, Password.
+1. **Sign up / Log in**: an ink-blue band at the top (`color-bar-bg`, about 200px tall) with the logo mark, the wordmark "Talaan" and one plain line, "Track every application in one place." Below it on paper, a two-option segmented control (Log in, Create account). Sign up fields: Invite code, Account name, Email, Password (with show/hide; helper under it (v2.7): "There is no password reset yet. Keep your password somewhere safe."), plus the plain line "Access is by invitation for now." Log in fields: Email, Password.
    - Failed login message (one banner above the fields, not tied to a field): "Invalid email or password."
    - Failed sign up messages (amended in F4; the API tells the user which field to fix): invite code field "Invalid or expired invite code."; email field "Email already exists."; any password or format rule from the API on its own field. Too many attempts: banner "Too many attempts. Try again in about N minutes." Server or network trouble: banner "Talaan isn't responding right now. Try again in a moment."
    - Invite code field: hint "Paste the code you were given; dashes are optional", no spellcheck, capital letters on mobile keyboards.
