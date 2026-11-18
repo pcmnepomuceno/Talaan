@@ -160,11 +160,9 @@ withEnv(async ({ base, createInvite }) => {
         if (await page.evaluate(() => document.activeElement?.tagName === "SELECT")) break;
       }
       check("Tab reaches the Status select", await page.evaluate(() => document.activeElement?.tagName === "SELECT"));
-      // One key at a time, as a person types: each key changes the select and the URL (router.replace), and
-      // a key sent before the URL catches up starts from the old value (true of every status choice, not just this one).
+      // Keys go back to back: the select holds its own value while the URL catches up.
       for (let i = 0; i < 11; i++) {
         await page.keyboard.press("ArrowDown"); // All, 9 statuses, Needs follow-up
-        await page.waitForTimeout(250);
       }
       await page.waitForURL(/\/applications\?status=follow_up$/, { timeout: 10000 }).catch(() => {});
       check("ArrowDown to the last option selects Needs follow-up", pathOf(page.url()) === "/applications?status=follow_up", pathOf(page.url()));
