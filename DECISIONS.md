@@ -553,3 +553,11 @@
 - **`days` outside 1..90 is 422, not clamped.** A clamped value would answer a question the caller did not ask and hide a client bug (the same reasoning as the 62-day calendar range). Non-integers are 422 for the same reason.
 - **`follow_up` cannot combine with `status`, and `days` needs `follow_up=true`.** The follow-up list is defined as `status = applied`, so a second status filter would either contradict it or be redundant. Mixing modes is 422, as on the calendar route.
 - **Cache rule: drop, never patch.** Whether a row is in the follow-up list depends on server data (the clock, interviews, `date_applied`), so the client cannot decide it locally. The follow-up list is dropped on any application write, any interview write, any status change and any auth event, and refetched. Alternative: patch the cached rows. Rejected for the same reason as the agenda cache (2026-11-11): the patch would need the whole membership rule in the client.
+
+---
+
+# Decision: next 16.4.6 for two cache-leak advisories
+- **Date:** 2026-11-18
+- **`next` 16.4.3 → 16.4.6, exact pin.** `npm audit --omit=dev` flagged 16.2.0–16.4.4 for GHSA-mfr8-8qww-v76h and GHSA-vc7v-qv4w-wrv8 (moderate: data from one root param's `'use cache'` / `unstable_cache` entry served for another). 16.4.6 is the fixed, latest patch. The app does not use `'use cache'` or `unstable_cache` (no match in `frontend/src`), so it was not exposed, but the advisory blocks a clean audit. Bumped with `npm install --save-exact`, not `npm audit fix --force` or `next upgrade`, so only `next`, `@next/env` and `@next/swc-*` moved.
+- **`eslint-config-next` stays at 16.4.3** (dev-only, not affected); aligning it is a separate change (Backlog in docs/ROADMAP.md).
+- Checked: `npm ci && npm run build` exited 0 on the first run (the build on 16.4.3 exited 1 on the advisory check), and the route table and the `Proxy (Middleware)` line are unchanged. `npm run lint`, `npm run typecheck` and `npm test` (1000 tests, run three times, and once with `TZ=America/Los_Angeles`) pass, and `npm audit --omit=dev` reports 0 vulnerabilities. The six local e2e scripts (Playwright 1.64.1, chromium build 1243, API on `talaan_test`) all passed on the first run with no retry: auth 18, agenda 40, applications 75, calendar 42, follow-up 36, interviews 52 checks, 0 failures; every `/api` call goes through `src/proxy.ts`.
