@@ -337,6 +337,15 @@ describe("create", () => {
     await waitFor(() => expect(banner()?.textContent).toContain("Talaan isn't responding"));
   });
 
+  it("a 404 on create (no longer an admin) takes the not-found path, not a banner", async () => {
+    handlers[CREATE] = () => json(404, { detail: "Not Found" });
+    await loaded();
+    await submit();
+    expect(await screen.findByText("Page not found.")).toBeTruthy();
+    expect(screen.queryByText(/Something went wrong/)).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Create invite" })).toBeNull();
+  });
+
   it("a 422 maps to its field and focuses it", async () => {
     handlers[CREATE] = () => json(422, { detail: [{ loc: ["body", "note"], msg: "String should have at most 200 characters" }] });
     await loaded();

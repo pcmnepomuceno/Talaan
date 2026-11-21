@@ -137,6 +137,11 @@ export function AdminScreen() {
       setPassword("");
       refresh();
     } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        // The admin gate's 404: no longer an admin. Same as the list and revoke.
+        setGone(true);
+        return;
+      }
       const fields = err instanceof ApiError && err.status === 422 ? err.fieldErrors : {};
       const failed: Partial<Record<Field, string>> = {};
       if (fields.note) failed.note = fields.note;
