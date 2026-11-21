@@ -1,0 +1,7 @@
+{
+  "manifest_version": 3,
+  "name": "Talaan cookie check (spike)",
+  "version": "0.0.1",
+  "host_permissions": ["https://talaan-phi.vercel.app/*"],
+  "action": { "default_popup": "popup.html" }
+}

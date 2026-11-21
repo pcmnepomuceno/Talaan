@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Talaan spike (other, attacker)",
+  "version": "0.0.1",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzxDBcg9TbxqkIyho/c3wUIajpRl+Qs3YnbwYOuHlYolxWojTsLr9qiCnAv6Mghcoo2H9SYsN2sIUxgIxMUp76C8Bkg6jL0MXu8nKajYDOqDDvPcZWi8mGq1sL5RR1U2iFnJW89LWQtKYv+j3HMrH9OHD/gEtCL5Byxv6So6pDiBmh4jrkq7ViU1ORVKgqPSqWW0ibRf7LqzpfpjWPsF6vDzKfbSva5ZYc3RMCcXBP7sglIif1tOZSYNW0jP4dDwfUOSCj2ectV5RTXjBJ4aga3DKDWLJxzSOzGPMN3LC3JbMWNBoomHPh7nTqqx9VmLOBmCK4MGDvfBuMZ8kdCRVZQIDAQAB",
+  "host_permissions": [
+    "http://localhost:3100/*",
+    "http://localhost:8100/*"
+  ],
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "background": {
+    "service_worker": "sw.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+Y"
+      }
+    }
+  }
+}
