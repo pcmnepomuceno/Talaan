@@ -603,3 +603,14 @@
   - **Emails are not verified.** `ADMIN_EMAILS` must name an account that already exists. An admin address with no account yet could be claimed by anyone holding a valid invite, who would sign up with that address and become admin. The address must also be removed from `ADMIN_EMAILS` before the admin account is deleted, otherwise anyone with an invite could register it again. This is accepted until email verification exists (Backlog in docs/ROADMAP.md).
   - There is no user management and no audit log of who created or revoked an invite.
   - 2026-11-21: the revoke existence check stays in the revoke call (`invites.revoke`, which the route calls) and not in a dependency, on purpose. The single atomic `DELETE ... WHERE used_at IS NULL` is what protects a used invite from being deleted; the existence check after it only keeps the 404 vs 409 answer accurate under a concurrent signup, and a dependency lookup first would make that answer racy, not make revoke unsafe.
+
+---
+
+# Decision: Chrome extension next; cookie first, tokens second
+- **Date:** 2026-11-21
+- **Status:** Provisional until the S0 spike (docs/ROADMAP.md, Chrome extension). S0 can overturn the cookie-first choice.
+- **Decision:** The Chrome extension is the next milestone after A1. It authenticates with the user's existing login cookie first: it is the simplest option, adds no new credential and needs no setup from the user. Personal API tokens (E3) follow as a second option, with a "use a token" choice in the extension. This relaxes the earlier "personal API tokens, not cookies" line for browser capture.
+- **Extraction is deterministic and has no AI:** JSON-LD `JobPosting` first, then Open Graph tags and the page title, shown in an editable popup. A fallback for pages with no structured data is deferred to v1.2 (bring-your-own key).
+- **Per-site scrapers are rejected** as brittle: every site redesign breaks them and each one needs upkeep.
+- **Capture is user-initiated and reads only the open tab** (`activeTab`), because some sites forbid automated extraction. Nothing runs in the background and no other tab is read.
+- **What S0 decides:** whether an MV3 popup can call the API with the login cookie, which Origin and Sec-Fetch-Site headers arrive and what the origin check needs, whether the extension ID is stable, how a logged-out user is handled, and whether `activeTab` can read the title, JSON-LD and Open Graph tags. If the cookie path fails or needs a weakening of the origin check or `SameSite=Lax`, tokens (E3) move first and this entry gets a new dated entry.
