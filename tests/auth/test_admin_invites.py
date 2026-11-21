@@ -5,10 +5,10 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.exc import DataError
+from sqlalchemy.exc import DataError, OperationalError
 
 from app import config
-from app.auth import invites
+from app.auth import admin_invites, invites
 from app.auth.models import InviteCode, RateLimitEvent
 from app.auth.models import Session as SessionModel
 from app.auth.security import hash_password, hash_session_token
@@ -358,6 +358,21 @@ def test_a_data_error_on_insert_propagates_and_is_a_500_not_the_limiters_503(adm
     api.cookies.update(admin.cookies)
     r = api.post(URL, json={"expires_in_days": 14, "password": USER_PASSWORD})
     assert r.status_code == 500 and secret not in r.text
+
+
+def test_a_db_error_in_the_lock_or_count_is_503_and_creates_nothing(admin, db, monkeypatch):
+    """Pins the lock and count inside fail_closed: outside it, the error would be a 500."""
+    before = db.query(InviteCode).count()
+
+    def boom(*a, **k):
+        raise OperationalError("SELECT pg_advisory_xact_lock", {}, Exception("db down"))
+
+    monkeypatch.setattr(admin_invites, "text", boom)  # the route's advisory-lock statement
+    api = TestClient(app, raise_server_exceptions=False)
+    api.cookies.update(admin.cookies)
+    r = api.post(URL, json={"expires_in_days": 14, "password": USER_PASSWORD})
+    assert r.status_code == 503
+    assert db.query(InviteCode).count() == before
 
 
 # --- real threads ---
