@@ -137,7 +137,7 @@ If the API starts before migrations, `/ping` and `/health` return 200 (`SELECT 1
 - Deletion on request now; self-serve account deletion in v1b.
 
 ## Extension points (hooks only, nothing built)
-- **API tokens**: hashed personal tokens, accepted as `Authorization: Bearer` inside `get_current_user` next to cookies.
+- **API tokens** (E3, docs/ROADMAP.md): hashed personal tokens for the browser extension; planned to be accepted only by a quick-add endpoint that can only create an application, not as a general `Authorization: Bearer` login in `get_current_user`.
 - **LLM provider interface**: one small interface behind which LiteLLM sits; BYO key, encrypted at rest, never logged.
 - **JobSource interface**: yields job postings from legitimate feeds.
 - **Per-user ownership**: every query is scoped by `created_by` through shared dependencies.
