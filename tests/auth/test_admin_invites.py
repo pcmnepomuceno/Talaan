@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import DataError
 
 from app import config
 from app.auth import invites
@@ -342,6 +343,23 @@ def test_missing_password_is_422_not_500(admin):
 def test_password_over_1024_chars_is_422(admin, db):
     assert create(admin, password="x" * 1025).status_code == 422
     assert db.query(InviteCode).count() == 0
+
+
+def test_a_real_db_error_on_insert_is_a_logged_500_not_the_limiters_503(admin, db, monkeypatch, caplog):
+    secret = "TLN-TEST-AAAA-BBBB"
+
+    def boom(*a, **k):
+        raise DataError("INSERT INTO invite_codes", {"code": secret}, Exception("bad data"))
+
+    monkeypatch.setattr(invites, "create", boom)
+    caplog.set_level(logging.DEBUG)
+    with pytest.raises(DataError):  # propagates to the server, which logs the traceback (uvicorn)
+        create(admin)
+    api = TestClient(app, raise_server_exceptions=False)  # a 500 as a response, not a re-raise
+    api.cookies.update(admin.cookies)
+    r = api.post(URL, json={"expires_in_days": 14, "password": USER_PASSWORD})
+    assert r.status_code == 500 and secret not in r.text
+    assert secret not in caplog.text
 
 
 # --- real threads ---

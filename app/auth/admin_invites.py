@@ -84,7 +84,10 @@ def create_invite(
         raise HTTPException(status_code=403, detail="Incorrect password.")
 
     # One transaction: the lock makes count-then-insert atomic, so two creates at 49 cannot both
-    # pass. The commit (or the rollback below) releases it.
+    # pass. The commit (or the rollback below) releases it. Only the lock and the count are the
+    # limiter's work (fail_closed: DB error -> 503); the insert and commit sit outside, so a real
+    # DataError/IntegrityError is a logged 500, not a misleading 503. No commit in between, so
+    # the lock is still held through the insert.
     with rate_limit.fail_closed(db):
         db.execute(text("SELECT pg_advisory_xact_lock(:id)"), {"id": CAP_LOCK_ID})
         open_count = (
@@ -92,14 +95,14 @@ def create_invite(
             .filter(InviteCode.used_at.is_(None), InviteCode.expires_at > invites.utcnow())
             .count()
         )
-        if open_count >= invites.MAX_OPEN_INVITES:
-            db.rollback()
-            raise HTTPException(
-                status_code=409,
-                detail=f"There are already {invites.MAX_OPEN_INVITES} unused invites. "
-                "Revoke one or wait for one to expire.",
-            )
-        invite, display = invites.create(db, body.note, timedelta(days=body.expires_in_days), commit=False)
-        result = InviteCreated(id=invite.id, code=display, note=invite.note, expires_at=invite.expires_at)
-        db.commit()
+    if open_count >= invites.MAX_OPEN_INVITES:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=f"There are already {invites.MAX_OPEN_INVITES} unused invites. "
+            "Revoke one or wait for one to expire.",
+        )
+    invite, display = invites.create(db, body.note, timedelta(days=body.expires_in_days), commit=False)
+    result = InviteCreated(id=invite.id, code=display, note=invite.note, expires_at=invite.expires_at)
+    db.commit()
     return result
