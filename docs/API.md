@@ -13,8 +13,11 @@ Contract first. Applications (milestone 3) and interviews (milestone 4) CRUD are
 | POST | `/signup` | requires `invite_code` (M9); currently answers 200, see Signup |
 | POST | `/login` | 200; sets cookie |
 | POST | `/logout` | 204 |
-| GET | `/me` | current user |
+| GET | `/me` | current user, with `is_admin` |
 | POST | `/account/delete` | body `{"password"}`; 204; permanent, see Account deletion |
+| GET | `/admin/invites` | admin only; every invite, newest first, not paginated; see Admin invites |
+| POST | `/admin/invites` | admin only; body `{note?, expires_in_days, password}`; 201 with the code, shown once |
+| DELETE | `/admin/invites/{id}` | admin only; 204; an unused invite only |
 | GET | `/applications` | paginated; `?status=`, or `?follow_up=true&days=` |
 | POST | `/applications` | 201 |
 | POST | `/applications/quick` | 201; quick-add |
@@ -30,7 +33,7 @@ Contract first. Applications (milestone 3) and interviews (milestone 4) CRUD are
 `/health` and `/ping` are unauthenticated and unversioned so pingers and Render checks survive version bumps (DECISIONS.md, 2026-10-20).
 
 ## Status codes
-200 OK, 201 Created, 204 No Content (delete, logout), 401 not logged in or bad credentials, 404 not found **or not yours**, 409 duplicate email, 422 validation, 429 rate limited, 403 wrong password on `/account/delete` or a blocked cross-site request, 400 invalid invite code on `/signup`, 503 `/health` when the database is unreachable, or `/login`, `/signup` and `/account/delete` when the rate limiter cannot reach it (fail closed).
+200 OK, 201 Created, 204 No Content (delete, logout), 401 not logged in or bad credentials, 404 not found **or not yours** (and every `/admin/invites` route for a logged-in non-admin), 409 duplicate email, or on `/admin/invites` a used invite that cannot be revoked and the 50-unused cap, 422 validation, 429 rate limited, 403 wrong password on `/account/delete` or `POST /admin/invites`, or a blocked cross-site request, 400 invalid invite code on `/signup`, 503 `/health` when the database is unreachable, or `/login`, `/signup`, `/account/delete` and `POST /admin/invites` when the rate limiter cannot reach it (fail closed).
 
 ## Errors
 FastAPI default: `{"detail": "message"}`. Validation errors (422) use FastAPI's `detail` list. Clients branch on status code, not on message text.
@@ -46,15 +49,39 @@ POST/PUT/PATCH/DELETE (login and signup included) return `403 {"detail": "Cross-
 - `204` deleted. `401` no, expired or already-deleted session (also the loser of two simultaneous deletes). `403 {"detail": "Incorrect password."}` wrong password (not 401, so a client does not treat it as an expired session). `429` too many wrong attempts (5 per user and 10 per IP per 15 minutes; `ACCOUNT_DELETE_*` env). `503` database failure; nothing is deleted. `422` password missing or over 1024 characters (any wrong password up to that, including over 72 bytes, is the same 403).
 - Used invite codes stay used (`used_by_user_id` becomes NULL). The same email can sign up again, but only with a new invite code; the old account does not come back.
 
+## Admin invites
+`GET`, `POST` and `DELETE /admin/invites` need a session whose current email is listed in `ADMIN_EMAILS` (comma separated, case-insensitive; unset or empty means nobody, so every route answers 404). No session is `401`. A logged-in user who is not an admin gets `404 {"detail": "Not Found"}` on every method, the same body as an unknown path. Known leaks: a non-admin sending malformed JSON gets `422` (FastAPI parses the body before the check), anonymous callers get `401`, not 404, and Starlette answers other methods with `405` plus an `Allow` header (for example `PUT /admin/invites`) and 307-redirects a trailing slash (`/admin/invites/`) to anyone, anonymous included, so the routes can be found. Every response, errors included, carries `Cache-Control: no-store`. `is_admin` (boolean, computed from `ADMIN_EMAILS`) is in the `/me` and `/signup` bodies; it only decides whether the UI shows the Admin link, the server checks the email again on every request.
+
+### `GET /admin/invites`
+`200 {"items": [{"id", "status", "note", "created_at", "expires_at", "used_at", "used_by_account_name"}]}`, newest first (`id` descending). `status` is `unused`, `used` or `expired`. `used_by_account_name` is the account name of the user who used it, null when unused or when that account was deleted (`used_at` is still set). There is never a code, a hash or an email.
+
+**Pagination exception:** this list is not paginated and has no `total`, `limit` or `offset`. The cap of 50 applies to unused invites only, so used and expired rows can add up, but at friend-trial scale that is a few dozen. Add `limit` and `offset` like `GET /applications` if it grows.
+
+### `POST /admin/invites`
+Body (unknown fields are 422):
+- `note`: optional string, stripped; blank becomes null; at most 200 characters (code points).
+- `expires_in_days`: required, exactly `7`, `14` or `30`.
+- `password`: required, the caller's own password, at most 1024 characters.
+
+`201 {"id", "code", "note", "expires_at"}`. `code` (`TLN-XXXX-XXXX-XXXX`) is in this response only; it is stored as a SHA-256 hash, never logged and never in the list. Errors, in the order they are checked:
+- `404` not an admin, `401` no session.
+- `429` rate limited (`Retry-After`), the same body as the other limits. `503` when the limiter cannot reach the database (fail closed).
+- `403 {"detail": "Incorrect password."}` (not 401, so the client does not treat it as an expired session).
+- `409 {"detail": "There are already 50 unused invites. Revoke one or wait for one to expire."}` when 50 unused, unexpired invites exist. Used and expired invites do not count. The CLI is not capped.
+- `422` validation (bad `expires_in_days`, note over 200 characters, missing password, extra field).
+
+### `DELETE /admin/invites/{id}`
+`204` when an unused invite was deleted. `409 {"detail": "This invite has been used and cannot be revoked."}` for a used one (it stays as the record of who joined). `404 {"detail": "Invite not found."}` when it does not exist, for example an invite already revoked.
+
 ## Signup
-`POST /signup` body: `{"email", "password", "account_name", "invite_code"}`. `invite_code` is required (missing is 422). Codes look like `TLN-XXXX-XXXX-XXXX`; case, dashes, spaces and a pasted line ending are ignored. Admins create codes with `python -m app.admin create-invite` (no HTTP endpoint). A code works once and expires (default 14 days).
+`POST /signup` body: `{"email", "password", "account_name", "invite_code"}`. `invite_code` is required (missing is 422). Codes look like `TLN-XXXX-XXXX-XXXX`; case, dashes, spaces and a pasted line ending are ignored. Admins create codes on the `/admin` page (the Admin invites endpoints) or with `python -m app.admin create-invite`. A code works once and expires (default 14 days).
 
 Unknown, expired, already used, malformed and over-length codes all return the same `400 {"detail": "Invalid or expired invite code."}`. The code is checked before the email, so `400 {"detail": "Email already exists."}` is only seen with a valid code. Any failed signup (duplicate email, 422, 429) leaves the code unused. Failed attempts count against the signup per-IP limit.
 
 ## Rate limits
-`POST /login`: 10 attempts per IP and 5 failed attempts per email, per 15 minutes (a successful login removes only its own attempt from the email count; earlier failures stay counted). `POST /signup`: 5 attempts per IP per hour. Over a limit: `429 {"detail": "Too many attempts. Try again later."}` with a `Retry-After` header in seconds. The body is the same for every limit. Blocked attempts are not counted. Defaults come from env (`LOGIN_IP_LIMIT`, `LOGIN_EMAIL_LIMIT`, `SIGNUP_IP_LIMIT` and the `*_WINDOW_SECONDS` pair for each).
+`POST /login`: 10 attempts per IP and 5 failed attempts per email, per 15 minutes (a successful login removes only its own attempt from the email count; earlier failures stay counted). `POST /signup`: 5 attempts per IP per hour. Over a limit: `429 {"detail": "Too many attempts. Try again later."}` with a `Retry-After` header in seconds. The body is the same for every limit. Blocked attempts are not counted. Defaults come from env (`LOGIN_IP_LIMIT`, `LOGIN_EMAIL_LIMIT`, `SIGNUP_IP_LIMIT` and the `*_WINDOW_SECONDS` pair for each). `POST /admin/invites` allows 10 attempts per user and 10 per IP per hour (`ADMIN_INVITE_USER_*`, `ADMIN_INVITE_IP_*`), every attempt counted, successful ones too.
 
-The client IP is, in order: the `X-Talaan-Client-IP` header, but only when `PROXY_SECRET` is configured and the request carries exactly that value in `X-Talaan-Proxy-Secret` (constant-time compare; the Next proxy sends both, see DECISIONS.md 2026-11-09); else, with `TRUST_PROXY=true` (only behind a proxy you control), the right-most `X-Forwarded-For` value; else the socket peer. A wrong or missing secret, or an unusable IP value, silently falls back to the next source (never an error). With `ENVIRONMENT=production` the API serves no `/docs`, `/redoc` or `/openapi.json`. Only `/account/delete` among authenticated endpoints is rate limited. `/login` returns the same 401 for an unknown email and a wrong password, including passwords over 72 bytes.
+The client IP is, in order: the `X-Talaan-Client-IP` header, but only when `PROXY_SECRET` is configured and the request carries exactly that value in `X-Talaan-Proxy-Secret` (constant-time compare; the Next proxy sends both, see DECISIONS.md 2026-11-09); else, with `TRUST_PROXY=true` (only behind a proxy you control), the right-most `X-Forwarded-For` value; else the socket peer. A wrong or missing secret, or an unusable IP value, silently falls back to the next source (never an error). With `ENVIRONMENT=production` the API serves no `/docs`, `/redoc` or `/openapi.json`. Among authenticated endpoints only `/account/delete` and `POST /admin/invites` are rate limited. `/login` returns the same 401 for an unknown email and a wrong password, including passwords over 72 bytes.
 
 Limits are exact under concurrency (one advisory lock per key; DECISIONS.md). To check by hand, send 20 parallel logins for a fresh email. The result must be exactly 5x 401 and 15x 429:
 
@@ -76,7 +103,7 @@ Your IP must also have fewer than 5 login attempts in the last 15 minutes, or th
 Another user's application or interview returns **404, never 403**, so IDs cannot be probed. Ownership checks live in shared dependencies.
 
 ## Pagination and filtering
-Every list is paginated: `?limit=20&offset=0` (default 20, max 100). Response:
+Every list is paginated: `?limit=20&offset=0` (default 20, max 100). The one exception is `GET /admin/invites` (see Admin invites). Response:
 ```json
 {"items": [], "total": 0, "limit": 20, "offset": 0}
 ```

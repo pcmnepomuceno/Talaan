@@ -13,7 +13,7 @@ type Handler = () => Response | Promise<Response>;
 const ME = "/api/v1/me";
 const DELETE = "/api/v1/account/delete";
 const LOGOUT = "/api/v1/logout";
-const user = { id: 1, email: "ana@example.ph", account_name: "Ana Cruz" };
+const user = { id: 1, email: "ana@example.ph", account_name: "Ana Cruz", is_admin: false };
 
 let handlers: Record<string, Handler>;
 const calls = (path: string) => vi.mocked(globalThis.fetch).mock.calls.filter(([p]) => p === path);
@@ -95,6 +95,36 @@ describe("profile", () => {
     handlers[ME] = () => json(401, { detail: "Session expired" });
     render(<AccountScreen />);
     await waitFor(() => expect(locationReplace).toHaveBeenCalledWith("/login?expired=1&next=%2Faccount"));
+  });
+});
+
+describe("admin link", () => {
+  const adminLink = () => screen.queryByRole("link", { name: "Admin" });
+
+  it("shows a link to /admin above Log out when the user is an admin", async () => {
+    handlers[ME] = () => json(200, { ...user, is_admin: true });
+    render(<AccountScreen />);
+    await screen.findByText("ana@example.ph");
+    const link = await screen.findByRole("link", { name: "Admin" });
+    expect(link.getAttribute("href")).toBe("/admin");
+    const logout = screen.getByRole("button", { name: "Log out" });
+    expect(link.compareDocumentPosition(logout) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("shows nothing for a non-admin", async () => {
+    render(<AccountScreen />);
+    await screen.findByText("ana@example.ph");
+    expect(adminLink()).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Admin", hidden: true })).toBeNull();
+  });
+
+  it("shows nothing while the account is loading", async () => {
+    const d = deferred();
+    handlers[ME] = () => d.promise;
+    render(<AccountScreen />);
+    expect(adminLink()).toBeNull();
+    await act(async () => d.resolve(json(200, { ...user, is_admin: true })));
+    expect(await screen.findByRole("link", { name: "Admin" })).toBeTruthy();
   });
 });
 

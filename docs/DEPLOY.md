@@ -41,6 +41,8 @@ unset NEON_URL
 
 The code prints once. Options: `--note TEXT` (who the code is for) and `--expires-in Nd|Nh` (1 hour to 365 days, default `14d`). `list-invites` and `revoke-invite ID` work the same way. `list-invites` also prints when each code was used and the account name that used it (`(deleted)` after account deletion), never an email, code or hash.
 
+An admin (an account listed in `ADMIN_EMAILS`) can also create, list and revoke invites on the `/admin` page, reached from Account, with no terminal and no database string. The code is shown once, and the page caps unused invites at 50; the CLI has no cap.
+
 ## 1. Secrets and env vars
 
 Generate once: `openssl rand -hex 32` (the proxy secret). Never commit real values.
@@ -54,6 +56,8 @@ Generate once: `openssl rand -hex 32` (the proxy secret). Never commit real valu
 | Render | `PROXY_SECRET` | the generated secret (at least 32 characters) |
 | Render | `TRUST_PROXY` | `false` |
 | Render | `BCRYPT_ROUNDS` | `12` (production refuses lower) |
+| Render | `ADMIN_EMAILS` | comma-separated emails of admins (for example `admin@example.ph`), set in the Render dashboard only (never in a committed file). Unset or empty = the admin page is off (the app still starts). It must name an account that already exists: emails are not verified, so an address with no account could be claimed by anyone holding a valid invite. Remove the address before deleting that account. Accepted until email verification exists. |
+| Render | `ADMIN_INVITE_USER_LIMIT`, `ADMIN_INVITE_IP_LIMIT` and their `*_WINDOW_SECONDS` | defaults 10 attempts per user and per IP per 3600 seconds (`POST /admin/invites`); window at most 604800 |
 | Render | `LOGIN_*`, `SIGNUP_*`, `ACCOUNT_DELETE_*` | defaults from `.env.example` unless tuning; each `*_WINDOW_SECONDS` at most 604800 (7 days, the purge cutoff) |
 | Vercel | `BACKEND_URL` | `https://<service>.onrender.com`, no trailing slash. Read per request by `src/proxy.ts`. |
 | Vercel | `PROXY_SECRET` | same value as on Render |

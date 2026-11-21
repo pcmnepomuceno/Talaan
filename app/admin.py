@@ -1,7 +1,8 @@
 """Admin CLI: `python -m app.admin {create-invite,list-invites,revoke-invite,purge}`.
 
-Runs against DATABASE_URL. There is deliberately no HTTP endpoint for this. The plaintext
-code is printed once by create-invite; it is not stored, logged, or shown again.
+Runs against DATABASE_URL. An admin-gated HTTP endpoint (app/auth/admin_invites.py) shares the
+invite logic in app/auth/invites.py. The plaintext code is printed once by create-invite; it is
+not stored, logged, or shown again.
 """
 
 import argparse
@@ -54,12 +55,6 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def status(invite: InviteCode) -> str:
-    if invite.used_at is not None:
-        return "used"
-    return "expired" if invite.expires_at <= invites.utcnow() else "unused"
-
-
 def _delete_in_batches(db: Session, table: str, condition: str, params: dict) -> int:
     """Delete rows matching `condition` (fixed SQL, never user input), BATCH_SIZE at a time, one
     short transaction per batch. FOR UPDATE SKIP LOCKED leaves any row another transaction holds
@@ -103,11 +98,7 @@ def run(db: Session, argv: list[str]) -> int:
     args = build_parser().parse_args(argv)
 
     if args.command == "create-invite":
-        display, code_hash = invites.generate()
-        now = invites.utcnow()
-        invite = InviteCode(code_hash=code_hash, note=args.note, created_at=now, expires_at=now + args.expires_in)
-        db.add(invite)
-        db.commit()
+        invite, display = invites.create(db, args.note, args.expires_in)
         print(f"Invite {invite.id} created, expires {invite.expires_at.isoformat()}")
         print(f"Code (shown once, not stored): {display}")
         return 0
@@ -129,19 +120,15 @@ def run(db: Session, argv: list[str]) -> int:
             used = r.used_at.isoformat() if r.used_at else ""
             if r.used_at and account is None:
                 account = "(deleted)"  # the user row is gone (FK SET NULL)
-            print(f"{r.id}\t{status(r)}\t{r.created_at.isoformat()}\t{r.expires_at.isoformat()}\t{used}\t{account or ''}\t{r.note or ''}")
+            print(f"{r.id}\t{invites.status(r)}\t{r.created_at.isoformat()}\t{r.expires_at.isoformat()}\t{used}\t{account or ''}\t{r.note or ''}")
         return 0
 
-    # revoke-invite: the WHERE keeps the "unused only" rule atomic against a concurrent signup.
-    deleted = db.query(InviteCode).filter(InviteCode.id == args.id, InviteCode.used_at.is_(None)).delete(
-        synchronize_session=False
-    )
-    db.commit()
-    if deleted:
+    # revoke-invite
+    result = invites.revoke(db, args.id)
+    if result == "revoked":
         print(f"Invite {args.id} revoked")
         return 0
-    exists = db.query(InviteCode.id).filter(InviteCode.id == args.id).first() is not None
-    print(f"refusing: invite {args.id} is used" if exists else f"no invite with id {args.id}", file=sys.stderr)
+    print(f"refusing: invite {args.id} is used" if result == "used" else f"no invite with id {args.id}", file=sys.stderr)
     return 1
 
 

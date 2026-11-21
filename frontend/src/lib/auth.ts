@@ -3,7 +3,7 @@
 import { resetCaches } from "./cache";
 import { request } from "./http";
 
-export type User = { id: number; email: string; account_name: string };
+export type User = { id: number; email: string; account_name: string; is_admin: boolean };
 
 export type SignupInput = { invite_code: string; account_name: string; email: string; password: string };
 

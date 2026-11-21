@@ -2,12 +2,12 @@
 
 A code is 12 Crockford base32 characters, shown as TLN-XXXX-XXXX-XXXX. Only the SHA-256
 of the normalized 12 characters is stored. Never log or return a plaintext code (the admin
-CLI prints it once at creation).
+CLI and the admin-gated HTTP endpoint show it once at creation; both use create/revoke/status here).
 """
 
 import hashlib
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
 from sqlalchemy import text
@@ -25,6 +25,8 @@ PREFIX = "TLN"
 MAPPED_PREFIX = PREFIX.translate(ALIASES)
 # Longer input is rejected before any work. Same answer as every other bad code.
 MAX_INPUT_LEN = 64
+# Unused, unexpired invites the admin endpoint allows at once. The CLI is not subject to it.
+MAX_OPEN_INVITES = 50
 
 
 def utcnow() -> datetime:
@@ -93,3 +95,34 @@ def consume(db: Session, code_hash: str, user_id: int) -> bool:
         {"now": utcnow(), "uid": user_id, "h": code_hash},
     ).first()
     return row is not None
+
+
+def status(invite: InviteCode) -> str:
+    if invite.used_at is not None:
+        return "used"
+    return "expired" if invite.expires_at <= utcnow() else "unused"
+
+
+def create(db: Session, note: str | None, expires_in: timedelta, commit: bool = True) -> tuple[InviteCode, str]:
+    """Insert and commit a new invite. Returns (row, display code); the code exists only in memory.
+    commit=False only flushes (the row gets its id) so the caller can commit it together with a
+    check it made in the same transaction (the admin endpoint's cap, under an advisory lock)."""
+    display, code_hash = generate()
+    now = utcnow()
+    invite = InviteCode(code_hash=code_hash, note=note, created_at=now, expires_at=now + expires_in)
+    db.add(invite)
+    db.commit() if commit else db.flush()
+    return invite, display
+
+
+def revoke(db: Session, invite_id: int) -> str:
+    """"revoked", "used" or "missing". The WHERE keeps the unused-only rule atomic against a
+    concurrent signup: if a consume holds the row lock, the DELETE waits, re-checks and matches nothing."""
+    deleted = db.query(InviteCode).filter(InviteCode.id == invite_id, InviteCode.used_at.is_(None)).delete(
+        synchronize_session=False
+    )
+    db.commit()
+    if deleted:
+        return "revoked"
+    exists = db.query(InviteCode.id).filter(InviteCode.id == invite_id).first() is not None
+    return "used" if exists else "missing"

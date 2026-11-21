@@ -189,3 +189,18 @@ def test_signup_stores_normalized_email_and_catches_case_duplicates(client, db):
     assert r.status_code == 200
     assert r.json()["email"] == "new@example.com"
     assert client.post("/api/v1/signup", json=body(db, email="NEW@example.com")).status_code == 400
+
+
+def test_signup_is_admin_false_for_a_normal_signup(client, db, monkeypatch):
+    monkeypatch.setattr(config, "ADMIN_EMAILS", frozenset({"admin@example.ph"}))
+    r = client.post("/api/v1/signup", json=body(db))
+    assert r.status_code == 200
+    assert r.json()["is_admin"] is False
+
+
+def test_signup_is_admin_true_for_a_listed_address(client, db, monkeypatch):
+    monkeypatch.setattr(config, "ADMIN_EMAILS", frozenset({"admin@example.ph"}))
+    r = client.post("/api/v1/signup", json=body(db, email="  Admin@Example.PH "))  # normalized to lowercase
+    assert r.status_code == 200
+    assert r.json()["email"] == "admin@example.ph"
+    assert r.json()["is_admin"] is True
