@@ -144,7 +144,7 @@ async function withEnv(fn) {
       cwd: REPO,
       detached: true,
       stdio: ["ignore", fs.openSync(path.join(LOGS, "api.log"), "w"), fs.openSync(path.join(LOGS, "api.log"), "a")],
-      env: { ...baseEnv, COOKIE_SECURE: "false", TRUST_PROXY: "false", ALLOWED_ORIGINS: base, LOGIN_IP_LIMIT: "1000", LOGIN_EMAIL_LIMIT: "1000", SIGNUP_IP_LIMIT: "1000" },
+      env: { ...baseEnv, COOKIE_SECURE: "false", TRUST_PROXY: "false", ALLOWED_ORIGINS: base, LOGIN_IP_LIMIT: "1000", LOGIN_EMAIL_LIMIT: "1000", SIGNUP_IP_LIMIT: "1000", ADMIN_EMAILS: process.env.E2E_ADMIN_EMAILS || "" },
     });
     children.push(api);
     const web = spawn("npx", ["next", "dev", "-p", String(webPort)], {
