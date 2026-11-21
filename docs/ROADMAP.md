@@ -1,6 +1,6 @@
 # Talaan Roadmap
 
-**Current milestone:** A1 (admin page for invites at `/admin`, `ADMIN_EMAILS`, no migration) is done on branch feature/a1-admin-invites. Before it: friend-trial prep (licence, first-visit wording, invitee README, clearer invite listing) on branch chore/licence-and-trial. F10 (follow-up list, `GET /applications?follow_up=true&days=`, the Needs follow-up view in the Status select, DESIGN.md v2.6) is done and merged in PR #29. F9 (calendar view, `GET /interviews/calendar`, Month view on the Interviews screen, DESIGN.md v2.5) is done and merged in PR #25, after F8 (agenda, `.ics`, import guide) in PR #24. Deferred, not in any batch: drag to reschedule, adding an interview from a day, week or day views, application dates in the grid, subscription feed, API tokens, a duration field, swipe actions, demo account, README screenshots.
+**Current milestone:** A1 (admin page for invites at `/admin`, `ADMIN_EMAILS`, no migration) is done, merged (PR #33) and live; `ADMIN_EMAILS` is set in Render. The next milestone is the Chrome extension: S0, E1, E2, E3, E4 (see Chrome extension below). Before A1: friend-trial prep (licence, first-visit wording, invitee README, clearer invite listing) on branch chore/licence-and-trial. F10 (follow-up list, `GET /applications?follow_up=true&days=`, the Needs follow-up view in the Status select, DESIGN.md v2.6) is done and merged in PR #29. F9 (calendar view, `GET /interviews/calendar`, Month view on the Interviews screen, DESIGN.md v2.5) is done and merged in PR #25, after F8 (agenda, `.ics`, import guide) in PR #24. Deferred, not in any batch: drag to reschedule, adding an interview from a day, week or day views, application dates in the grid, subscription feed, a duration field, swipe actions, demo account, README screenshots.
 
 ## Roadmap
 
@@ -8,7 +8,7 @@ Committed:
 - v1a core tracker: auth fixes + tests; domain layout move; applications CRUD with status filter + pagination; `saved` application status + nullable `date_applied` (new migration); interviews; per-user isolation; real /health with a DB check; Docker; CI.
 - v1b multi-user hardening, then DEPLOY: invite-code signup via env var behind a swappable check_signup_allowed(); rate limiting on login/signup; account deletion (sessions.user_id ON DELETE CASCADE migration + delete-account endpoint); hashed session tokens (token -> token_hash migration); SameSite=Lax and Secure via config; deploy to Render + Neon. Ship here before v1c.
 - v1c Filipino job-seeker features: interview export as .ics plus an "Add to Google Calendar" link (no OAuth); follow-up list (applied N days ago, no update; done in F10, merged in PR #29); documents checklist per application (NBI, TIN, SSS, PhilHealth, Pag-IBIG, TOR, diploma); rule-based scam red-flag check (asks for fees, personal-email domain, no company details).
-- v1.1: hashed personal API tokens + browser extension (desktop capture path: user-initiated capture of the page the user is viewing); PWA share target and quick-add (mobile capture path); scam checks on captured jobs.
+- v1.1: the Chrome extension and phone capture, in the order S0, E1, E2, E3, E4 (Chrome extension section below); scam checks on captured jobs.
 
 Optional (decide after 3-5 friends have used it):
 - v1.2: LiteLLM provider-agnostic layer (BYO key, encrypted at rest, never logged) + paste-an-email status suggestion with approval; rule/regex baseline first.
@@ -41,9 +41,20 @@ Next.js app in `frontend/`, built from `docs/DESIGN.md`. Each milestone is merge
 - A1 (done, 2026-11-21): admin page for invites at `/admin`. List invites; create one with a show-once code and a copy button; revoke an unused invite. Access is gated by `ADMIN_EMAILS`, no migration. Creating needs a password re-check, is rate limited and capped at 50 unused invites. It reversed the 2026-11-03 "no admin endpoint" rule (DECISIONS.md 2026-11-21, docs/AUTH.md).
 
 Friend trial checklist:
-- Invite 3 to 5 people, one code each: `python -m app.admin create-invite --note "<name>" --expires-in 14d`.
+- Invite 3 to 5 people, one code each. Create invites at `/admin` (note = the friend's name, 14 days); the CLI still works: `python -m app.admin create-invite --note "<name>" --expires-in 14d`.
 - Ask for feedback after a week.
 - Ask them to try add application, add interview, and Needs follow-up.
+
+## Chrome extension
+
+Order of work (S0 first; each later step is its own mergeable PR):
+- S0 spike (throwaway, nothing merged): can an MV3 extension popup call the API with the user's login cookie, what Origin and Sec-Fetch-Site headers arrive, what the origin check needs, a stable extension ID, logged-out behavior, and `activeTab` reads of the title, JSON-LD and Open Graph tags.
+- E1 `job_url`: a nullable column on applications, an "Open posting" link, editable in the form, and "already saved" detection on a repeat capture; DESIGN.md update.
+- E2 the extension: a popup with editable prefilled fields; generic extraction only (JSON-LD `JobPosting`, then Open Graph and the page title; no per-site scrapers, no AI); user-initiated, `activeTab` only, unpacked install first; lives in `extension/` with its own small build and unit tests on synthetic HTML fixtures; authenticates with the user's login cookie if S0 shows it works.
+- E3 personal API tokens: an Account screen (create, shown once, hashed, revoke, cap 5, rate limit, last used) and a quick-add endpoint that accepts only a token and can only create an application; the extension gets a "use a token" option.
+- E4 phone share target and polish.
+
+Decided: no AI in extraction (a fallback for pages with no structured data is deferred to v1.2, bring-your-own key). Chrome Web Store later (one-time fee, review). Desktop only (Chrome on Android has no extensions). See DECISIONS.md 2026-11-21.
 
 ## Clients
 
@@ -53,6 +64,8 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 
 - A1 follow-ups (2026-11-21): no user management (list, disable or delete accounts), no audit log of who created or revoked an invite, and an unpaginated invite list (add paging if it grows). Email verification is the way to close the `ADMIN_EMAILS` limit (an address with no account yet can be claimed by anyone holding a valid invite; docs/AUTH.md).
 - NUL bytes (\x00) in free text give a 500 (found 2026-11-21): application `company`/`job_name` (`Name`, app/applications/schemas.py:20), `remarks` (`Remarks`, app/applications/schemas.py:24, also used by interviews), interview `interviewer` (app/interviews/schemas.py:20) and signup `account_name` (app/users/schemas.py:22, no constraints at all). Login `password` is not affected: measured 401 for both an existing and an unknown email. Postgres text cannot hold NUL; reject it in the schema like the invite note (422).
+- Deploy note (2026-11-21): `ADMIN_EMAILS` must name an account that already exists (emails are not verified; DECISIONS.md 2026-11-21).
+- `list-invites` (2026-11-21): the TSV output breaks when an invite note or an account name contains a tab or a newline; escape or strip them.
 - CI `changes` job clones the full history (`fetch-depth: 0`) only to list changed paths. Deferred (2026-10-28): a full clone of this small repo costs seconds. Revisit if clone time grows (many binary design assets); `gh pr diff --name-only` or the `pulls/{n}/files` API needs no checkout.
 - Playwright layout smoke tests in CI (clipping, 44px targets, no horizontal scroll). Reason (2026-11-02): layout can't be tested in jsdom; the F2a review checks (segment clipping at 320px, hover band) were run by hand in Chrome.
 - The 88px rail fits the bold 14px label "Applications" only with `tracking-tight` (77px label in a 79px pill, 4px from the rail edges). A longer label or a third item needs a wider rail or a smaller label token. (2026-11-11, F8: the third item, "Interviews", fits; checked at 768 in `e2e-agenda.cjs`. A longer fourth label would still need the wider rail.)
