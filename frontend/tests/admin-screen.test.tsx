@@ -438,6 +438,28 @@ describe("revoke", () => {
     expect(calls(LIST)).toHaveLength(2);
   });
 
+  it("a 404 that is not Invite not found. (the admin gate) takes the not-found path, with no success toast", async () => {
+    handlers[revokePath(5)] = () => json(404, { detail: "Not Found" });
+    await open();
+    await userEvent.click(confirm());
+    expect(await screen.findByText("Page not found.")).toBeTruthy();
+    expect(screen.queryByText("Invite revoked.")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Create invite" })).toBeNull();
+  });
+
+  it.each([
+    ["204", () => json(204)],
+    ["404 (already gone)", () => json(404, { detail: "Invite not found." })],
+    ["409", () => json(409, { detail: "This invite has been used and cannot be revoked." })],
+  ])("%s: after the refresh, focus moves to the Invites heading", async (_n, reply) => {
+    handlers[revokePath(5)] = reply;
+    await open();
+    handlers[LIST] = () => json(200, { items: [] });
+    await userEvent.click(confirm());
+    expect(await screen.findByText("No invites yet.")).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Invites" })));
+  });
+
   it("409 closes the dialog, toasts that the invite was used and refreshes", async () => {
     handlers[revokePath(5)] = () => json(409, { detail: "This invite has been used and cannot be revoked." });
     await open();

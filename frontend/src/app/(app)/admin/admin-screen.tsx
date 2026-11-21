@@ -53,8 +53,17 @@ export function AdminScreen() {
   const [revoking, setRevoking] = useState<Invite | null>(null);
   const [revokeBusy, setRevokeBusy] = useState(false);
   const revokeSending = useRef(false);
+  // After a revoke the row (and its button) may vanish on refresh, so focus lands on the heading once the list settles.
+  const invitesHeading = useRef<HTMLHeadingElement>(null);
+  const focusAfterLoad = useRef(false);
+  const [headingReq, setHeadingReq] = useState(0);
 
   // A 401 redirects inside `request` and never settles. A 404 means the caller is not an admin.
+  const settled = () => {
+    if (!focusAfterLoad.current) return;
+    focusAfterLoad.current = false;
+    setHeadingReq((n) => n + 1);
+  };
   useEffect(() => {
     let live = true;
     listInvites().then(
@@ -62,11 +71,15 @@ export function AdminScreen() {
         if (!live) return;
         setInvites(items);
         setLoadFailed(false);
+        settled();
       },
       (err) => {
         if (!live) return;
         if (err instanceof ApiError && err.status === 404) setGone(true);
-        else setLoadFailed(true);
+        else {
+          setLoadFailed(true);
+          settled();
+        }
       },
     );
     return () => {
@@ -85,6 +98,9 @@ export function AdminScreen() {
     const target = { note: noteInput, expires: daysInput, password: passwordInput }[focusReq.field];
     target.current?.focus();
   }, [focusReq]);
+  useEffect(() => {
+    if (headingReq) invitesHeading.current?.focus();
+  }, [headingReq]);
   useEffect(() => {
     if (created) copyButton.current?.focus();
   }, [created]);
@@ -160,7 +176,12 @@ export function AdminScreen() {
       toast.success("Invite revoked.");
     } catch (err) {
       const status = err instanceof ApiError ? err.status : 0;
-      if (status === 404) {
+      if (status === 404 && err instanceof ApiError && err.detail !== "Invite not found.") {
+        // The admin gate's plain "Not Found": no longer an admin. Same as the list.
+        revokeSending.current = false;
+        setGone(true);
+        return;
+      } else if (status === 404) {
         toast.success("Invite revoked."); // already gone
       } else if (status === 409) {
         toast.error("This invite was used, so it cannot be revoked.");
@@ -174,6 +195,7 @@ export function AdminScreen() {
     revokeSending.current = false;
     setRevokeBusy(false);
     setRevoking(null);
+    focusAfterLoad.current = true;
     refresh();
   }
 
@@ -278,7 +300,7 @@ export function AdminScreen() {
         )}
 
         <section aria-labelledby="invites" className="mt-8 flex flex-col gap-4">
-          <h2 id="invites" className="text-section-title text-text-primary">
+          <h2 ref={invitesHeading} id="invites" tabIndex={-1} className="text-section-title text-text-primary outline-none">
             Invites
           </h2>
           {loadFailed && <LoadError title="Couldn't refresh the invites. Showing the last loaded list." onRetry={retry} />}
