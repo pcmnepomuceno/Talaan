@@ -1,6 +1,6 @@
 # Talaan Roadmap
 
-**Current milestone:** friend-trial prep (licence, first-visit wording, invitee README, clearer invite listing) on branch chore/licence-and-trial. F10 (follow-up list, `GET /applications?follow_up=true&days=`, the Needs follow-up view in the Status select, DESIGN.md v2.6) is done and merged in PR #29. F9 (calendar view, `GET /interviews/calendar`, Month view on the Interviews screen, DESIGN.md v2.5) is done and merged in PR #25, after F8 (agenda, `.ics`, import guide) in PR #24. Deferred, not in any batch: drag to reschedule, adding an interview from a day, week or day views, application dates in the grid, subscription feed, API tokens, a duration field, swipe actions, demo account, README screenshots.
+**Current milestone:** A1 (admin page for invites at `/admin`, `ADMIN_EMAILS`, no migration) is done on branch feature/a1-admin-invites. Before it: friend-trial prep (licence, first-visit wording, invitee README, clearer invite listing) on branch chore/licence-and-trial. F10 (follow-up list, `GET /applications?follow_up=true&days=`, the Needs follow-up view in the Status select, DESIGN.md v2.6) is done and merged in PR #29. F9 (calendar view, `GET /interviews/calendar`, Month view on the Interviews screen, DESIGN.md v2.5) is done and merged in PR #25, after F8 (agenda, `.ics`, import guide) in PR #24. Deferred, not in any batch: drag to reschedule, adding an interview from a day, week or day views, application dates in the grid, subscription feed, API tokens, a duration field, swipe actions, demo account, README screenshots.
 
 ## Roadmap
 
@@ -38,7 +38,7 @@ Next.js app in `frontend/`, built from `docs/DESIGN.md`. Each milestone is merge
 
 ## Admin
 
-- A1: Admin page for invites (after the friend trial, not started). List invites; create an invite with a show-once code and a copy button; revoke an unused invite. Access is gated by an `ADMIN_EMAILS` setting, no migration. Creating needs a password re-check, and the routes are rate limited. It reverses the 2026-11-03 "no admin endpoint" rule (docs/AUTH.md, DECISIONS.md), so it needs a new DECISIONS.md entry when built.
+- A1 (done, 2026-11-21): admin page for invites at `/admin`. List invites; create one with a show-once code and a copy button; revoke an unused invite. Access is gated by `ADMIN_EMAILS`, no migration. Creating needs a password re-check, is rate limited and capped at 50 unused invites. It reversed the 2026-11-03 "no admin endpoint" rule (DECISIONS.md 2026-11-21, docs/AUTH.md).
 
 Friend trial checklist:
 - Invite 3 to 5 people, one code each: `python -m app.admin create-invite --note "<name>" --expires-in 14d`.
@@ -51,6 +51,7 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 
 ## Backlog
 
+- A1 follow-ups (2026-11-21): no user management (list, disable or delete accounts), no audit log of who created or revoked an invite, and an unpaginated invite list (add paging if it grows). Email verification is the way to close the `ADMIN_EMAILS` limit (an address with no account yet can be claimed by anyone holding a valid invite; docs/AUTH.md).
 - CI `changes` job clones the full history (`fetch-depth: 0`) only to list changed paths. Deferred (2026-10-28): a full clone of this small repo costs seconds. Revisit if clone time grows (many binary design assets); `gh pr diff --name-only` or the `pulls/{n}/files` API needs no checkout.
 - Playwright layout smoke tests in CI (clipping, 44px targets, no horizontal scroll). Reason (2026-11-02): layout can't be tested in jsdom; the F2a review checks (segment clipping at 320px, hover band) were run by hand in Chrome.
 - The 88px rail fits the bold 14px label "Applications" only with `tracking-tight` (77px label in a 79px pill, 4px from the rail edges). A longer label or a third item needs a wider rail or a smaller label token. (2026-11-11, F8: the third item, "Interviews", fits; checked at 768 in `e2e-agenda.cjs`. A longer fourth label would still need the wider rail.)

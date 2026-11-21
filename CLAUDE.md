@@ -28,7 +28,7 @@ Tables, columns and ENUMs: docs/ARCHITECTURE.md (Schema section). FKs live on th
 ## Security rules
 Auth decisions (sessions, cookies, invites, rate limits, origin check, account deletion): docs/AUTH.md. Rules that always apply:
 - Every application and interview route scopes to the caller through `get_current_user` (`created_by`; interviews via their parent application).
-- Never log or return a plaintext invite code (only the one-time CLI print). Never use `SameSite=None`.
+- Never log or return a plaintext invite code (only the one-time CLI print and the `POST /admin/invites` response). Admin routes return 404 to non-admins (`ADMIN_EMAILS`, docs/AUTH.md). Never use `SameSite=None`.
 - The session cookie's name and attributes live only in `app/auth/cookies.py`. Tokens never go in the response body or in web storage.
 - `BCRYPT_ROUNDS` stays fixed after launch; never lower it outside tests.
 - Production refuses to start with insecure config (`production_problems()` in `app/config.py`).
@@ -68,7 +68,7 @@ Decision changes get a new dated entry in DECISIONS.md (append; never rewrite ol
 Domain packages (`app/`). Applications and interviews have CRUD. A middleware in `main.py` sets `Cache-Control: no-store` on every `/api/v1` response.
 
     app/main.py, config.py, database.py, health.py, security.py (Origin check)
-    app/auth/          router, schemas, models [Session, RateLimitEvent, InviteCode], dependencies, security, cookies, rate_limit, invites
+    app/auth/          router, schemas, models [Session, RateLimitEvent, InviteCode], dependencies, security, cookies, rate_limit, invites, admin_invites
     app/admin.py       CLI: python -m app.admin {create-invite,list-invites,revoke-invite,purge}
     app/users/         router (/me, /account/delete), schemas, models
     app/applications/  models, schemas, router, dependencies (service planned)

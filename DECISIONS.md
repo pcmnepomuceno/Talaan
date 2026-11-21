@@ -581,3 +581,24 @@
 - **`list-invites` shows who used a code.** It now prints `used_at` and the account name (`users.account_name`), or "(deleted)" when the user was removed. It never prints an email, a code or a hash.
 - **README documents what is stored**, including that the invite note survives account deletion and that IP-keyed rate-limit rows stay about a week.
 - **A1 admin page deferred** until after the friend trial. It will reverse the 2026-11-03 no-admin-endpoint rule, so it needs its own entry when built.
+
+---
+
+# Decision: Admin page for invites (reverses "no admin endpoint")
+- **Date:** 2026-11-21
+- **Decision:** This reverses "There is no admin HTTP endpoint" in "Invite-code signup (hashed, single-use, CLI-managed)" (2026-11-03) and the "A1 admin page deferred" lines of 2026-11-18. Admins can list, create and revoke invites over `GET`, `POST` and `DELETE /api/v1/admin/invites` and on the `/admin` page. The CLI stays and is unchanged.
+- **Why.** The owner wants to create and track invites without a terminal and without pasting the production database string (docs/DEPLOY.md). Friends are being invited one at a time, and the CLI route is slow and puts the production string in a shell.
+- **Who is an admin.** The `ADMIN_EMAILS` setting (comma separated, trimmed, case-insensitive), compared with the session user's current email on every request, so changing an email or deleting the account takes effect at once. Unset or empty means the feature is off, and production still starts. `is_admin` on `/me` and signup is computed from the same setting and only decides whether the UI shows the link.
+- **Safeguards.**
+  - Every route returns 404 (FastAPI's own unknown-route body) to a logged-in non-admin, and 401 without a session.
+  - Creating needs the caller's password again (403 on a wrong one, not 401), and is rate limited per user and per IP (10 per hour each, `ADMIN_INVITE_*`), counting every attempt.
+  - At most 50 unused, unexpired invites (409), counted under `pg_advisory_xact_lock` in the insert's transaction so concurrent creates cannot pass together. The CLI is not capped.
+  - The code is in the one 201 response only: stored as a SHA-256 hash, never logged, never in the list. The page keeps it in component state, shows it once, and the list never has a code, hash or email.
+  - Status, create and revoke moved into `app/auth/invites.py` and are shared with the CLI, so there is one implementation. Revoke is one atomic `DELETE ... WHERE used_at IS NULL`, so a signup racing a revoke ends as either a used invite (409) or a revoked one (the signup's usual 400).
+  - No migration: the `invite_codes` table is unchanged.
+- **Alternatives rejected.** An `is_admin` column on users: needs a migration and a way to grant it (a second admin path to secure). A separate admin token or secret: another credential to store, rotate and leak, and it would not tie an action to an account.
+- **Accepted limits.**
+  - The list is not paginated (the one exception to the API's pagination rule). Only unused invites are capped, but used and expired rows stay a few dozen at friend-trial scale.
+  - The 404 rule has leaks: a non-admin sending malformed JSON gets 422 because FastAPI parses the body before the dependency runs; anonymous callers get 401; and `/admin` for a non-admin keeps the app shell and returns 200 while the client draws "Page not found." A real 404 would need middleware or a server-side check, which is not worth it here.
+  - **Emails are not verified.** `ADMIN_EMAILS` must name an account that already exists. An admin address with no account yet could be claimed by anyone holding a valid invite, who would sign up with that address and become admin. The address must also be removed from `ADMIN_EMAILS` before the admin account is deleted, otherwise anyone with an invite could register it again. This is accepted until email verification exists (Backlog in docs/ROADMAP.md).
+  - There is no user management and no audit log of who created or revoked an invite.
