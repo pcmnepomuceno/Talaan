@@ -225,8 +225,6 @@ Rows keep their ledger sheet and rules; each row shows three bars. Base `color-b
 
 **Slow start note (v2.3).** The free-tier API can take a minute to wake. When a login or sign-up request, or the first list or detail load, is still pending after 3 seconds, one Caption line in `color-text-muted` appears: "Starting up. This can take up to a minute the first time." It sits in a polite live region (present from the start, so the text is announced when it appears) and is removed when the request settles, whether it succeeds or fails. Nothing is shown before 3 seconds.
 
-The line already covers the first login and sign-up, and is unchanged in v2.7.
-
 ### 6.13 Month grid (v2.5)
 The month view of the Interviews screen (8.8). Existing tokens only: no dots, no counts as badges, no pills, no new colors.
 - **Month header**: h2 with the month and year (`November 2026`, Section Title) at the left; at the right the icon buttons "Previous month" and "Next month" (chevrons, 44 x 44, accessible names exactly those) and the text action "Today" (`TextAction`, 44px). At 1900-01 and 2200-12 the matching button is `aria-disabled` (not `disabled`, so a focused button keeps focus) in `color-text-muted`.

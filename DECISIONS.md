@@ -579,5 +579,5 @@
 - **MIT licence**, chosen by the owner (no alternatives discussed).
 - **No-reset warning, not a reset flow.** The sign-up form shows a plain warning under the password field that there is no password reset. A reset flow is not planned for the trial.
 - **`list-invites` shows who used a code.** It now prints `used_at` and the account name (`users.account_name`), or "(deleted)" when the user was removed. It never prints an email, a code or a hash.
-- **README documents what is stored**, including that the invite note survives account deletion and that IP-keyed rate-limit rows stay up to 7 days.
+- **README documents what is stored**, including that the invite note survives account deletion and that IP-keyed rate-limit rows stay about a week.
 - **A1 admin page deferred** until after the friend trial. It will reverse the 2026-11-03 no-admin-endpoint rule, so it needs its own entry when built.
