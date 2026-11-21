@@ -23,6 +23,9 @@ const labels = {
   pending: "Pending",
   good: "Good",
   bad: "Bad",
+  unused: "Unused",
+  used: "Used",
+  expired: "Expired",
 } as const;
 
 it.each(Object.entries(labels))("stamp %s reads exactly %s", (value, label) => {

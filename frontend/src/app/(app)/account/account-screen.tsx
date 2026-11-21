@@ -83,6 +83,17 @@ export function AccountScreen() {
           <ThemeToggle />
         </div>
 
+        {user?.is_admin && (
+          <section aria-labelledby="admin" className="mt-8 flex flex-col items-start gap-3">
+            <h2 id="admin" className="sr-only">
+              Admin
+            </h2>
+            <Button variant="secondary" href="/admin">
+              Admin
+            </Button>
+          </section>
+        )}
+
         <section aria-labelledby="session" className="mt-8 flex flex-col items-start gap-3">
           <h2 id="session" className="sr-only">
             Session

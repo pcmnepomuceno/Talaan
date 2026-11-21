@@ -1,11 +1,11 @@
 // The enum lists live in lib/types.ts (lib never imports from components); re-exported here.
-import { OUTCOMES, STATUSES, type Outcome, type Status } from "../lib/types";
+import { type InviteStatus, OUTCOMES, STATUSES, type Outcome, type Status } from "../lib/types";
 
-export { OUTCOMES, STATUSES, type Outcome, type Status };
+export { type InviteStatus, OUTCOMES, STATUSES, type Outcome, type Status };
 
 // DESIGN.md 3.2: sentence-case label plus text, bg and border tokens. Full class names so
 // Tailwind can see them. Outcomes reuse saved, offered and rejected.
-const stamps: Record<Status | Outcome, [label: string, cls: string]> = {
+const stamps: Record<Status | Outcome | InviteStatus, [label: string, cls: string]> = {
   saved: ["Saved", "text-status-saved-text bg-status-saved-bg border-status-saved-border"],
   applied: ["Applied", "text-status-applied-text bg-status-applied-bg border-status-applied-border"],
   screening: ["Screening", "text-status-screening-text bg-status-screening-bg border-status-screening-border"],
@@ -21,14 +21,18 @@ const stamps: Record<Status | Outcome, [label: string, cls: string]> = {
   pending: ["Pending", "text-status-saved-text bg-status-saved-bg border-status-saved-border"],
   good: ["Good", "text-status-offered-text bg-status-offered-bg border-status-offered-border"],
   bad: ["Bad", "text-status-rejected-text bg-status-rejected-bg border-status-rejected-border"],
+  // Invites (admin page) reuse applied, offered and withdrawn.
+  unused: ["Unused", "text-status-applied-text bg-status-applied-bg border-status-applied-border"],
+  used: ["Used", "text-status-offered-text bg-status-offered-bg border-status-offered-border"],
+  expired: ["Expired", "text-status-withdrawn-text bg-status-withdrawn-bg border-status-withdrawn-border"],
 };
 
-export function stampLabel(value: Status | Outcome) {
+export function stampLabel(value: Status | Outcome | InviteStatus) {
   return stamps[value][0];
 }
 
 // DESIGN.md 6.4: flat rectangle, no dot or icon; the label always shows.
-export function StatusStamp({ value }: { value: Status | Outcome }) {
+export function StatusStamp({ value }: { value: Status | Outcome | InviteStatus }) {
   const [label, cls] = stamps[value];
   return (
     <span

@@ -18,6 +18,9 @@ export const OUTCOMES = ["pending", "good", "bad"] as const;
 export type Status = (typeof STATUSES)[number];
 export type Outcome = (typeof OUTCOMES)[number];
 
+// Invite status as the admin API sends it (app/auth/invites.py status()); not an application status.
+export type InviteStatus = "unused" | "used" | "expired";
+
 // Field names match the API exactly (app/applications/schemas.py ApplicationRead,
 // app/interviews/schemas.py InterviewRead). DESIGN.md says "job title" and "notes";
 // the API says job_name and remarks.
