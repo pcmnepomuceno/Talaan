@@ -304,6 +304,18 @@ def test_note_over_200_code_points_is_422(admin, db):
     assert db.query(InviteCode).count() == 0
 
 
+def test_note_with_nul_is_422_on_the_note_field_and_creates_nothing(admin, db):
+    r = create(admin, note="a\x00b")
+    assert r.status_code == 422 and r.json()["detail"][0]["loc"][-1] == "note"
+    assert db.query(InviteCode).count() == 0
+
+
+def test_note_with_tab_newline_and_emoji_is_still_201(admin):
+    note = "a\tb\nc \U0001f600"
+    r = create(admin, note=note)
+    assert r.status_code == 201 and r.json()["note"] == note
+
+
 @pytest.mark.parametrize("days", [0, 1, 15, 31, "abc", None, 7.5])
 def test_expires_in_days_outside_7_14_30_is_422(admin, db, days):
     assert create(admin, expires_in_days=days).status_code == 422

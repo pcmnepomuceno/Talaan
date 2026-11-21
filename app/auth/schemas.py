@@ -33,6 +33,8 @@ class InviteCreate(BaseModel):
     @classmethod
     def strip_note(cls, value):
         if isinstance(value, str):
+            if "\x00" in value:  # Postgres text cannot hold NUL: would be a 500 at the insert
+                raise ValueError("Note cannot contain a null character.")
             return value.strip() or None
         return value
 
