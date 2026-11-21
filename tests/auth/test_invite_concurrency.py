@@ -135,3 +135,49 @@ def test_same_email_two_codes_race_one_user_one_code_used(monkeypatch):
         setup.query(RateLimitEvent).filter_by(key=IP_KEY).delete()
         setup.commit()
         setup.close()
+
+
+def test_revoke_waits_for_consume():
+    """A signup's consume UPDATE holds the row lock. revoke's DELETE waits, re-checks `used_at IS
+    NULL` after the commit, matches nothing and answers "used": a consumed invite is never deleted."""
+    _, code_hash = invites.generate()
+    setup = SessionLocal()
+    now = datetime.now(timezone.utc)
+    invite = InviteCode(code_hash=code_hash, created_at=now, expires_at=now + timedelta(days=1))
+    setup.add(invite)
+    setup.commit()
+    invite_id = invite.id
+
+    holder = SessionLocal()
+    result, errors = [], []
+
+    def revoke_it():
+        db = SessionLocal()
+        try:
+            result.append(invites.revoke(db, invite_id))
+        except Exception as e:  # noqa: BLE001 - a thread would swallow it; asserted below
+            errors.append(e)
+        finally:
+            db.close()
+
+    try:
+        assert invites.consume(holder, code_hash, user_id=None)  # UPDATE open, row locked
+        t = spawn(revoke_it)
+        t.join(0.5)
+        assert t.is_alive() and not result  # the DELETE is waiting on the row lock
+        holder.commit()
+        join_all([t], timeout=10)
+        assert not errors, errors
+        assert result == ["used"]
+        check = SessionLocal()
+        try:
+            assert check.query(InviteCode).filter_by(id=invite_id).one().used_at is not None
+        finally:
+            check.close()
+    finally:
+        holder.rollback()
+        holder.close()
+        setup.rollback()
+        setup.query(InviteCode).filter_by(code_hash=code_hash).delete()
+        setup.commit()
+        setup.close()
