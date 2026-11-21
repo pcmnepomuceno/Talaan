@@ -137,6 +137,8 @@ withEnv(async ({ base, apiBase, createInvite }) => {
       "non-admin: no 'Create invite' heading and no form",
       (await p2.getByRole("heading", { name: "Create invite" }).count()) === 0 && (await p2.locator("form").count()) === 0,
     );
+    check("non-admin: the app shell is present (1 nav)", (await p2.locator("nav").count()) === 1);
+    check(`non-admin: document.title is "Talaan" (got "${await p2.title()}")`, (await p2.title()) === "Talaan");
     await ctx2.close();
   } finally {
     await browser.close();
