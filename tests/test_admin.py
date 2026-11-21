@@ -49,6 +49,54 @@ def test_list_shows_status_and_no_secrets(db, user, capsys):
         assert row.code_hash not in out
 
 
+def _rows(capsys):
+    lines = capsys.readouterr().out.splitlines()
+    return lines[0], [line.split("\t") for line in lines[1:]]
+
+
+def test_list_header_is_exact(db, capsys):
+    assert admin.run(db, ["list-invites"]) == 0
+    header, rows = _rows(capsys)
+    assert header == "id\tstatus\tcreated\texpires\tused\taccount\tnote"
+    assert rows == []
+
+
+def test_list_used_invite_shows_when_and_who_with_empty_note(db, user, capsys):
+    create_invite(db, used_by=user)
+    admin.run(db, ["list-invites"])
+    _, [row] = _rows(capsys)
+    assert row[1] == "used"
+    assert datetime.fromisoformat(row[4]) == db.query(InviteCode).one().used_at
+    assert row[5] == "Test User"
+    assert row[6] == ""
+
+
+def test_list_shows_deleted_for_a_deleted_account(db, users, capsys):
+    create_invite(db, used_by=users[1])
+    db.delete(users[1])
+    db.commit()
+    admin.run(db, ["list-invites"])
+    _, [row] = _rows(capsys)
+    assert row[4] != ""
+    assert row[5] == "(deleted)"
+
+
+def test_list_unused_invite_has_empty_used_and_account(db, capsys):
+    create_invite(db, note="n")
+    admin.run(db, ["list-invites"])
+    _, [row] = _rows(capsys)
+    assert row[4] == "" and row[5] == "" and row[6] == "n"
+
+
+def test_list_never_prints_email_or_code_material(db, user, capsys):
+    code = create_invite(db, used_by=user)
+    admin.run(db, ["list-invites"])
+    out = capsys.readouterr().out
+    assert user.email not in out
+    assert code not in out and invites.normalize(code) not in out
+    assert db.query(InviteCode).one().code_hash not in out
+
+
 def test_revoke_deletes_unused(db, capsys):
     create_invite(db)
     row = db.query(InviteCode).one()

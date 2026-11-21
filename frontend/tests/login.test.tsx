@@ -264,6 +264,37 @@ describe("create account", () => {
     expect(screen.getByLabelText("Password").getAttribute("autocomplete")).toBe("new-password");
   });
 
+  const NO_RESET = "There is no password reset yet. Keep your password somewhere safe.";
+  const described = (el: HTMLElement) =>
+    (el.getAttribute("aria-describedby") ?? "")
+      .split(" ")
+      .map((id) => document.getElementById(id)?.textContent ?? "");
+
+  it("warns there is no password reset, and the helper describes the password input", async () => {
+    await openSignup();
+    const pw = screen.getByLabelText("Password");
+    expect(screen.getByText(NO_RESET)).toBeTruthy();
+    expect(described(pw)).toEqual([NO_RESET]);
+  });
+
+  it("log in mode has no password reset line", () => {
+    render(<LoginForm />);
+    expect(screen.queryByText(NO_RESET)).toBeNull();
+  });
+
+  it("a password error keeps the helper and describes the input by both", async () => {
+    handlers[SIGNUP] = () =>
+      json(422, { detail: [{ loc: ["body", "password"], msg: "Value error, Password must be at most 72 bytes long." }] });
+    await openSignup();
+    await fillSignup();
+    await submitSignup();
+    await screen.findByText("Password must be at most 72 bytes long.");
+    const pw = screen.getByLabelText("Password");
+    expect(pw.getAttribute("aria-invalid")).toBe("true");
+    expect(described(pw)).toEqual([NO_RESET, "Password must be at most 72 bytes long."]);
+    expect(screen.getByText(NO_RESET)).toBeTruthy();
+  });
+
   it("signs up, then logs in with the same credentials, then navigates", async () => {
     handlers[SIGNUP] = () => json(200, user);
     handlers[LOGIN] = () => json(200, { detail: "Logged in" });

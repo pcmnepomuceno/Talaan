@@ -1,4 +1,4 @@
-# Talaan Design System v2.6 (Design.md)
+# Talaan Design System v2.7 (Design.md)
 
 This file is the single source of truth for Talaan's look. Screens must use these exact token values. Do not substitute a Material 3 palette or any color not listed here. Do not copy the layout, content or branding of any other product.
 
@@ -257,7 +257,7 @@ The month view of the Interviews screen (8.8). Existing tokens only: no dots, no
 ---
 
 ## 8. Screens (reference list)
-1. **Sign up / Log in**: an ink-blue band at the top (`color-bar-bg`, about 200px tall) with the logo mark, the wordmark "Talaan" and one plain line, "Track every application in one place." Below it on paper, a two-option segmented control (Log in, Create account). Sign up fields: Invite code, Account name, Email, Password (with show/hide), plus the plain line "Access is by invitation for now." Log in fields: Email, Password.
+1. **Sign up / Log in**: an ink-blue band at the top (`color-bar-bg`, about 200px tall) with the logo mark, the wordmark "Talaan" and one plain line, "Track every application in one place." Below it on paper, a two-option segmented control (Log in, Create account). Sign up fields: Invite code, Account name, Email, Password (with show/hide; helper under it (v2.7): "There is no password reset yet. Keep your password somewhere safe."), plus the plain line "Access is by invitation for now." Log in fields: Email, Password.
    - Failed login message (one banner above the fields, not tied to a field): "Invalid email or password."
    - Failed sign up messages (amended in F4; the API tells the user which field to fix): invite code field "Invalid or expired invite code."; email field "Email already exists."; any password or format rule from the API on its own field. Too many attempts: banner "Too many attempts. Try again in about N minutes." Server or network trouble: banner "Talaan isn't responding right now. Try again in a moment."
    - Invite code field: hint "Paste the code you were given; dashes are optional", no spellcheck, capital letters on mobile keyboards.

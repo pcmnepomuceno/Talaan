@@ -12,10 +12,10 @@ from datetime import timedelta
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-import app.users.models  # noqa: F401  # registers `users`: the invite FK needs it in a bare CLI process
 from app import config
 from app.auth import invites, rate_limit
 from app.auth.models import InviteCode
+from app.users.models import User  # registers `users` for the invite FK
 
 BATCH_SIZE = 1000  # rows per DELETE; tests patch it
 DEFAULT_EXPIRES_IN = "14d"
@@ -118,10 +118,18 @@ def run(db: Session, argv: list[str]) -> int:
         return 0
 
     if args.command == "list-invites":
-        rows = db.query(InviteCode).order_by(InviteCode.id).all()
-        print("id\tstatus\tcreated\texpires\tnote")
-        for r in rows:
-            print(f"{r.id}\t{status(r)}\t{r.created_at.isoformat()}\t{r.expires_at.isoformat()}\t{r.note or ''}")
+        rows = (
+            db.query(InviteCode, User.account_name)
+            .outerjoin(User, User.id == InviteCode.used_by_user_id)
+            .order_by(InviteCode.id)
+            .all()
+        )
+        print("id\tstatus\tcreated\texpires\tused\taccount\tnote")
+        for r, account in rows:
+            used = r.used_at.isoformat() if r.used_at else ""
+            if r.used_at and account is None:
+                account = "(deleted)"  # the user row is gone (FK SET NULL)
+            print(f"{r.id}\t{status(r)}\t{r.created_at.isoformat()}\t{r.expires_at.isoformat()}\t{used}\t{account or ''}\t{r.note or ''}")
         return 0
 
     # revoke-invite: the WHERE keeps the "unused only" rule atomic against a concurrent signup.
