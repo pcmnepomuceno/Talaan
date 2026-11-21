@@ -4,6 +4,8 @@ Run locally with:
     uvicorn app.main:app --reload
 """
 
+import os  # SPIKE ONLY
+
 from fastapi import FastAPI, Request
 
 from app import config, health, security
@@ -41,3 +43,7 @@ app.include_router(admin_invites.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
 app.include_router(interviews.router, prefix="/api/v1")
 app.include_router(applications.router, prefix="/api/v1")
+if os.getenv("SPIKE_DEBUG") == "1":  # SPIKE ONLY
+    from app import spike_debug  # SPIKE ONLY
+
+    app.include_router(spike_debug.router, prefix="/api/v1")  # SPIKE ONLY

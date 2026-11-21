@@ -21,6 +21,8 @@ async def origin_check(request: Request, call_next):
     if request.method in UNSAFE_METHODS:
         origin = request.headers.get("origin")
         site = request.headers.get("sec-fetch-site", "").strip().lower()
+        if origin is not None and origin.strip().lower() in config.EXTENSION_ORIGINS:  # SPIKE: proposed for E2
+            return await call_next(request)  # SPIKE: proposed for E2
         if site == "cross-site" or (
             site != "same-origin"
             and origin is not None

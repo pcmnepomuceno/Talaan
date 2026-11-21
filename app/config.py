@@ -7,6 +7,7 @@ present). Keep real secrets in .env, never commit them — see .env.example.
 import ipaddress
 import logging
 import os
+import re  # SPIKE: proposed for E2
 from datetime import timedelta, timezone
 from urllib.parse import urlsplit
 
@@ -146,6 +147,18 @@ def parse_origins(raw: str | None) -> frozenset[str]:
 
 
 ALLOWED_ORIGINS = parse_origins(os.getenv("ALLOWED_ORIGINS"))
+
+
+# SPIKE: proposed for E2. Comma-separated chrome-extension://<32 chars a-p> origins that may write.
+def parse_extension_origins(raw: str | None) -> frozenset[str]:  # SPIKE: proposed for E2
+    items = [part.strip().lower() for part in (raw or "").split(",") if part.strip()]  # SPIKE: proposed for E2
+    for item in items:  # SPIKE: proposed for E2
+        if not re.fullmatch(r"chrome-extension://[a-p]{32}", item):  # SPIKE: proposed for E2
+            raise ValueError(f"EXTENSION_ORIGINS entry {item!r} must be chrome-extension://<32 chars a-p>")  # SPIKE: proposed for E2
+    return frozenset(items)  # SPIKE: proposed for E2
+
+
+EXTENSION_ORIGINS = parse_extension_origins(os.getenv("EXTENSION_ORIGINS"))  # SPIKE: proposed for E2
 
 
 # Account deletion (POST /account/delete): wrong-password budget per user, attempts per IP.
