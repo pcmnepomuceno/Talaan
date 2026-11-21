@@ -47,6 +47,7 @@ def test_anonymous_gets_401_on_list_and_revoke(client, user, monkeypatch):
     monkeypatch.setattr(config, "ADMIN_EMAILS", parse_admins(USER_EMAIL))
     assert client.get(URL).status_code == 401
     assert client.delete(f"{URL}/1").status_code == 401
+    assert client.get(URL).headers["cache-control"] == "no-store"
 
 
 def test_non_admin_gets_404_on_list_and_revoke(client, db, user, make_session, monkeypatch):
@@ -55,7 +56,17 @@ def test_non_admin_gets_404_on_list_and_revoke(client, db, user, make_session, m
     as_user(client, "tok")
     r = client.get(URL)
     assert r.status_code == 404 and r.json() == {"detail": "Not Found"}
+    assert r.headers["cache-control"] == "no-store"
     assert client.delete(f"{URL}/1").status_code == 404
+
+
+def test_non_admin_gets_404_before_validation_runs(client, db, user, make_session, monkeypatch):
+    """The gate runs before body and path validation, so a non-admin learns nothing from a 422."""
+    monkeypatch.setattr(config, "ADMIN_EMAILS", parse_admins("someone-else@example.ph"))
+    make_session("tok")
+    as_user(client, "tok")
+    for r in (client.post(URL, json={}), client.delete(f"{URL}/abc")):
+        assert r.status_code == 404 and r.json() == {"detail": "Not Found"}
 
 
 def test_empty_admin_emails_means_404_for_everyone(client, user, make_session, monkeypatch):
@@ -136,8 +147,9 @@ def test_revoke_used_is_409_and_stays(admin, db):
     assert db.query(InviteCode).count() == 1
 
 
-def test_revoke_missing_is_404(admin):
-    r = admin.delete(f"{URL}/999999")
+@pytest.mark.parametrize("invite_id", ["999999", "99999999999999999999", "-1"])
+def test_revoke_missing_is_404(admin, invite_id):
+    r = admin.delete(f"{URL}/{invite_id}")
     assert r.status_code == 404 and r.json() == {"detail": "Invite not found."}
 
 
@@ -152,6 +164,16 @@ def test_cache_control_no_store_on_every_outcome(admin, db):
         admin.delete(f"{URL}/{ids[0]}"),  # 204
     ]
     assert [r.status_code for r in responses] == [200, 409, 404, 204]
+    assert all(r.headers["cache-control"] == "no-store" for r in responses)
+
+
+def test_create_outcomes_403_409_429_are_no_store(admin, db, monkeypatch):
+    responses = [create(admin, password=BAD)]  # 403
+    fill(db, unused=50)
+    responses.append(create(admin))  # 409
+    monkeypatch.setattr(config, "ADMIN_INVITE_USER_LIMIT", 1)
+    responses.append(create(admin))  # 429
+    assert [r.status_code for r in responses] == [403, 409, 429]
     assert all(r.headers["cache-control"] == "no-store" for r in responses)
 
 
@@ -177,7 +199,8 @@ def fill(db, unused=0, expired=0, used=0):
 
 def test_anonymous_gets_401_on_create(client, user, monkeypatch):
     monkeypatch.setattr(config, "ADMIN_EMAILS", parse_admins(USER_EMAIL))
-    assert create(client).status_code == 401
+    r = create(client)
+    assert r.status_code == 401 and r.headers["cache-control"] == "no-store"
 
 
 def test_non_admin_gets_404_on_create_and_nothing_is_made(client, db, user, make_session, monkeypatch):
@@ -186,6 +209,7 @@ def test_non_admin_gets_404_on_create_and_nothing_is_made(client, db, user, make
     as_user(client, "tok")
     r = create(client)
     assert r.status_code == 404 and r.json() == {"detail": "Not Found"}
+    assert r.headers["cache-control"] == "no-store"
     assert db.query(InviteCode).count() == 0
     assert db.query(RateLimitEvent).count() == 0  # not even a rate-limit row
 
@@ -215,6 +239,9 @@ def test_create_response_shape_and_no_store(admin):
 
 
 def test_code_is_absent_from_later_list_and_from_every_log(admin, db, caplog):
+    """Limit: the `db` fixture was built before the log level is set, and SQL statement logging is
+    off by default, so this proves the app's own logs never carry the code. The stored value is the
+    hash, never the plaintext code (asserted below)."""
     caplog.set_level(logging.DEBUG)  # root logger: every logger propagates here
     r = create(admin, note="log check")
     assert r.status_code == 201
@@ -326,6 +353,7 @@ def test_two_concurrent_creates_at_49_unused_give_one_201_and_one_409(monkeypatc
                 _, code_hash = invites.generate()
                 setup.add(InviteCode(code_hash=code_hash, note=run, created_at=now, expires_at=now + timedelta(days=1)))
             setup.commit()
+            assert setup.query(InviteCode).filter(InviteCode.used_at.is_(None)).count() == 49
         finally:
             setup.close()
 
