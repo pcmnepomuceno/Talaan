@@ -103,13 +103,15 @@ def status(invite: InviteCode) -> str:
     return "expired" if invite.expires_at <= utcnow() else "unused"
 
 
-def create(db: Session, note: str | None, expires_in: timedelta) -> tuple[InviteCode, str]:
-    """Insert and commit a new invite. Returns (row, display code); the code exists only in memory."""
+def create(db: Session, note: str | None, expires_in: timedelta, commit: bool = True) -> tuple[InviteCode, str]:
+    """Insert and commit a new invite. Returns (row, display code); the code exists only in memory.
+    commit=False only flushes (the row gets its id) so the caller can commit it together with a
+    check it made in the same transaction (the admin endpoint's cap, under an advisory lock)."""
     display, code_hash = generate()
     now = utcnow()
     invite = InviteCode(code_hash=code_hash, note=note, created_at=now, expires_at=now + expires_in)
     db.add(invite)
-    db.commit()
+    db.commit() if commit else db.flush()
     return invite, display
 
 

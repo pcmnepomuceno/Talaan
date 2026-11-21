@@ -1,15 +1,23 @@
 """Admin-only invite management over HTTP (DECISIONS.md, 2026-11-21). Every route needs
 require_admin. Shares status/revoke with the CLI through app.auth.invites."""
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from datetime import timedelta
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.auth import invites
+from app import config
+from app.auth import invites, rate_limit
 from app.auth.dependencies import require_admin
 from app.auth.models import InviteCode
-from app.auth.schemas import InviteItem, InviteList
+from app.auth.schemas import InviteCreate, InviteCreated, InviteItem, InviteList
+from app.auth.security import verify_password
 from app.database import get_db
 from app.users.models import User
+
+# Fixed advisory-lock id that serializes the cap check and the insert across all admin creates.
+CAP_LOCK_ID = rate_limit.lock_id("admin-invite:cap")
 
 router = APIRouter(prefix="/admin/invites", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -51,3 +59,47 @@ def revoke_invite(invite_id: int, db: Session = Depends(get_db)) -> Response:
     if result == "missing":
         raise HTTPException(status_code=404, detail="Invite not found.")
     return Response(status_code=204)
+
+
+@router.post("", status_code=201, response_model=InviteCreated)
+def create_invite(
+    body: InviteCreate,
+    request: Request,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> InviteCreated:
+    """Create one invite. The plaintext code is in this response only: never log it."""
+    # Plain values now: enforce() commits, which expires `admin`.
+    user_id, password_hash = admin.id, admin.password_hash
+    # Limits first, committed before bcrypt (as in account delete). Every attempt counts.
+    rate_limit.enforce(
+        db,
+        ("admin-invite:ip:" + rate_limit.client_ip(request),
+         config.ADMIN_INVITE_IP_LIMIT, config.ADMIN_INVITE_IP_WINDOW_SECONDS),
+        (f"admin-invite:user:{user_id}",
+         config.ADMIN_INVITE_USER_LIMIT, config.ADMIN_INVITE_USER_WINDOW_SECONDS),
+    )
+    # 403, not 401: the frontend treats 401 as "session expired" and would log the user out.
+    if not verify_password(body.password, password_hash):
+        raise HTTPException(status_code=403, detail="Incorrect password.")
+
+    # One transaction: the lock makes count-then-insert atomic, so two creates at 49 cannot both
+    # pass. The commit (or the rollback below) releases it.
+    with rate_limit.fail_closed(db):
+        db.execute(text("SELECT pg_advisory_xact_lock(:id)"), {"id": CAP_LOCK_ID})
+        open_count = (
+            db.query(InviteCode)
+            .filter(InviteCode.used_at.is_(None), InviteCode.expires_at > invites.utcnow())
+            .count()
+        )
+        if open_count >= invites.MAX_OPEN_INVITES:
+            db.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail=f"There are already {invites.MAX_OPEN_INVITES} unused invites. "
+                "Revoke one or wait for one to expire.",
+            )
+        invite, display = invites.create(db, body.note, timedelta(days=body.expires_in_days), commit=False)
+        result = InviteCreated(id=invite.id, code=display, note=invite.note, expires_at=invite.expires_at)
+        db.commit()
+    return result

@@ -154,6 +154,12 @@ ACCOUNT_DELETE_USER_WINDOW_SECONDS = _int("ACCOUNT_DELETE_USER_WINDOW_SECONDS", 
 ACCOUNT_DELETE_IP_LIMIT = _int("ACCOUNT_DELETE_IP_LIMIT", 10, minimum=1)
 ACCOUNT_DELETE_IP_WINDOW_SECONDS = _int("ACCOUNT_DELETE_IP_WINDOW_SECONDS", 900, minimum=1, maximum=MAX_WINDOW_SECONDS)
 
+# Admin invite creation (POST /admin/invites): every attempt counts, successful ones too.
+ADMIN_INVITE_USER_LIMIT = _int("ADMIN_INVITE_USER_LIMIT", 10, minimum=1)
+ADMIN_INVITE_USER_WINDOW_SECONDS = _int("ADMIN_INVITE_USER_WINDOW_SECONDS", 3600, minimum=1, maximum=MAX_WINDOW_SECONDS)
+ADMIN_INVITE_IP_LIMIT = _int("ADMIN_INVITE_IP_LIMIT", 10, minimum=1)
+ADMIN_INVITE_IP_WINDOW_SECONDS = _int("ADMIN_INVITE_IP_WINDOW_SECONDS", 3600, minimum=1, maximum=MAX_WINDOW_SECONDS)
+
 
 # Emails (comma-separated, case-insensitive) allowed to manage invites over HTTP. Parsed once at
 # import. Unset or blank = nobody is an admin. Not part of production_problems(): off is valid.
