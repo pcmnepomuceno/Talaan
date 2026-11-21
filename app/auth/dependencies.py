@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session as DBSession
 
+from app import config
 from app.auth.cookies import read_session_token
 from app.auth.models import Session
 from app.auth.security import hash_session_token
@@ -45,3 +46,11 @@ def get_current_user(
 		)
 
 	return user
+
+
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+	"""401 without a session (from get_current_user); 404 unless the user's current email is in
+	ADMIN_EMAILS. The body is FastAPI's own unknown-route one, so the feature is not announced."""
+	if not config.is_admin(current_user.email):
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+	return current_user
