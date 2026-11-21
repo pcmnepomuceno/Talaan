@@ -360,14 +360,20 @@ def test_a_data_error_on_insert_propagates_and_is_a_500_not_the_limiters_503(adm
     assert r.status_code == 500 and secret not in r.text
 
 
-def test_a_db_error_in_the_lock_or_count_is_503_and_creates_nothing(admin, db, monkeypatch):
-    """Pins the lock and count inside fail_closed: outside it, the error would be a 500."""
+@pytest.mark.parametrize("target", ["lock", "count"])
+def test_a_db_error_in_the_lock_or_count_is_503_and_creates_nothing(admin, db, monkeypatch, target):
+    """Pins the lock and the count each inside fail_closed: outside it, the error would be a 500."""
     before = db.query(InviteCode).count()
 
     def boom(*a, **k):
-        raise OperationalError("SELECT pg_advisory_xact_lock", {}, Exception("db down"))
+        raise OperationalError("db statement", {}, Exception("db down"))
 
-    monkeypatch.setattr(admin_invites, "text", boom)  # the route's advisory-lock statement
+    if target == "lock":
+        monkeypatch.setattr(admin_invites, "text", boom)  # the route's advisory-lock statement
+    else:
+        # Only the count's filter calls invites.utcnow() before the 503 (the limiter uses
+        # rate_limit.utcnow, and invites.create is not reached), so the lock has succeeded here.
+        monkeypatch.setattr(invites, "utcnow", boom)
     api = TestClient(app, raise_server_exceptions=False)
     api.cookies.update(admin.cookies)
     r = api.post(URL, json={"expires_in_days": 14, "password": USER_PASSWORD})
