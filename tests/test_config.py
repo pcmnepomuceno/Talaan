@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import sys
@@ -154,3 +155,42 @@ def test_window_above_the_seven_day_ceiling_fails_startup_naming_the_variable(na
 
 def test_windows_at_the_ceiling_are_accepted():
     assert import_config(**dict.fromkeys(WINDOW_VARS, "604800")).returncode == 0
+
+
+def admin_emails(**env):
+    """ADMIN_EMAILS as a fresh interpreter parses it at import (None env value = unset)."""
+    base = {k: v for k, v in os.environ.items() if k != "ADMIN_EMAILS"}
+    r = subprocess.run(
+        [sys.executable, "-c", "import json, app.config as c; print(json.dumps(sorted(c.ADMIN_EMAILS)))"],
+        env={**base, **env}, capture_output=True, text=True, check=False,
+    )
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)
+
+
+def test_admin_emails_unset_or_blank_is_empty():
+    assert admin_emails() == []
+    assert admin_emails(ADMIN_EMAILS="") == []
+    assert admin_emails(ADMIN_EMAILS="  , ,") == []
+
+
+def test_admin_emails_strips_lowercases_and_drops_blanks():
+    raw = " Admin@Example.ph ,second@EXAMPLE.ph,, "
+    assert admin_emails(ADMIN_EMAILS=raw) == ["admin@example.ph", "second@example.ph"]
+
+
+def test_is_admin_is_case_insensitive_and_trimmed(monkeypatch):
+    monkeypatch.setattr(config, "ADMIN_EMAILS", frozenset({"admin@example.ph"}))
+    assert config.is_admin("admin@example.ph")
+    assert config.is_admin("  Admin@Example.PH ")
+    assert not config.is_admin("other@example.ph")
+
+
+def test_is_admin_false_when_unset(monkeypatch):
+    monkeypatch.setattr(config, "ADMIN_EMAILS", frozenset())
+    assert not config.is_admin("admin@example.ph")
+
+
+def test_production_problems_does_not_mention_admin_emails(monkeypatch):
+    monkeypatch.setattr(config, "ADMIN_EMAILS", frozenset())
+    assert not any("ADMIN_EMAILS" in p for p in config.production_problems())

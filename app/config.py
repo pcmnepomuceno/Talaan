@@ -155,6 +155,16 @@ ACCOUNT_DELETE_IP_LIMIT = _int("ACCOUNT_DELETE_IP_LIMIT", 10, minimum=1)
 ACCOUNT_DELETE_IP_WINDOW_SECONDS = _int("ACCOUNT_DELETE_IP_WINDOW_SECONDS", 900, minimum=1, maximum=MAX_WINDOW_SECONDS)
 
 
+# Emails (comma-separated, case-insensitive) allowed to manage invites over HTTP. Parsed once at
+# import. Unset or blank = nobody is an admin. Not part of production_problems(): off is valid.
+ADMIN_EMAILS = frozenset(e.strip().lower() for e in (os.getenv("ADMIN_EMAILS") or "").split(",") if e.strip())
+
+
+def is_admin(email: str) -> bool:
+    """Reads the module global at call time, so tests can patch ADMIN_EMAILS."""
+    return email.strip().lower() in ADMIN_EMAILS
+
+
 # "development" (default, also blank) or "production". Production hides /docs, /redoc and
 # /openapi.json and makes app/main.py refuse to start on a dev-grade config (production_problems).
 # Anything else is a startup error, so a typo cannot silently mean "development".
