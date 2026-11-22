@@ -101,10 +101,12 @@ export async function start({ chrome, fetch, document, setTimeout = globalThis.s
     if (!lookupable(url)) return;
     try {
       const r = await api.lookup(url);
+      if (r.status !== 200 && mine === seq) lastUrl = null;
       const m = r.status === 200 ? r.data?.match : null;
       if (mine === seq && m && Number.isSafeInteger(m.id) && typeof m.job_name === "string" && typeof m.company === "string") setDup(m);
     } catch {
-      // A failed lookup never blocks Save and shows nothing.
+      // A failed lookup never blocks Save and shows nothing; forget the URL so the next blur retries.
+      if (mine === seq) lastUrl = null;
     }
   }
 

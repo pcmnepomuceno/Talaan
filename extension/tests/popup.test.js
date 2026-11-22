@@ -430,6 +430,20 @@ describe("duplicate check", () => {
     expect(JSON.parse(lookups(f)[1][1].body).url).toBe("https://jobs.example.ph/jobs/2");
   });
 
+  it.each([
+    ["a network error", () => { throw new TypeError("x"); }],
+    ["a 500", () => res(500, null)],
+  ])("retries the same URL on blur after %s on open", async (_n, first) => {
+    let n = 0;
+    const { f } = await mount({ routes: { "POST /api/v1/applications/lookup": () => (n++ === 0 ? first() : MATCH()) } });
+    expect(lookups(f)).toHaveLength(1);
+    expect($("#dup").hidden).toBe(true);
+    $("#job_url").dispatchEvent(new Event("blur"));
+    await settle();
+    expect(lookups(f)).toHaveLength(2);
+    expect($("#dup").hidden).toBe(false);
+  });
+
   it("does not look up an invalid URL and clears an old note", async () => {
     const { f } = await mount({ routes: { "POST /api/v1/applications/lookup": MATCH() } });
     expect($("#dup").hidden).toBe(false);
