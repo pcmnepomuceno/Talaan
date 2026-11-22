@@ -111,9 +111,42 @@ function safeUrl(url) {
   return noFrag;
 }
 
+const L = "(?<![\\p{L}\\p{N}])";
+const R = "(?![\\p{L}\\p{N}])";
+const word = (alt) => new RegExp(`${L}(?:${alt})${R}`, "iu");
+const MODE_WORDS = [
+  ["remote", word("remote|work from home|wfh")],
+  ["hybrid", word("hybrid")],
+  ["on_site", word("on-site|onsite|on site")],
+];
+const PAGE_MODES = { remote: "remote", hybrid: "hybrid", "on-site": "on_site" };
+
 /**
- * @param {{url?: string, title?: string, metas?: {ogTitle?: string|null}, jsonLd?: string[]}} raw
- * @returns {{company: string, job_name: string, job_url: string, source: "jsonld"|"opengraph"|"title"|"none"}}
+ * Work mode from the strongest signal that exists; the first level with a signal wins.
+ * ponytail: a heuristic; ambiguous or unknown gives blank, never a guess.
+ * @returns {{mode: "on_site"|"hybrid"|"remote"|"", source: "jsonld"|"page"|"title"|""}}
+ */
+export function detectWorkMode(raw, posting) {
+  const jlt = posting?.jobLocationType;
+  const types = Array.isArray(jlt) ? jlt : [jlt];
+  if (types.some((x) => typeof x === "string" && x.toUpperCase().includes("TELECOMMUTE"))) {
+    return { mode: "remote", source: "jsonld" };
+  }
+  const key = clean(raw?.hints?.modeText).toLowerCase();
+  const page = Object.hasOwn(PAGE_MODES, key) ? PAGE_MODES[key] : "";
+  if (page) return { mode: page, source: "page" };
+  const texts = [clean(posting?.title) || clean(posting?.name), clean(raw?.metas?.ogTitle), clean(raw?.title)];
+  const found = new Set();
+  for (const t of texts) {
+    const text = t.replace(/remote (?:sensing|control|desktop)/gi, " ");
+    for (const [mode, re] of MODE_WORDS) if (re.test(text)) found.add(mode);
+  }
+  return found.size === 1 ? { mode: [...found][0], source: "title" } : { mode: "", source: "" };
+}
+
+/**
+ * @param {{url?: string, title?: string, metas?: {ogTitle?: string|null}, jsonLd?: string[], hints?: {companyText?: string|null, modeText?: string|null}}} raw
+ * @returns {{company: string, job_name: string, job_url: string, source: "jsonld"|"opengraph"|"title"|"none", mode_of_work: string, mode_source: string}}
  */
 export function extractPosting(raw) {
   const r = raw && typeof raw === "object" ? raw : {};
@@ -128,6 +161,7 @@ export function extractPosting(raw) {
     company = orgName(p.hiringOrganization);
     if (jobName || company) source = "jsonld";
   }
+  company ||= clean(r.hints?.companyText);
   if (!jobName) {
     const host = hostOf(tabUrl);
     const og = cleanTitle(r.metas?.ogTitle, host);
@@ -136,5 +170,6 @@ export function extractPosting(raw) {
     else if (title) jobName = title;
     if (source === "none" && jobName) source = og ? "opengraph" : "title";
   }
-  return { company, job_name: jobName, job_url: safeUrl(tabUrl), source };
+  const { mode, source: modeSource } = detectWorkMode(r, p);
+  return { company, job_name: jobName, job_url: safeUrl(tabUrl), source, mode_of_work: mode, mode_source: modeSource };
 }

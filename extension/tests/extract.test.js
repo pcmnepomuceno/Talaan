@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanTitle, extractPosting } from "../src/extract.js";
+import { cleanTitle, detectWorkMode, extractPosting } from "../src/extract.js";
 
 const TAB = "https://jobs.example.com/jobs/view/222";
 const metas = (o = {}) => ({ ogTitle: null, ...o });
@@ -10,7 +10,7 @@ const posting = (o = {}) => ({ "@type": "JobPosting", title: "Engineer", hiringO
 describe("json-ld shapes", () => {
   it("single object", () => {
     expect(extractPosting(raw({ jsonLd: [ld({ "@context": "https://schema.org", ...posting() })] }))).toEqual({
-      company: "Acme", job_name: "Engineer", job_url: TAB, source: "jsonld",
+      company: "Acme", job_name: "Engineer", job_url: TAB, source: "jsonld", mode_of_work: "", mode_source: "",
     });
   });
   it("array of objects, graph, array @type", () => {
@@ -63,7 +63,7 @@ describe("fallbacks", () => {
   it("og only, title only, nothing", () => {
     expect(extractPosting(raw({ metas: metas({ ogTitle: "O" }) })).source).toBe("opengraph");
     expect(extractPosting(raw({ title: "T" }))).toMatchObject({ job_name: "T", source: "title", company: "" });
-    expect(extractPosting({})).toEqual({ company: "", job_name: "", job_url: "", source: "none" });
+    expect(extractPosting({})).toEqual({ company: "", job_name: "", job_url: "", source: "none", mode_of_work: "", mode_source: "" });
   });
   it("company only from json-ld keeps source jsonld and falls back for the name", () => {
     const r = extractPosting(raw({ title: "T", jsonLd: [ld({ "@type": "JobPosting", hiringOrganization: "Acme" })] }));
@@ -134,6 +134,13 @@ describe("defensive", () => {
     expect(() => { r = extractPosting(raw({ jsonLd: [block] })); }).not.toThrow();
     expect(typeof r.company).toBe("string");
   });
+  it("prototype-key modeText falls through to the title", () => {
+    for (const modeText of ["constructor", "__proto__", "toString"]) {
+      const r = raw({ title: "Remote Engineer", hints: { modeText } });
+      expect(detectWorkMode(r, null)).toEqual({ mode: "remote", source: "title" });
+      expect(extractPosting(r)).toMatchObject({ mode_of_work: "remote", mode_source: "title" });
+    }
+  });
 });
 
 describe("title cleanup", () => {
@@ -196,5 +203,81 @@ describe("title cleanup", () => {
   it("strips the suffix first, then cuts to 200 code points", () => {
     expect(at(LI, { title: "a".repeat(195) + " | LinkedIn" }).job_name).toBe("a".repeat(195));
     expect(at(LI, { title: "a".repeat(300) + " | LinkedIn" }).job_name).toBe("a".repeat(200));
+  });
+});
+
+describe("company hints", () => {
+  const h = (companyText, o = {}) => raw({ hints: { companyText, modeText: null }, ...o });
+  it("JSON-LD company beats the hint", () => {
+    expect(extractPosting(h("Hint Co", { jsonLd: [ld(posting())] })).company).toBe("Acme");
+  });
+  it("hint used with no JSON-LD or no hiringOrganization, source unchanged", () => {
+    expect(extractPosting(h("Hint Co", { title: "T" }))).toMatchObject({ company: "Hint Co", source: "title" });
+    const r = extractPosting(h("Hint Co", { jsonLd: [ld({ "@type": "JobPosting", title: "E" })] }));
+    expect(r).toMatchObject({ company: "Hint Co", source: "jsonld" });
+  });
+  it("hint text is cleaned", () => {
+    expect(extractPosting(h("  <b>Kalye</b>\n  Labs ")).company).toBe("Kalye Labs");
+  });
+});
+
+describe("work mode", () => {
+  const m = (o) => {
+    const r = extractPosting(raw(o));
+    return [r.mode_of_work, r.mode_source];
+  };
+  const t = (title) => m({ title });
+  const jl = (o) => ({ jsonLd: [ld(posting(o))] });
+  const hint = (modeText, o = {}) => raw({ hints: { companyText: null, modeText }, ...o });
+
+  it("TELECOMMUTE as string and array", () => {
+    expect(m(jl({ jobLocationType: "TELECOMMUTE" }))).toEqual(["remote", "jsonld"]);
+    expect(m(jl({ jobLocationType: ["x", "telecommute"] }))).toEqual(["remote", "jsonld"]);
+  });
+  it("page hint", () => {
+    const g = (x) => extractPosting(hint(x));
+    expect(g("Hybrid")).toMatchObject({ mode_of_work: "hybrid", mode_source: "page" });
+    expect(g("On-site")).toMatchObject({ mode_of_work: "on_site", mode_source: "page" });
+    expect(g("Remote")).toMatchObject({ mode_of_work: "remote", mode_source: "page" });
+  });
+  it("title scan", () => {
+    expect(t("Support Engineer | $10/hr | 100% Remote 123 - OnlineJobs.ph")).toEqual(["remote", "title"]);
+    expect(t("RouteWise | Remote | Part-Time")).toEqual(["remote", "title"]);
+    expect(t("Dev (WFH)")[0]).toBe("remote");
+    expect(t("Dev, Work From Home")[0]).toBe("remote");
+    expect(t("Dev Onsite")[0]).toBe("on_site");
+    expect(t("Dev, On site")[0]).toBe("on_site");
+    expect(t("Dev - On-site")[0]).toBe("on_site");
+    expect(m({ metas: metas({ ogTitle: "Dev | Hybrid" }) })).toEqual(["hybrid", "title"]);
+    expect(m(jl({ title: "Dev Remote" }))).toEqual(["remote", "title"]);
+  });
+  it("priority: first level with a signal wins", () => {
+    expect(m(jl({ jobLocationType: "TELECOMMUTE" }))[1]).toBe("jsonld");
+    const r = extractPosting({ ...hint("Hybrid", { title: "Remote", jsonLd: [ld(posting({ jobLocationType: "TELECOMMUTE" }))] }) });
+    expect(r).toMatchObject({ mode_of_work: "remote", mode_source: "jsonld" });
+    expect(extractPosting(hint("Hybrid", { title: "Dev Remote" }))).toMatchObject({ mode_of_work: "hybrid", mode_source: "page" });
+  });
+  it("ambiguous titles give blank", () => {
+    expect(t("Dev Remote/Hybrid")).toEqual(["", ""]);
+    expect(m({ metas: metas({ ogTitle: "Dev hybrid" }), title: "Dev remote" })).toEqual(["", ""]);
+  });
+  it("non-mode words are ignored", () => {
+    for (const x of ["Remote Sensing Engineer", "Remote Control Technician", "Remote Desktop Support", "Remoteness", "Hybridization"]) {
+      expect(t(x), x).toEqual(["", ""]);
+    }
+  });
+  it("unknown hint falls through to the title", () => {
+    expect(extractPosting(hint("Híbrido", { title: "Dev Remote" }))).toMatchObject({ mode_of_work: "remote", mode_source: "title" });
+  });
+  it("emoji and RTL titles give no mode", () => {
+    expect(t("مهندس برمجيات 👩‍💻")).toEqual(["", ""]);
+  });
+  it("wrong types do not throw", () => {
+    for (const hints of [5, "x", [], { modeText: 3, companyText: {} }, null]) {
+      expect(() => extractPosting(raw({ hints }))).not.toThrow();
+    }
+    for (const jobLocationType of [5, {}, [1, null], null]) {
+      expect(() => detectWorkMode(raw(), { jobLocationType })).not.toThrow();
+    }
   });
 });
