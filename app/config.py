@@ -7,6 +7,7 @@ present). Keep real secrets in .env, never commit them — see .env.example.
 import ipaddress
 import logging
 import os
+import re
 from datetime import timedelta, timezone
 from urllib.parse import urlsplit
 
@@ -146,6 +147,22 @@ def parse_origins(raw: str | None) -> frozenset[str]:
 
 
 ALLOWED_ORIGINS = parse_origins(os.getenv("ALLOWED_ORIGINS"))
+
+EXTENSION_ORIGIN = re.compile(r"chrome-extension://[a-p]{32}")
+
+
+def parse_extension_origins(raw: str | None) -> frozenset[str]:
+    """Comma-separated pinned extension origins for app/security.py. Items stripped, blanks
+    dropped, default empty. Each must fullmatch chrome-extension://<32 letters a-p>; anything
+    else (wildcard, prefix, uppercase, moz-extension, trailing slash) is a startup error."""
+    items = {part.strip() for part in (raw or "").split(",") if part.strip()}
+    for item in items:
+        if not EXTENSION_ORIGIN.fullmatch(item):
+            raise ValueError(f"EXTENSION_ORIGINS entry {item!r} must be chrome-extension://<32 letters a-p>")
+    return frozenset(items)
+
+
+EXTENSION_ORIGINS = parse_extension_origins(os.getenv("EXTENSION_ORIGINS"))
 
 
 # Account deletion (POST /account/delete): wrong-password budget per user, attempts per IP.

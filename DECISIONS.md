@@ -630,3 +630,15 @@
 - **E2.** The extension will call the lookup with the captured page URL before it offers to save, show the same "already saved" note, and still let the user save. The server never blocks a duplicate.
 - **Production order.** Run the migration against Neon BEFORE merging (docs/DEPLOY.md, step 2): `DATABASE_URL=<Neon direct string> python -m alembic upgrade head`, then `python -m alembic check`. The old API ignores the new nullable columns, so migrating first is safe; Render does not migrate on boot.
   - 2026-11-22 (follow-up): the lookup is `POST /applications/lookup` with a JSON body `{url, exclude_id?}`, not a GET with `?url=`, so posting URLs never reach access logs, proxy logs or error bodies (a 422 from this route never echoes its input). `exclude_id` lets the edit form skip the row being edited. The origin check now covers this route: the web form's same-origin POST passes, and the E2 extension will need its origin in `EXTENSION_ORIGINS`.
+
+---
+
+# Decision: Extension origin allowance (E2a)
+- **Date:** 2026-11-22
+- **Decision:** The origin check accepts a write from the Chrome extension when the raw `Origin` is exactly one entry of the new `EXTENSION_ORIGINS` setting (`chrome-extension://<32 letters a-p>`, default empty) and the raw `Sec-Fetch-Site` is exactly `none`. GETs, CORS, cookies and `ALLOWED_ORIGINS` are unchanged. Rules: docs/AUTH.md (Origin check).
+- **Spike evidence** (docs/spikes/extension-cookie.md, Q2 and Q3). An extension POST arrives with `Origin: chrome-extension://<id>` and `Sec-Fetch-Site: none`, the same from the popup page (opened in a tab, not the real action popup) and the service worker. With our ID allowed, our POST returned 201 and another extension's POST returned 403; with no cookie it returned 401.
+- **Why exact match plus `none`.** Origin is a forbidden header, so a web page cannot forge it, and each Web Store extension has its own ID. The session cookie is still required. The match is exact, with no trim or lowercase, so a trailing slash, uppercase or whitespace gets 403. The setting is validated with `fullmatch` at import, so a typo fails startup.
+- **Rejected.** A `chrome-extension://` prefix or wildcard, which would admit every extension. Relying on `Sec-Fetch-Site` alone, because it is `none` for every extension.
+- **Residual risk (a), accepted until E3 tokens.** The ID comes from the public `key` in the manifest, so an unpacked copy that a user loads on purpose in developer mode and that reuses our key gets the same ID. It is inherent to the cookie-first design (spike Q4).
+- **Residual risk (b), accepted until E3 tokens.** GETs stay unchecked, so any extension with host permission on our host can read data with the cookie.
+- **Production.** `production_problems()` does not check the setting: empty is valid until the E2b extension ships.
