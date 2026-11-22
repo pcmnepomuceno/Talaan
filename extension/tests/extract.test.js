@@ -134,9 +134,9 @@ describe("defensive", () => {
     expect(() => { r = extractPosting(raw({ jsonLd: [block] })); }).not.toThrow();
     expect(typeof r.company).toBe("string");
   });
-  it("prototype-key modeText falls through to the title", () => {
+  it("prototype-key modeTexts fall through to the title", () => {
     for (const modeText of ["constructor", "__proto__", "toString"]) {
-      const r = raw({ title: "Remote Engineer", hints: { modeText } });
+      const r = raw({ title: "Remote Engineer", hints: { modeTexts: [modeText] } });
       expect(detectWorkMode(r, null)).toEqual({ mode: "remote", source: "title" });
       expect(extractPosting(r)).toMatchObject({ mode_of_work: "remote", mode_source: "title" });
     }
@@ -207,7 +207,7 @@ describe("title cleanup", () => {
 });
 
 describe("company hints", () => {
-  const h = (companyText, o = {}) => raw({ hints: { companyText, modeText: null }, ...o });
+  const h = (companyText, o = {}) => raw({ hints: { companyText, modeTexts: [] }, ...o });
   it("JSON-LD company beats the hint", () => {
     expect(extractPosting(h("Hint Co", { jsonLd: [ld(posting())] })).company).toBe("Acme");
   });
@@ -228,7 +228,7 @@ describe("work mode", () => {
   };
   const t = (title) => m({ title });
   const jl = (o) => ({ jsonLd: [ld(posting(o))] });
-  const hint = (modeText, o = {}) => raw({ hints: { companyText: null, modeText }, ...o });
+  const hint = (modeText, o = {}) => raw({ hints: { companyText: null, modeTexts: Array.isArray(modeText) ? modeText : [modeText] }, ...o });
 
   it("TELECOMMUTE as string and array", () => {
     expect(m(jl({ jobLocationType: "TELECOMMUTE" }))).toEqual(["remote", "jsonld"]);
@@ -250,6 +250,12 @@ describe("work mode", () => {
     expect(t("Dev - On-site")[0]).toBe("on_site");
     expect(m({ metas: metas({ ogTitle: "Dev | Hybrid" }) })).toEqual(["hybrid", "title"]);
     expect(m(jl({ title: "Dev Remote" }))).toEqual(["remote", "title"]);
+  });
+  it("page level needs exactly one distinct label, case-insensitively", () => {
+    expect(extractPosting(hint(["Hybrid", "hybrid"]))).toMatchObject({ mode_of_work: "hybrid", mode_source: "page" });
+    expect(extractPosting(hint(["Hybrid", "Remote"]))).toMatchObject({ mode_of_work: "", mode_source: "" });
+    expect(extractPosting(hint(["Hybrid", "Remote"], { title: "Dev Onsite" }))).toMatchObject({ mode_of_work: "on_site", mode_source: "title" });
+    expect(extractPosting(hint([]))).toMatchObject({ mode_of_work: "", mode_source: "" });
   });
   it("priority: first level with a signal wins", () => {
     expect(m(jl({ jobLocationType: "TELECOMMUTE" }))[1]).toBe("jsonld");
@@ -273,7 +279,7 @@ describe("work mode", () => {
     expect(t("مهندس برمجيات 👩‍💻")).toEqual(["", ""]);
   });
   it("wrong types do not throw", () => {
-    for (const hints of [5, "x", [], { modeText: 3, companyText: {} }, null]) {
+    for (const hints of [5, "x", [], { modeTexts: 3, companyText: {} }, { modeTexts: [3, null] }, null]) {
       expect(() => extractPosting(raw({ hints }))).not.toThrow();
     }
     for (const jobLocationType of [5, {}, [1, null], null]) {

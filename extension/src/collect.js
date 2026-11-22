@@ -26,7 +26,7 @@ export function collect(loc = location) {
     { domain: "linkedin.com", path: /^\/jobs\/view\//, company: /^\/company\/[^/]+/, mode: true },
   ];
   const cut = (s) => [...s.slice(0, 400)].slice(0, 200).join("");
-  const hints = { companyText: null, modeText: null };
+  const hints = { companyText: null, modeTexts: [] };
   const h = (loc.hostname || "").toLowerCase();
   const hint = SITE_HINTS.find((x) => (h === x.domain || h.endsWith("." + x.domain)) && x.path.test(loc.pathname));
   if (hint) {
@@ -38,13 +38,12 @@ export function collect(loc = location) {
       break;
     }
     if (hint.mode) {
-      for (const el of document.body.querySelectorAll("*")) {
+      const root = document.querySelector("main") || document.body;
+      for (const el of root.querySelectorAll("*")) {
+        if (hints.modeTexts.length >= 10) break;
         if (el.childElementCount !== 0) continue;
         const t = (el.textContent || "").trim();
-        if (/^(remote|hybrid|on-site)$/i.test(t)) {
-          hints.modeText = cut(t);
-          break;
-        }
+        if (/^(remote|hybrid|on-site)$/i.test(t)) hints.modeTexts.push(cut(t));
       }
     }
   }

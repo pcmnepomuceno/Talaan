@@ -28,7 +28,7 @@ describe("collect", () => {
       title: "Engineer at Acme",
       metas: { ogTitle: "OG Title" },
       jsonLd: ['{"@type":"JobPosting"}'],
-      hints: { companyText: null, modeText: null },
+      hints: { companyText: null, modeTexts: [] },
     });
   });
 
@@ -107,7 +107,7 @@ describe("self-containment", () => {
     const u = new URL("https://www.linkedin.com/jobs/view/1");
     document.body.innerHTML = '<a href="/company/x">Acme</a><span>Remote</span>';
     expect(standalone(u)).toEqual(collect(u));
-    expect(collect(u).hints).toEqual({ companyText: "Acme", modeText: "Remote" });
+    expect(collect(u).hints).toEqual({ companyText: "Acme", modeTexts: ["Remote"] });
   });
 
   it("src/collect.js uses no forbidden API", () => {
@@ -121,7 +121,7 @@ describe("self-containment", () => {
 const IN = new URL("https://www.indeed.com/viewjob?jk=1");
 const LI = new URL("https://www.linkedin.com/jobs/view/123");
 const hints = (u) => collect(u).hints;
-const NONE = { companyText: null, modeText: null };
+const NONE = { companyText: null, modeTexts: [] };
 
 describe("site hints", () => {
   const indeedBody =
@@ -130,7 +130,7 @@ describe("site hints", () => {
 
   it("reads the Indeed company link, skipping non-company and empty links", () => {
     document.body.innerHTML = indeedBody;
-    expect(hints(IN)).toEqual({ companyText: "Kalye Labs Inc", modeText: null });
+    expect(hints(IN)).toEqual({ companyText: "Kalye Labs Inc", modeTexts: [] });
   });
 
   it("gives null on a non-job Indeed path", () => {
@@ -146,7 +146,7 @@ describe("site hints", () => {
 
   it("reads the LinkedIn company and the leaf mode chip only", () => {
     document.body.innerHTML = liBody;
-    expect(hints(LI)).toEqual({ companyText: "Kalye Labs", modeText: "Hybrid" });
+    expect(hints(LI)).toEqual({ companyText: "Kalye Labs", modeTexts: ["Hybrid"] });
   });
 
   it("gives null on LinkedIn split-view paths", () => {
@@ -168,9 +168,9 @@ describe("site hints", () => {
 
   it("gives no mode for a missing or foreign-language chip", () => {
     document.body.innerHTML = '<a href="/company/a">Acme</a>';
-    expect(hints(LI).modeText).toBeNull();
+    expect(hints(LI).modeTexts).toEqual([]);
     document.body.innerHTML = "<span>Híbrido</span>";
-    expect(hints(LI).modeText).toBeNull();
+    expect(hints(LI).modeTexts).toEqual([]);
   });
 
   it("cuts to 200 code points and returns text verbatim", () => {
@@ -178,6 +178,21 @@ describe("site hints", () => {
     expect([...hints(LI).companyText]).toHaveLength(200);
     document.body.innerHTML = '<a href="/company/a">&lt;b&gt;Acme&lt;/b&gt; \u05e9\u05dc\u05d5\u05dd</a>';
     expect(hints(LI).companyText).toBe("<b>Acme</b> \u05e9\u05dc\u05d5\u05dd");
+  });
+
+  it("scopes the mode scan to main and collects every leaf label", () => {
+    document.body.innerHTML = '<aside><span>Remote</span></aside><main><span>Hybrid</span><div><b>Remote</b></div><p>Remote or hybrid</p></main>';
+    expect(hints(LI).modeTexts).toEqual(["Hybrid", "Remote"]);
+  });
+
+  it("ignores labels outside main when main exists but holds none", () => {
+    document.body.innerHTML = "<main><p>Nothing</p></main><aside><span>Remote</span></aside>";
+    expect(hints(LI).modeTexts).toEqual([]);
+  });
+
+  it("keeps at most 10 labels", () => {
+    document.body.innerHTML = "<main>" + "<span>Remote</span>".repeat(12) + "</main>";
+    expect(hints(LI).modeTexts).toHaveLength(10);
   });
 
   it("slices a huge hint text before spreading it", () => {

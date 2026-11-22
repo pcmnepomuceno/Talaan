@@ -132,9 +132,9 @@ export function detectWorkMode(raw, posting) {
   if (types.some((x) => typeof x === "string" && x.toUpperCase().includes("TELECOMMUTE"))) {
     return { mode: "remote", source: "jsonld" };
   }
-  const key = clean(raw?.hints?.modeText).toLowerCase();
-  const page = Object.hasOwn(PAGE_MODES, key) ? PAGE_MODES[key] : "";
-  if (page) return { mode: page, source: "page" };
+  const labels = Array.isArray(raw?.hints?.modeTexts) ? raw.hints.modeTexts : [];
+  const pages = new Set(labels.map((x) => clean(x).toLowerCase()).filter((k) => Object.hasOwn(PAGE_MODES, k)).map((k) => PAGE_MODES[k]));
+  if (pages.size === 1) return { mode: [...pages][0], source: "page" };
   const texts = [clean(posting?.title) || clean(posting?.name), clean(raw?.metas?.ogTitle), clean(raw?.title)];
   const found = new Set();
   for (const t of texts) {
@@ -145,7 +145,7 @@ export function detectWorkMode(raw, posting) {
 }
 
 /**
- * @param {{url?: string, title?: string, metas?: {ogTitle?: string|null}, jsonLd?: string[], hints?: {companyText?: string|null, modeText?: string|null}}} raw
+ * @param {{url?: string, title?: string, metas?: {ogTitle?: string|null}, jsonLd?: string[], hints?: {companyText?: string|null, modeTexts?: string[]}}} raw
  * @returns {{company: string, job_name: string, job_url: string, source: "jsonld"|"opengraph"|"title"|"none", mode_of_work: string, mode_source: string}}
  */
 export function extractPosting(raw) {
