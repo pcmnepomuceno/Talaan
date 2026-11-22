@@ -557,7 +557,7 @@ it("job posting URL: a server 422 lands on the field", async () => {
   await fillMinimum();
   await userEvent.type(field("Job posting URL"), "https://a.ph/j");
   await userEvent.click(save());
-  const msg = await screen.findByText("Enter a full address starting with http:// or https://.");
+  const msg = await screen.findByText("Enter a full address starting with http:// or https://");
   expect(msg.closest("p")?.id).toBe(`${field("Job posting URL").id}-error`);
   expect(document.activeElement).toBe(field("Job posting URL"));
 });

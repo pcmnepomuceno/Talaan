@@ -43,7 +43,8 @@ function badUrl(raw: string): boolean {
 
 function badJobUrl(raw: string): boolean {
   // The URL parser forgives "http:///x" (host x); Python's urlsplit, the server's rule, does not.
-  if (/[\p{Cc}\s]/u.test(raw) || !/^https?:\/\/[^/?#]/i.test(raw)) return true;
+  // Any "@" in the authority (up to the next / ? #) is rejected, empty user-info included (https://@host): the URL parser hides that.
+  if (/[\p{Cc}\s]/u.test(raw) || !/^https?:\/\/[^/?#]/i.test(raw) || /^https?:\/\/[^/?#]*@/i.test(raw)) return true;
   try {
     const u = new URL(raw);
     return !((u.protocol === "http:" || u.protocol === "https:") && u.hostname !== "") || u.username !== "" || u.password !== "";
@@ -123,7 +124,7 @@ export function mapServerErrors<K extends string = FieldName>(
 ): { errors: Partial<Record<K, string>>; other: string[] } {
   const errors: Partial<Record<K, string>> = {};
   const other: string[] = [];
-  const tidy = (m: string) => (/[.!?]$/.test(m) ? m : `${m}.`).replace(/^./, (c) => c.toUpperCase());
+  const tidy = (m: string) => (/[.!?/]$/.test(m) ? m : `${m}.`).replace(/^./, (c) => c.toUpperCase());
   for (const [k, msg] of Object.entries(fieldErrors)) {
     if ((fields as readonly string[]).includes(k)) errors[k as K] = tidy(msg);
     else other.push(tidy(msg));

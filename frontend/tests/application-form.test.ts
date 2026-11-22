@@ -46,7 +46,7 @@ it("website: empty ok; http and https only; at most 2000", () => {
 it("job posting URL: empty ok; http(s) with a host, no userinfo, no control or space; at most 2000 code points", () => {
   const msg = "Enter a full address starting with http:// or https://";
   for (const good of ["", "   ", "https://a.ph/j?id=1#x", "  HTTPS://A.PH/j  ", "https://a.ph/😀", "https://日本.jp/x"]) expect(validate({ ...ok, job_url: good }).job_url, good).toBeUndefined();
-  for (const bad of ["a.ph/j", "ftp://a.ph", "javascript:alert(1)", "https://", "http:///x", "https://u:p@a.ph", "https://u@a.ph", "https://a.ph/\u0000", "https://a.ph/a\tb", "https://a.ph/a\nb", "https://a.ph/a b", "https://a.ph/\u007f"])
+  for (const bad of ["a.ph/j", "ftp://a.ph", "javascript:alert(1)", "https://", "http:///x", "https://u:p@a.ph", "https://u@a.ph", "https://@a.ph", "https://:@a.ph", "https://a.ph@b.ph", "https://a.ph/\u0000", "https://a.ph/a\tb", "https://a.ph/a\nb", "https://a.ph/a b", "https://a.ph/\u007f"])
     expect(validate({ ...ok, job_url: bad }).job_url, JSON.stringify(bad)).toBe(msg);
   expect(validate({ ...ok, job_url: `https://a.ph/${"a".repeat(1987)}` }).job_url).toBeUndefined(); // exactly 2000
   expect(validate({ ...ok, job_url: `https://a.ph/${"a".repeat(1988)}` }).job_url).toBe("Job posting URL must be 2,000 characters or fewer.");
@@ -94,4 +94,5 @@ it("maps 422 field errors to fields and the rest to a banner list", () => {
   const { errors, other } = mapServerErrors({ company: "String should have at least 1 character", salary: "Input should be less than or equal to 2147483647", contact_email: "value is not a valid email address", body: "Extra inputs are not permitted" });
   expect(errors).toEqual({ company: "String should have at least 1 character.", salary: "Input should be less than or equal to 2147483647." });
   expect(other).toEqual(["Value is not a valid email address.", "Extra inputs are not permitted."]);
+  expect(mapServerErrors({ company: "Enter http://", salary: "Is it?", contact_email: "Wow!", body: "See /" })).toEqual({ errors: { company: "Enter http://", salary: "Is it?" }, other: ["Wow!", "See /"] });
 });
