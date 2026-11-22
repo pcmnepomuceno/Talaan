@@ -328,6 +328,8 @@ export function ApplicationForm({ application, qs }: { application?: Application
                   You already saved this posting:{" "}
                   <Link
                     href={`/applications/${dup.match.id}${qs}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="inline-flex min-h-11 items-center text-primary underline"
                   >
                     {dup.match.job_name}, {dup.match.company}

@@ -577,6 +577,9 @@ it("duplicate note: on blur a match shows the neutral note and a link to that ap
   blurUrl();
   const link = await screen.findByRole("link", { name: "Backend Engineer, Kape Digital" });
   expect(link.getAttribute("href")).toBe("/applications/4?status=applied");
+  expect(link.getAttribute("target")).toBe("_blank");
+  expect(link.getAttribute("rel")).toContain("noopener");
+  expect(link.getAttribute("rel")).toContain("noreferrer");
   const note = statusRegion().querySelector("p")!;
   expect(note.textContent).toBe("You already saved this posting: Backend Engineer, Kape Digital.");
   expect(note.className).toContain("text-caption");
