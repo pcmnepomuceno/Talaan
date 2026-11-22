@@ -96,7 +96,7 @@ export function fromApiAgendaInterview(v: unknown): AgendaInterview {
   return { ...fromApiInterview(v), company: str(r, "company"), job_name: str(r, "job_name") };
 }
 
-/** GET /applications/lookup: the user's newest application with this posting URL, or null. */
+/** POST /applications/lookup: the user's newest application with this posting URL, or null. */
 export type LookupMatch = { id: number; job_name: string; company: string };
 export function fromApiLookup(v: unknown): LookupMatch | null {
   const m = obj(v, "lookup").match;

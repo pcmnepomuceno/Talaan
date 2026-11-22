@@ -61,7 +61,7 @@ function useDuplicateNote(raw: string, stored: string, ownId: number | undefined
       const c = new AbortController();
       ctl.current = c;
       const n = ++seq.current;
-      lookupJobUrl(u, c.signal).then(
+      lookupJobUrl(u, ownId ?? null, c.signal).then(
         (m) => {
           if (n === seq.current) setResult({ url: u, match: m && m.id !== ownId ? m : null });
         },

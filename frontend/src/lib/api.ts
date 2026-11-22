@@ -82,8 +82,10 @@ export async function getApplication(id: number): Promise<Application | null> {
  * The user's newest application saved with this posting URL (the server normalizes it), or null.
  * Ephemeral: touches no cache, and a 401 never redirects to login (typed values stay). The caller passes its AbortSignal and ignores every failure.
  */
-export async function lookupJobUrl(url: string, signal: AbortSignal): Promise<LookupMatch | null> {
-  return fromApiLookup(await request<unknown>(`${BASE}/lookup?url=${encodeURIComponent(url)}`, { signal, redirectOn401: false }));
+export async function lookupJobUrl(url: string, excludeId: number | null, signal: AbortSignal): Promise<LookupMatch | null> {
+  // POST so the posting URL stays out of query strings (logs, history); `excludeId` is the application being edited.
+  const body = { url, exclude_id: excludeId };
+  return fromApiLookup(await request<unknown>(`${BASE}/lookup`, { method: "POST", body, signal, redirectOn401: false }));
 }
 
 /** Oldest first. Rejects with ApiError(404) when the application is gone. */

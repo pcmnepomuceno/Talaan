@@ -487,7 +487,7 @@ it("saving an application that was deleted meanwhile shows not-found", async () 
 
 // ---- job posting URL (E1) ----
 const POSTING = "https://jobs.example.ph/dev?id=7";
-const lookupCalls = () => fake.callsTo("GET", /^\/applications\/lookup/);
+const lookupCalls = () => fake.callsTo("POST", /^\/applications\/lookup/);
 const matchOf = (id: number, job_name = "Dev", company = "Acme") => () => json(200, { match: { id, job_name, company } });
 const noMatch = () => json(200, { match: null });
 const statusRegion = () => document.querySelector('[role="status"][aria-live="polite"]') as HTMLElement;
@@ -513,7 +513,7 @@ it("job posting URL: create sends it trimmed; an empty one is null", async () =>
   await userEvent.type(field("Job posting URL"), `  ${POSTING}  `);
   await userEvent.click(save());
   await waitFor(() => expect(replace).toHaveBeenCalled());
-  expect(fake.callsTo("POST", /./)[0].body).toMatchObject({ job_url: POSTING });
+  expect(fake.callsTo("POST", /^\/applications$/)[0].body).toMatchObject({ job_url: POSTING });
 });
 
 it("job posting URL: an edit that touches another field sends no job_url", async () => {
@@ -571,7 +571,7 @@ it("duplicate note: always-mounted polite status region, empty until a match", (
 });
 
 it("duplicate note: on blur a match shows the neutral note and a link to that application, keeping the query", async () => {
-  fake.on("GET", /^\/applications\/lookup/, matchOf(4, "Backend Engineer", "Kape Digital"));
+  fake.on("POST", /^\/applications\/lookup/, matchOf(4, "Backend Engineer", "Kape Digital"));
   mountNew("?status=applied");
   typeUrl(POSTING);
   blurUrl();
@@ -584,11 +584,13 @@ it("duplicate note: on blur a match shows the neutral note and a link to that ap
   expect(statusRegion().querySelector('[role="alert"]')).toBeNull();
   expect(document.querySelector(".text-error-text")).toBeNull();
   expect(lookupCalls()).toHaveLength(1);
-  expect(lookupCalls()[0].path).toBe(`/applications/lookup?url=${encodeURIComponent(POSTING)}`);
+  expect(lookupCalls()[0].path).toBe("/applications/lookup");
+  expect(lookupCalls()[0].path).not.toContain("url=");
+  expect(lookupCalls()[0].body).toEqual({ url: POSTING, exclude_id: null });
 });
 
 it("duplicate note: 500ms after the last keystroke, not before; typing again clears it at once", async () => {
-  fake.on("GET", /^\/applications\/lookup/, matchOf(4), false);
+  fake.on("POST", /^\/applications\/lookup/, matchOf(4), false);
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   try {
     mountNew();
@@ -609,7 +611,7 @@ it("duplicate note: 500ms after the last keystroke, not before; typing again cle
 });
 
 it("duplicate note: blur right after typing asks once, not again when the wait ends", async () => {
-  fake.on("GET", /^\/applications\/lookup/, noMatch, false);
+  fake.on("POST", /^\/applications\/lookup/, noMatch, false);
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   try {
     mountNew();
@@ -623,7 +625,7 @@ it("duplicate note: blur right after typing asks once, not again when the wait e
 });
 
 it("duplicate note: no request for an empty, invalid or over-long value", async () => {
-  fake.on("GET", /^\/applications\/lookup/, noMatch, false);
+  fake.on("POST", /^\/applications\/lookup/, noMatch, false);
   mountNew();
   for (const v of ["", "   ", "example.com", "ftp://a.ph", "https://u@a.ph", `https://a.ph/${"a".repeat(2000)}`]) {
     typeUrl(v);
@@ -635,8 +637,16 @@ it("duplicate note: no request for an empty, invalid or over-long value", async 
 
 it("duplicate note: an application is not a duplicate of itself", async () => {
   fake.db.apps[0].job_url = "https://jobs.example.ph/old";
-  fake.on("GET", /url=.*%3Fid%3D7$/, matchOf(1, "Frontend Engineer", "Pinagsama Tech"), false);
-  fake.on("GET", /url=.*%3Fid%3D72$/, matchOf(2, "Product Designer", "Bayanihan Digital"), false);
+  // the server would exclude id 1 itself; the form still ignores a match with its own id (second guard)
+  fake.on(
+    "POST",
+    /^\/applications\/lookup/,
+    () =>
+      (fake.calls.at(-1)!.body as { url: string }).url.endsWith("id=7")
+        ? json(200, { match: { id: 1, job_name: "Frontend Engineer", company: "Pinagsama Tech" } })
+        : json(200, { match: { id: 2, job_name: "Product Designer", company: "Bayanihan Digital" } }),
+    false,
+  );
   mountEdit("1");
   await screen.findByDisplayValue("Frontend Engineer");
   typeUrl(POSTING);
@@ -666,11 +676,21 @@ it("duplicate note: an untouched edit form makes no lookup, even for a stored UR
   }
 });
 
+it("duplicate note: editing sends this application's id as exclude_id", async () => {
+  fake.on("POST", /^\/applications\/lookup/, noMatch, false);
+  mountEdit("1");
+  await vi.waitFor(() => expect(field("Job title").value).not.toBe(""));
+  typeUrl(POSTING);
+  blurUrl();
+  await waitFor(() => expect(lookupCalls()).toHaveLength(1));
+  expect(lookupCalls()[0].body).toEqual({ url: POSTING, exclude_id: 1 });
+});
+
 it("duplicate note: every failure is silent and saving still works", async () => {
   mountNew();
   await fillMinimum();
   for (const respond of [() => json(500, { detail: "x" }), () => json(422, { detail: [{ loc: ["query", "url"], msg: "bad" }] }), () => json(200, { match: { id: "x" } })]) {
-    fake.on("GET", /^\/applications\/lookup/, respond);
+    fake.on("POST", /^\/applications\/lookup/, respond);
     typeUrl(`${POSTING}${Math.random()}`);
     blurUrl();
     await waitFor(() => expect(lookupCalls().length).toBeGreaterThan(0));
@@ -690,7 +710,7 @@ it("duplicate note: every failure is silent and saving still works", async () =>
 });
 
 it("duplicate note: a match never blocks saving", async () => {
-  fake.on("GET", /^\/applications\/lookup/, matchOf(4), false);
+  fake.on("POST", /^\/applications\/lookup/, matchOf(4), false);
   mountNew();
   await fillMinimum();
   typeUrl(POSTING);
@@ -698,17 +718,22 @@ it("duplicate note: a match never blocks saving", async () => {
   await screen.findByRole("link", { name: "Dev, Acme" });
   await userEvent.click(save());
   await waitFor(() => expect(replace).toHaveBeenCalled());
-  expect(fake.callsTo("POST", /./)[0].body).toMatchObject({ job_url: POSTING });
+  expect(fake.callsTo("POST", /^\/applications$/)[0].body).toMatchObject({ job_url: POSTING });
 });
 
 it("duplicate note: a slow answer for an older value is dropped after newer input", async () => {
   let release!: () => void;
   const gate = new Promise<void>((r) => (release = r));
-  fake.on("GET", /url=.*old/, async () => {
-    await gate;
-    return json(200, { match: { id: 8, job_name: "Old", company: "Old Co" } });
-  });
-  fake.on("GET", /url=.*new/, matchOf(9, "New", "New Co"));
+  fake.on(
+    "POST",
+    /^\/applications\/lookup/,
+    async () => {
+      if (!(fake.calls.at(-1)!.body as { url: string }).url.endsWith("old")) return json(200, { match: { id: 9, job_name: "New", company: "New Co" } });
+      await gate;
+      return json(200, { match: { id: 8, job_name: "Old", company: "Old Co" } });
+    },
+    false,
+  );
   mountNew();
   typeUrl("https://a.ph/old");
   blurUrl();
@@ -723,7 +748,7 @@ it("duplicate note: a slow answer for an older value is dropped after newer inpu
 });
 
 it("duplicate note: the live region's text is written once for one match (a repeat blur changes nothing)", async () => {
-  fake.on("GET", /^\/applications\/lookup/, matchOf(4), false);
+  fake.on("POST", /^\/applications\/lookup/, matchOf(4), false);
   mountNew();
   typeUrl(POSTING);
   blurUrl();

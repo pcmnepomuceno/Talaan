@@ -16,7 +16,7 @@ function check(name, ok, extra = "") {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${extra ? "  " + extra : ""}`);
   ok ? passed++ : failed++;
 }
-const lookupUrl = (u) => /\/api\/v1\/applications\/lookup\?/.test(u);
+const lookupReq = (r) => r.method() === "POST" && /\/api\/v1\/applications\/lookup$/.test(new URL(r.url()).pathname);
 
 withEnv(async ({ base, createInvite }) => {
   const stamp = Date.now();
@@ -63,7 +63,7 @@ withEnv(async ({ base, createInvite }) => {
   const ctxA = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: "light", reducedMotion: "reduce" });
   const page = await signUp(ctxA, `e2e-e1a-${stamp}@example.com`);
   const lookups = [];
-  page.on("request", (r) => lookupUrl(r.url()) && lookups.push(r.url()));
+  page.on("request", (r) => lookupReq(r) && lookups.push(r));
 
   // 1. add an application with utm_source and a fragment
   const URL1 = "https://jobs.example.ph/careers/view?jobId=42&utm_source=linkedin#apply";
@@ -100,7 +100,9 @@ withEnv(async ({ base, createInvite }) => {
   const noteColor = await colorOf(note);
   check("duplicate note uses the muted Caption colour (same as the helper text)", noteColor === mutedRef, `${noteColor} vs ${mutedRef}`);
   check("duplicate note is not in an alert region and the field shows no error", (await note.locator('xpath=ancestor-or-self::*[@role="alert"]').count()) === 0 && (await page.getByLabel("Job posting URL").getAttribute("aria-invalid")) !== "true");
-  check("the lookup went to the API with the typed URL", lookups.some((u) => new URL(u).searchParams.get("url") === SAME), lookups.join(" "));
+  check("the lookup went to the API with the typed URL", lookups.some((q) => q.postDataJSON().url === SAME), lookups.map((q) => q.url()).join(" "));
+  check("the lookup is a POST with no query string and no posting URL in the request URL", lookups.length >= 1 && lookups.every((q) => new URL(q.url()).search === "" && !q.url().includes("jobs.example.ph")), lookups.map((q) => q.url()).join(" "));
+  check("create: the lookup body has exclude_id null", lookups.every((q) => q.postDataJSON().exclude_id === null), lookups.map((q) => q.postData()).join(" "));
   await note.scrollIntoViewIfNeeded();
   await shoot(page, "form-duplicate-note");
 
@@ -131,6 +133,12 @@ withEnv(async ({ base, createInvite }) => {
   check("edit without touching the URL: zero lookup requests", lookups.length === 0, String(lookups.length));
   check("edit without touching the URL: no note", (await page.getByText("You already saved this posting:").count()) === 0);
 
+  // 6b. editing with a new URL sends this application's id as exclude_id
+  await page.getByLabel("Job posting URL").fill(OTHER);
+  await page.getByLabel("Job posting URL").blur();
+  await page.waitForTimeout(1200);
+  check("edit with a new URL: the lookup body has exclude_id = this id", lookups.length >= 1 && lookups.every((q) => q.postDataJSON().exclude_id === Number(id2)), lookups.map((q) => q.postData()).join(" "));
+
   // 7. clearing the URL: PATCH body job_url null, the link is gone
   const patches = [];
   page.on("request", (r) => r.method() === "PATCH" && patches.push(r.postData()));
@@ -147,14 +155,14 @@ withEnv(async ({ base, createInvite }) => {
   const ctxB = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const pageB = await signUp(ctxB, `e2e-e1b-${stamp}@example.com`);
   const lookupsB = [];
-  pageB.on("request", (r) => lookupUrl(r.url()) && lookupsB.push(r.url()));
+  pageB.on("request", (r) => lookupReq(r) && lookupsB.push(r));
   await pageB.goto(`${base}/applications/new`);
   await pageB.getByLabel("Job posting URL").fill(SAME);
   await pageB.getByLabel("Job posting URL").blur();
   await pageB.waitForTimeout(1500);
   check("second user: the lookup ran", lookupsB.length >= 1, String(lookupsB.length));
   check("second user: the same URL shows no note", (await pageB.getByText("You already saved this posting:").count()) === 0);
-  const r = await pageB.request.get(`${base}/api/v1/applications/lookup?url=${encodeURIComponent(SAME)}`);
+  const r = await pageB.request.post(`${base}/api/v1/applications/lookup`, { data: { url: SAME, exclude_id: null } });
   check("second user: the API answers match null", r.status() === 200 && (await r.json()).match === null);
 
   check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
