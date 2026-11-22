@@ -52,7 +52,9 @@ def test_other_user_never_matches(a, client):
     "params", [{}, {"url": ""}, {"url": "   "}, {"url": "ftp://example.com/a"}, {"url": "https://example.com/" + "a" * 2000}]
 )
 def test_bad_url_is_422(a, params):
-    assert a.get(LOOKUP, params=params).status_code == 422
+    r = a.get(LOOKUP, params=params)
+    assert r.status_code == 422
+    assert r.json()["detail"][0]["loc"][-1] == "url"
 
 
 def test_route_is_not_shadowed_by_id(a):
