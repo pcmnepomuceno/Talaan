@@ -147,7 +147,7 @@ def list_applications(
     return ApplicationPage(items=items, total=total, limit=limit, offset=offset)
 
 
-# Declared above /{application_id}: routes match in order, and that one would take "lookup" (422).
+# Declared above /{application_id}: a GET on this path would otherwise be read as that id (422); no POST /{application_id} exists.
 # POST, not GET: a posting URL in a query string would reach access logs and proxies.
 @router.post("/lookup", response_model=LookupResult)
 def lookup_application(
