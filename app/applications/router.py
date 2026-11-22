@@ -28,6 +28,8 @@ from app.applications.schemas import (
     ApplicationUpdate,
     FollowUpItem,
     FollowUpPage,
+    LookupMatch,
+    LookupResult,
 )
 from app.auth.dependencies import get_current_user
 from app.config import MANILA
@@ -140,6 +142,29 @@ def list_applications(
         .all()
     )
     return ApplicationPage(items=items, total=total, limit=limit, offset=offset)
+
+
+# Declared above /{application_id}: routes match in order, and that one would take "lookup" (422).
+@router.get("/lookup", response_model=LookupResult)
+def lookup_application(
+    url: str = Query(...),
+    user: User = Depends(get_current_user),
+    db: DBSession = Depends(get_db),
+):
+    """The caller's newest application saved from this posting (normalized match), or null."""
+    try:
+        cleaned = job_url.clean(url)
+    except ValueError as e:
+        raise _bad("url", str(e)) from None
+    if cleaned is None:
+        raise _bad("url", "Enter a full address starting with http:// or https://")
+    row = (
+        db.query(JobApplication)
+        .filter(JobApplication.created_by == user.id, JobApplication.job_url_key == job_url.key(cleaned))
+        .order_by(JobApplication.created_at.desc(), JobApplication.id.desc())
+        .first()
+    )
+    return LookupResult(match=LookupMatch(id=row.id, job_name=row.job_name, company=row.company) if row else None)
 
 
 @router.get("/{application_id}", response_model=ApplicationRead)

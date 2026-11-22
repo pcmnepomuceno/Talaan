@@ -85,6 +85,16 @@ class ApplicationRead(BaseModel):
     updated_at: datetime
 
 
+class LookupMatch(BaseModel):
+    id: int
+    job_name: str
+    company: str
+
+
+class LookupResult(BaseModel):
+    match: LookupMatch | None
+
+
 class ApplicationPage(BaseModel):
     items: list[ApplicationRead]
     total: int
