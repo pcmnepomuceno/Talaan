@@ -1,0 +1,126 @@
+/* Color tokens copied from frontend/src/styles/tokens.css (same names, same values; tests/tokens.test.js checks parity). */
+:root {
+  color-scheme: light dark;
+  --color-primary: light-dark(#1F3A6E, #A9C0F5);
+  --color-primary-pressed: light-dark(#142A52, #C9D8FA);
+  --color-bg-page: light-dark(#F7F3EA, #0E1626);
+  --color-surface-card: light-dark(#FFFDF8, #152038);
+  --color-surface-subtle: light-dark(#EFE9DB, #1C2A47);
+  --color-border-subtle: light-dark(#DDD5C3, #28365A);
+  --color-border-input: light-dark(#857F72, #6B7EA6);
+  --color-border-strong: light-dark(#5F5A50, #9AAAD0);
+  --color-text-primary: light-dark(#1A2236, #EEF2FA);
+  --color-text-secondary: light-dark(#454D60, #C6D0E6);
+  --color-text-muted: light-dark(#5F6677, #96A3C0);
+  --color-text-inverse: light-dark(#F7F3EA, #0E1626);
+  --color-focus-ring: light-dark(#1F3A6E, #A9C0F5);
+  --color-error-text: light-dark(#B91C1C, #FCA5A5);
+  --color-error-bg: light-dark(#FBE6E4, #3B1214);
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  width: 360px;
+  margin: 0;
+  padding: 16px;
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 400;
+}
+
+p { margin: 0 0 12px; }
+h1 { margin: 0 0 12px; font-size: 18px; line-height: 26px; font-weight: 600; }
+.muted { color: var(--color-text-muted); font-size: 14px; line-height: 20px; }
+#status { color: var(--color-text-secondary); font-size: 14px; line-height: 20px; min-height: 20px; }
+
+section:not([hidden]), form:not([hidden]) { animation: fade 100ms linear; }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  section:not([hidden]), form:not([hidden]) { animation: none; }
+}
+
+.field { margin: 0 0 16px; padding: 0; border: 0; min-width: 0; }
+label, legend { display: block; padding: 0; margin: 0 0 4px; font-size: 14px; line-height: 20px; font-weight: 600; }
+
+input[type="text"], select {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 16px;
+  border: 1px solid var(--color-border-input);
+  border-radius: 4px;
+  background: var(--color-surface-card);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-weight: 400;
+}
+input[type="text"]:hover, select:hover { border-color: var(--color-border-strong); }
+input[aria-invalid="true"], select[aria-invalid="true"] {
+  border: 1.5px solid var(--color-error-text);
+  background: var(--color-error-bg);
+}
+
+.segments {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 4px;
+  background: var(--color-surface-subtle);
+}
+.segments label {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  margin: 0;
+  border-radius: 2px;
+  color: var(--color-text-secondary);
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.segments input { margin: 0; accent-color: var(--color-primary); }
+
+.error { margin: 4px 0 0; color: var(--color-error-text); font-size: 14px; line-height: 20px; }
+
+button, #openLink {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 48px;
+  margin: 0 0 8px;
+  padding: 12px 16px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+button:hover, #openLink:hover { background: var(--color-primary-pressed); }
+button.secondary {
+  border-color: var(--color-border-input);
+  background: var(--color-surface-card);
+  color: var(--color-text-primary);
+}
+button.secondary:hover { background: var(--color-surface-subtle); }
+button:disabled {
+  border-color: var(--color-border-subtle);
+  background: var(--color-surface-subtle);
+  color: var(--color-text-muted);
+  cursor: default;
+}
+#openLink { text-decoration: none; }
+.muted a { color: var(--color-primary); }
+
+:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
