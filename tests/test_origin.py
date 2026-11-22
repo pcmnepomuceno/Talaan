@@ -181,3 +181,50 @@ def test_wildcard_fails_startup():
     )
     assert r.returncode != 0
     assert "wildcard" in r.stderr
+
+
+# --- EXTENSION_ORIGINS parsing ---
+
+OURS = "chrome-extension://" + "a" * 32
+OTHER = "chrome-extension://" + "b" * 32
+
+
+def test_parse_extension_origins_empty():
+    for raw in (None, "", " , ,"):
+        assert config.parse_extension_origins(raw) == frozenset()
+
+
+def test_parse_extension_origins_trims_and_drops_blanks():
+    assert config.parse_extension_origins(f" {OURS} , {OTHER} ,") == frozenset({OURS, OTHER})
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        "*",
+        "chrome-extension://",
+        "chrome-extension://abc",
+        "chrome-extension://" + "a" * 31,
+        "chrome-extension://" + "a" * 33,
+        "chrome-extension://" + "a" * 31 + "q",
+        "chrome-extension://" + "a" * 31 + "1",
+        OURS.upper(),
+        OURS + "/",
+        "moz-extension://" + "a" * 32,
+        "https://x.com",
+    ],
+)
+def test_malformed_extension_origin_rejected_naming_the_entry(entry):
+    with pytest.raises(ValueError, match=re.escape(f"EXTENSION_ORIGINS entry {entry!r}")):
+        config.parse_extension_origins(f"{OURS}, {entry}")
+
+
+def test_malformed_extension_origin_fails_startup():
+    r = subprocess.run(
+        [sys.executable, "-c", "import app.config"],
+        env={**os.environ, "EXTENSION_ORIGINS": "chrome-extension://abc"},
+        capture_output=True, text=True, check=False,
+    )
+    assert r.returncode != 0
+    assert "ValueError: EXTENSION_ORIGINS entry 'chrome-extension://abc'" in r.stderr
+
