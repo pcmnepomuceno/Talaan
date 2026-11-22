@@ -1,7 +1,7 @@
 // Injected into the page via chrome.scripting.executeScript({ func: collect }).
 // Must stay self-contained: everything it needs is defined inside its body.
 // Read-only; returns plain JSON-serializable data. Cleaning happens in extract.js.
-export function collect() {
+export function collect(loc = location) {
   const STR_MAX = 5000;
   const BLOCK_MAX = 200000;
   const BLOCKS_MAX = 20;
@@ -17,12 +17,44 @@ export function collect() {
     const text = el.textContent || "";
     if (text.trim()) jsonLd.push(text.slice(0, BLOCK_MAX));
   }
+  // Best-effort per-site hints (E2d). Matched on URL host + path only; no class names.
+  // When a site changes its markup the hint just returns null (blank field). To refresh:
+  // open the job page, find the company link / mode label, update the path regex or words here,
+  // add a fixture test in tests/collect.test.js, and update the README tested-sites table.
+  const SITE_HINTS = [
+    { domain: "indeed.com", path: /^\/viewjob/, company: /^\/cmp\/[^/]+\/?$/ },
+    { domain: "linkedin.com", path: /^\/jobs\/view\//, company: /^\/company\/[^/]+/, mode: true },
+  ];
+  const cut = (s) => [...s].slice(0, 200).join("");
+  const hints = { companyText: null, modeText: null };
+  const h = (loc.hostname || "").toLowerCase();
+  const hint = SITE_HINTS.find((x) => (h === x.domain || h.endsWith("." + x.domain)) && x.path.test(loc.pathname));
+  if (hint) {
+    for (const a of document.querySelectorAll("a[href]")) {
+      if (!hint.company.test(a.pathname)) continue;
+      const t = (a.textContent || "").trim();
+      if (!t || /^(show more|show less|follow)$/i.test(t) || /followers/i.test(t)) continue;
+      hints.companyText = cut(t);
+      break;
+    }
+    if (hint.mode) {
+      for (const el of document.body.querySelectorAll("*")) {
+        if (el.childElementCount !== 0) continue;
+        const t = (el.textContent || "").trim();
+        if (/^(remote|hybrid|on-site)$/i.test(t)) {
+          hints.modeText = cut(t);
+          break;
+        }
+      }
+    }
+  }
   return {
-    url: cap(location.href) || "",
+    url: cap(loc.href) || "",
     title: cap(document.title) || "",
     metas: {
       ogTitle: attr('meta[property="og:title"]', "content"),
     },
     jsonLd,
+    hints,
   };
 }

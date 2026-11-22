@@ -22,12 +22,13 @@ describe("collect", () => {
       ldScript('{"@type":"JobPosting"}');
     document.title = "Engineer at Acme";
     const got = collect();
-    expect(Object.keys(got)).toEqual(["url", "title", "metas", "jsonLd"]);
+    expect(Object.keys(got)).toEqual(["url", "title", "metas", "jsonLd", "hints"]);
     expect(got).toEqual({
       url: location.href,
       title: "Engineer at Acme",
       metas: { ogTitle: "OG Title" },
       jsonLd: ['{"@type":"JobPosting"}'],
+      hints: { companyText: null, modeText: null },
     });
   });
 
@@ -103,6 +104,10 @@ describe("self-containment", () => {
     const standalone = new Function("return (" + collect.toString() + ")")();
     expect(standalone).not.toBe(collect);
     expect(standalone()).toEqual(collect());
+    const u = new URL("https://www.linkedin.com/jobs/view/1");
+    document.body.innerHTML = '<a href="/company/x">Acme</a><span>Remote</span>';
+    expect(standalone(u)).toEqual(collect(u));
+    expect(collect(u).hints).toEqual({ companyText: "Acme", modeText: "Remote" });
   });
 
   it("src/collect.js uses no forbidden API", () => {
@@ -110,5 +115,82 @@ describe("self-containment", () => {
     for (const word of ["innerHTML", "DOMParser", "eval", "fetch", "XMLHttpRequest", "sendBeacon", "localStorage", "document.cookie", "import "]) {
       expect(src, word).not.toContain(word);
     }
+  });
+});
+
+const IN = new URL("https://www.indeed.com/viewjob?jk=1");
+const LI = new URL("https://www.linkedin.com/jobs/view/123");
+const hints = (u) => collect(u).hints;
+const NONE = { companyText: null, modeText: null };
+
+describe("site hints", () => {
+  const indeedBody =
+    '<a href="/jobs?q=x">Search</a><a href="/cmp/Kalye-Labs/reviews">Reviews</a>' +
+    '<a href="/cmp/x"><img src="a.png"></a><a href="/cmp/Kalye-Labs">Kalye Labs Inc</a>';
+
+  it("reads the Indeed company link, skipping non-company and empty links", () => {
+    document.body.innerHTML = indeedBody;
+    expect(hints(IN)).toEqual({ companyText: "Kalye Labs Inc", modeText: null });
+  });
+
+  it("gives null on a non-job Indeed path", () => {
+    document.body.innerHTML = indeedBody;
+    expect(hints(new URL("https://www.indeed.com/jobs?q=x"))).toEqual(NONE);
+  });
+
+  const liBody =
+    '<p>Hybrid work available</p><div>Hybrid<span>x</span></div>' +
+    '<a href="/company/kalye-labs/">Kalye Labs353 followers</a><a href="/company/kalye-labs/">Show more</a>' +
+    '<a href="/company/kalye-labs/life/">Kalye Labs</a><a href="/company/kalye-labs/">Follow</a>' +
+    "<span>Hybrid</span>";
+
+  it("reads the LinkedIn company and the leaf mode chip only", () => {
+    document.body.innerHTML = liBody;
+    expect(hints(LI)).toEqual({ companyText: "Kalye Labs", modeText: "Hybrid" });
+  });
+
+  it("gives null on LinkedIn split-view paths", () => {
+    document.body.innerHTML = liBody;
+    expect(hints(new URL("https://www.linkedin.com/jobs/search-results/?currentJobId=1"))).toEqual(NONE);
+  });
+
+  it("matches hosts by label, not substring", () => {
+    document.body.innerHTML = indeedBody;
+    expect(hints(new URL("https://uk.indeed.com/viewjob?jk=1")).companyText).toBe("Kalye Labs Inc");
+    for (const u of ["https://notindeed.com/viewjob", "https://indeed.com.evil.test/viewjob"]) {
+      expect(hints(new URL(u))).toEqual(NONE);
+    }
+    document.body.innerHTML = liBody;
+    for (const u of ["https://notlinkedin.com/jobs/view/1", "https://linkedin.com.evil.test/jobs/view/1"]) {
+      expect(hints(new URL(u))).toEqual(NONE);
+    }
+  });
+
+  it("gives no mode for a missing or foreign-language chip", () => {
+    document.body.innerHTML = '<a href="/company/a">Acme</a>';
+    expect(hints(LI).modeText).toBeNull();
+    document.body.innerHTML = "<span>Híbrido</span>";
+    expect(hints(LI).modeText).toBeNull();
+  });
+
+  it("cuts to 200 code points and returns text verbatim", () => {
+    document.body.innerHTML = `<a href="/company/a">${"😀".repeat(250)}</a>`;
+    expect([...hints(LI).companyText]).toHaveLength(200);
+    document.body.innerHTML = '<a href="/company/a">&lt;b&gt;Acme&lt;/b&gt; \u05e9\u05dc\u05d5\u05dd</a>';
+    expect(hints(LI).companyText).toBe("<b>Acme</b> \u05e9\u05dc\u05d5\u05dd");
+  });
+
+  it("does not mutate the DOM or call fetch on hint pages", () => {
+    document.body.innerHTML = liBody;
+    const before = document.documentElement.outerHTML;
+    const spy = vi.fn();
+    vi.stubGlobal("fetch", spy);
+    try {
+      collect(LI);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(document.documentElement.outerHTML).toBe(before);
   });
 });
