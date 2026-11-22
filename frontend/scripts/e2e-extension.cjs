@@ -4,13 +4,15 @@
 //     node frontend/scripts/e2e-extension.cjs
 //
 // scripts/local-env.cjs starts the API and `next dev` on free ports against the *_test database and cleans up
-// afterwards. The committed extension/ is copied to a temp dir (E2E_TMP_DIR) and ONLY the copy is rewritten:
+// afterwards. The committed extension/ is copied to a fresh mkdtemp dir (inside E2E_TMP_DIR when set, else the OS temp dir); only that dir is deleted
+// afterwards, and ONLY the copy is rewritten:
 // API_BASE and TAB_QUERY in src/config.js, host_permissions in manifest.json. The popup is opened as a TAB
 // (chrome-extension://<id>/popup.html), so it cannot prove a real toolbar-click activeTab grant or the real
 // action popup's Sec-Fetch-Site. Screenshots go to the gitignored frontend/.screenshots/. Exit code 1 on any failure.
 process.env.E2E_EXTENSION_ORIGINS ??= "chrome-extension://fjlnbbkeadlpibmnbpfhlgeingifocni";
 const fs = require("node:fs");
 const http = require("node:http");
+const os = require("node:os");
 const path = require("node:path");
 const { chromium } = require("playwright");
 const { chromiumOptions, withEnv, REPO } = require("./local-env.cjs");
@@ -18,7 +20,6 @@ const { chromiumOptions, withEnv, REPO } = require("./local-env.cjs");
 const ID = "fjlnbbkeadlpibmnbpfhlgeingifocni";
 const EXT = path.join(REPO, "extension");
 const SHOTS = path.resolve(__dirname, "../.screenshots");
-const TMP = process.env.E2E_TMP_DIR || `/tmp/claude-1000/-home-pcmnepomuceno-dev-Talaan/a4b79b8c-bf5c-4738-94bd-7c9ff071d7d1/scratchpad/e2b-ext-${Date.now()}`;
 let failed = 0;
 let passed = 0;
 function check(name, ok, extra = "") {
@@ -64,9 +65,10 @@ withEnv(async ({ base, createInvite }) => {
   check("committed extension/ contains no 'localhost'", hits.length === 0, hits.join(" "));
   if (hits.length) return;
 
+  const tmp = fs.mkdtempSync(path.join(process.env.E2E_TMP_DIR || os.tmpdir(), "talaan-e2e-ext-"));
   const { server, port } = await fixtureServer();
-  const copy = path.join(TMP, "ext");
-  const profile = path.join(TMP, "profile");
+  const copy = path.join(tmp, "ext");
+  const profile = path.join(tmp, "profile");
   let ctx;
   const pageErrors = [];
   try {
@@ -217,7 +219,7 @@ withEnv(async ({ base, createInvite }) => {
   } finally {
     await ctx?.close().catch(() => {});
     await new Promise((r) => server.close(r));
-    fs.rmSync(TMP, { recursive: true, force: true });
+    fs.rmSync(tmp, { recursive: true, force: true });
   }
 }).then(() => {
   console.log(`\n${passed} passed, ${failed} failed`);
