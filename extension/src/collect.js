@@ -22,9 +22,6 @@ export function collect() {
     title: cap(document.title) || "",
     metas: {
       ogTitle: attr('meta[property="og:title"]', "content"),
-      ogSiteName: attr('meta[property="og:site_name"]', "content"),
-      ogUrl: attr('meta[property="og:url"]', "content"),
-      canonical: attr('link[rel~="canonical"]', "href"),
     },
     jsonLd,
   };

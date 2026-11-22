@@ -6,7 +6,7 @@ Click the toolbar icon on a job posting. A small popup opens with the company, j
 
 ## What it reads and when
 
-It reads only the active tab, and only after you click the icon, through `activeTab` and `scripting`. It reads the page URL and title, the `og:title`, `og:site_name`, `og:url` and canonical link tags, and the text of JSON-LD script tags. It only reads and never writes to the page. Page reading gives up after 4 seconds, so a stuck tab leaves an empty form.
+It reads only the active tab, and only after you click the icon, through `activeTab` and `scripting`. It reads the page URL and title, the `og:title` tag, and the text of JSON-LD script tags. It only reads and never writes to the page. Page reading gives up after 4 seconds, so a stuck tab leaves an empty form.
 
 Nothing is sent anywhere until you press Save, with two exceptions that happen when the popup opens:
 
@@ -47,7 +47,7 @@ The `key` in `manifest.json` is the public key. It is committed because it fixes
 
 1. The stale JSON-LD check compares the URL path only, not the query. A site that keeps the posting id only in the query is not caught.
 2. On LinkedIn's split-view search pages (`/jobs/search/?currentJobId=...`) the posting's JSON-LD is dropped. Open the job's own page for best results.
-3. The company is never guessed. It is filled only from a JobPosting's `hiringOrganization`, because the page title and `og:site_name` name the job board.
+3. The company is never guessed. It is filled only from a JobPosting's `hiringOrganization`, because the page title names the job board (the `og:site_name` tag, which also names it, is not read).
 4. Several JobPostings with none matching the page URL (a list page) are ignored.
 5. Any extension with host permission on the Talaan site can read your data with your cookie, and an unpacked copy that reuses our public key gets our ID (docs/AUTH.md, residual risks). Personal API tokens (E3) are the planned fix.
 6. A page that cannot be read (`chrome://`, the Web Store, a PDF) gives an empty form.

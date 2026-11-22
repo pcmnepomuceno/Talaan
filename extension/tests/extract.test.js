@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { extractPosting } from "../src/extract.js";
 
 const TAB = "https://jobs.example.com/jobs/view/222";
-const metas = (o = {}) => ({ ogTitle: null, ogSiteName: null, ogUrl: null, canonical: null, ...o });
+const metas = (o = {}) => ({ ogTitle: null, ...o });
 const raw = (o = {}) => ({ url: TAB, title: "", metas: metas(), jsonLd: [], ...o });
 const ld = (o) => JSON.stringify(o);
 const posting = (o = {}) => ({ "@type": "JobPosting", title: "Engineer", hiringOrganization: { name: "Acme" }, ...o });
@@ -69,8 +69,8 @@ describe("fallbacks", () => {
     const r = extractPosting(raw({ title: "T", jsonLd: [ld({ "@type": "JobPosting", hiringOrganization: "Acme" })] }));
     expect(r).toMatchObject({ company: "Acme", job_name: "T", source: "jsonld" });
   });
-  it("company never comes from og:site_name or title", () => {
-    const r = extractPosting(raw({ title: "Engineer at Acme | Indeed", metas: metas({ ogSiteName: "Indeed" }) }));
+  it("company never comes from the title", () => {
+    const r = extractPosting(raw({ title: "Engineer at Acme | Indeed" }));
     expect(r.company).toBe("");
   });
 });

@@ -648,7 +648,7 @@
 # Decision: Chrome extension popup (E2b)
 - **Date:** 2026-11-22
 - **Decision:** The extension in `extension/` is a cookie-first popup: it calls the API with the user's login cookie and holds no token (E3 personal tokens come later). Rules and limits: extension/README.md.
-- **Minimum permissions:** `activeTab`, `scripting` and one host permission (`https://talaan-phi.vercel.app/*`). No background worker, no content script, no storage.
+- **Minimum permissions:** `activeTab`, `scripting` and one host permission (`https://talaan-phi.vercel.app/*`). No background worker, no content script, no storage. The page reader takes only the URL, title, `og:title` and JSON-LD.
 - **Extraction:** JSON-LD `JobPosting` first, then `og:title`, then the document title. The company comes only from `hiringOrganization`. Rejected: guessing it from the title or `og:site_name`, which name the job board.
 - **Pinned ID.** The manifest holds the public `key`, so the ID is fixed. The private key is kept outside the repo.
 - **D1, no bundled font.** Rejected: a Google Fonts request on open, which breaks "sends nothing until Save". Alternative: bundling the Plex woff2 files.

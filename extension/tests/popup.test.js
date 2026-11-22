@@ -11,7 +11,7 @@ const PAGE = "https://jobs.example.ph/jobs/1";
 const RAW = {
   url: PAGE,
   title: "Backend Engineer | Kape Digital",
-  metas: { ogTitle: null, ogSiteName: null, ogUrl: null, canonical: null },
+  metas: { ogTitle: null },
   jsonLd: [JSON.stringify({ "@type": "JobPosting", title: "Backend Engineer", hiringOrganization: { name: "Kape Digital" }, url: PAGE })],
 };
 const SAVE_BODY = {

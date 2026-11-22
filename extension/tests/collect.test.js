@@ -21,21 +21,18 @@ describe("collect", () => {
       '<link rel="canonical" href="https://jobs.example.com/canon">' +
       ldScript('{"@type":"JobPosting"}');
     document.title = "Engineer at Acme";
-    expect(collect()).toEqual({
+    const got = collect();
+    expect(Object.keys(got)).toEqual(["url", "title", "metas", "jsonLd"]);
+    expect(got).toEqual({
       url: location.href,
       title: "Engineer at Acme",
-      metas: {
-        ogTitle: "OG Title",
-        ogSiteName: "Acme Jobs",
-        ogUrl: "https://jobs.example.com/og",
-        canonical: "https://jobs.example.com/canon",
-      },
+      metas: { ogTitle: "OG Title" },
       jsonLd: ['{"@type":"JobPosting"}'],
     });
   });
 
-  it("gives null for absent og and canonical", () => {
-    expect(collect().metas).toEqual({ ogTitle: null, ogSiteName: null, ogUrl: null, canonical: null });
+  it("gives null for an absent og:title", () => {
+    expect(collect().metas).toEqual({ ogTitle: null });
   });
 
   it("keeps multiple JSON-LD blocks in order", () => {
@@ -101,7 +98,7 @@ describe("collect", () => {
 
 describe("self-containment", () => {
   it("runs from its source text alone and returns the same shape", () => {
-    document.head.innerHTML = '<meta property="og:url" content="u">' + ldScript('{"a":1}');
+    document.head.innerHTML = '<meta property="og:title" content="u">' + ldScript('{"a":1}');
     document.title = "T";
     const standalone = new Function("return (" + collect.toString() + ")")();
     expect(standalone).not.toBe(collect);
