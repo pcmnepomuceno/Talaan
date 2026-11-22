@@ -7,7 +7,7 @@ import pytest
 
 from app import config
 from app.main import app
-from tests.conftest import USER_EMAIL, USER_PASSWORD, create_invite
+from tests.conftest import USER_EMAIL, USER_PASSWORD, as_user, create_invite
 
 ALLOWED = "http://localhost:3000"
 EVIL = "https://evil.example"
@@ -228,3 +228,56 @@ def test_malformed_extension_origin_fails_startup():
     assert r.returncode != 0
     assert "ValueError: EXTENSION_ORIGINS entry 'chrome-extension://abc'" in r.stderr
 
+
+# --- extension origin allowance in origin_check ---
+
+LOOKUP = "/api/v1/applications/lookup"
+LOOKUP_BODY = {"url": "https://example.com/jobs/1"}
+
+
+@pytest.fixture
+def ext(client, users, monkeypatch):
+    monkeypatch.setattr(config, "EXTENSION_ORIGINS", frozenset({OURS}))
+    as_user(client, "tok-a")
+    return client
+
+
+def post_lookup(client, headers):
+    return client.post(LOOKUP, json=LOOKUP_BODY, headers=headers)
+
+
+def test_pinned_extension_origin_with_site_none_passes(ext):
+    assert post_lookup(ext, {"Origin": OURS, "Sec-Fetch-Site": "none"}).status_code == 200
+
+
+@pytest.mark.parametrize(
+    "origin",
+    [
+        OTHER,
+        "chrome-extension://abc",
+        "chrome-extension://" + "a" * 33,
+        "moz-extension://" + "a" * 32,
+        OURS + "/",
+        OURS.upper(),
+        " " + OURS,
+        EVIL,
+    ],
+)
+def test_other_origins_blocked_even_with_site_none(ext, origin):
+    assert post_lookup(ext, {"Origin": origin, "Sec-Fetch-Site": "none"}).status_code == 403
+
+
+@pytest.mark.parametrize("site", [None, "same-site", "cross-site", "None"])
+def test_pinned_extension_origin_needs_site_none(ext, site):
+    headers = {"Origin": OURS} | ({"Sec-Fetch-Site": site} if site else {})
+    assert post_lookup(ext, headers).status_code == 403
+
+
+def test_extension_origin_blocked_when_setting_empty(client, users):
+    as_user(client, "tok-a")
+    assert post_lookup(client, {"Origin": OURS, "Sec-Fetch-Site": "none"}).status_code == 403
+
+
+def test_pinned_extension_origin_without_cookie_is_401(client, users, monkeypatch):
+    monkeypatch.setattr(config, "EXTENSION_ORIGINS", frozenset({OURS}))
+    assert post_lookup(client, {"Origin": OURS, "Sec-Fetch-Site": "none"}).status_code == 401
