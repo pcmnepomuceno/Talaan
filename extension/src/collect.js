@@ -34,8 +34,9 @@ export function collect(loc = location) {
     const root = document.querySelector("main") || document.body;
     hints.titleMustContainCompany = hint.titleMustContainCompany === true;
     for (const a of root.querySelectorAll("a[href]")) {
-      if (a.hostname !== h && !onDomain(a.hostname, hint.domain)) continue;
-      if (!hint.company.test(a.pathname)) continue;
+      const ah = a.hostname || "";
+      if (ah !== h && !onDomain(ah, hint.domain)) continue;
+      if (!hint.company.test(a.pathname || "")) continue;
       const t = (a.textContent || "").trim();
       if (!t || /^(show more|show less|follow)$/i.test(t) || /followers/i.test(t)) continue;
       hints.companyText = cut(t);

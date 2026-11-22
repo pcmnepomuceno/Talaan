@@ -198,6 +198,11 @@ describe("site hints", () => {
     expect(hints(LI).companyText).toBeNull();
   });
 
+  it("skips SVG links, which have no hostname", () => {
+    document.body.innerHTML = '<main><svg><a href="/company/x"><text>Acme</text></a></svg><a href="/company/y">Real</a></main>';
+    expect(hints(LI).companyText).toBe("Real");
+  });
+
   it("accepts company links on a sibling subdomain of the hint domain", () => {
     document.body.innerHTML = '<a href="https://ph.linkedin.com/company/real">Real Co</a>';
     expect(hints(LI).companyText).toBe("Real Co");

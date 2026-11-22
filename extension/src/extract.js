@@ -85,15 +85,15 @@ function hostOf(u) {
   }
 }
 
+function hostLabels(hostname) {
+  return String(hostname ?? "").toLowerCase().split(".").filter((l) => /^[a-z]{4,}$/.test(l));
+}
+
 /**
  * Drop a trailing segment that names the site (it contains a host label of 4+ letters), then keep the
  * first " | " segment; " - " parts stay. Unrecognized titles are untouched.
  * ponytail: a real trailing segment containing a host label ("Engineer - LinkedIn Ads") is dropped too (README, Known limits).
  */
-function hostLabels(hostname) {
-  return String(hostname ?? "").toLowerCase().split(".").filter((l) => /^[a-z]{4,}$/.test(l));
-}
-
 export function cleanTitle(title, hostname) {
   // clean() once with no cut (it is not idempotent on entities), cut to NAME_MAX last.
   const t = clean(title, Infinity);
