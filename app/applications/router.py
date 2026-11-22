@@ -1,9 +1,11 @@
 """Job Application routes. Every route is scoped to the caller (`created_by`)."""
 
 from datetime import datetime, timezone
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Body, Depends, Query, status
 from fastapi.exceptions import RequestValidationError
+from pydantic import ValidationError
 from sqlalchemy import (
     Date,
     Integer,
@@ -28,6 +30,7 @@ from app.applications.schemas import (
     ApplicationUpdate,
     FollowUpItem,
     FollowUpPage,
+    LookupBody,
     LookupMatch,
     LookupResult,
 )
@@ -45,8 +48,8 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _bad(name: str, msg: str) -> RequestValidationError:
-    return RequestValidationError([{"type": "value_error", "loc": ("query", name), "msg": msg, "input": None}])
+def _bad(name: str, msg: str, where: str = "query") -> RequestValidationError:
+    return RequestValidationError([{"type": "value_error", "loc": (where, name), "msg": msg, "input": None}])
 
 
 def _pht_day(col):
@@ -145,25 +148,32 @@ def list_applications(
 
 
 # Declared above /{application_id}: routes match in order, and that one would take "lookup" (422).
-@router.get("/lookup", response_model=LookupResult)
+# POST, not GET: a posting URL in a query string would reach access logs and proxies.
+@router.post("/lookup", response_model=LookupResult)
 def lookup_application(
-    url: str = Query(...),
+    payload: Annotated[Any, Body()],
     user: User = Depends(get_current_user),
     db: DBSession = Depends(get_db),
 ):
     """The caller's newest application saved from this posting (normalized match), or null."""
+    # Validated by hand so no error ever carries `input` (it could be the URL).
     try:
-        cleaned = job_url.clean(url)
+        body = LookupBody.model_validate(payload)
+    except ValidationError as e:
+        errs = e.errors(include_url=False, include_input=False, include_context=False)
+        raise RequestValidationError([{**x, "loc": ("body", *x["loc"]), "input": None} for x in errs]) from None
+    try:
+        cleaned = job_url.clean(body.url)
     except ValueError as e:
-        raise _bad("url", str(e)) from None
+        raise _bad("url", str(e), "body") from None
     if cleaned is None:
-        raise _bad("url", "Enter a full address starting with http:// or https://")
-    row = (
-        db.query(JobApplication)
-        .filter(JobApplication.created_by == user.id, JobApplication.job_url_key == job_url.key(cleaned))
-        .order_by(JobApplication.created_at.desc(), JobApplication.id.desc())
-        .first()
+        raise _bad("url", "Enter a full address starting with http:// or https://", "body")
+    q = db.query(JobApplication).filter(
+        JobApplication.created_by == user.id, JobApplication.job_url_key == job_url.key(cleaned)
     )
+    if body.exclude_id is not None:
+        q = q.filter(JobApplication.id != body.exclude_id)
+    row = q.order_by(JobApplication.created_at.desc(), JobApplication.id.desc()).first()
     return LookupResult(match=LookupMatch(id=row.id, job_name=row.job_name, company=row.company) if row else None)
 
 

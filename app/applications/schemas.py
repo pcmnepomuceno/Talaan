@@ -10,6 +10,7 @@ from pydantic import (
     EmailStr,
     Field,
     HttpUrl,
+    StrictInt,
     StringConstraints,
     model_validator,
 )
@@ -83,6 +84,15 @@ class ApplicationRead(BaseModel):
     date_applied: date | None
     created_at: datetime
     updated_at: datetime
+
+
+class LookupBody(BaseModel):
+    """The raw string; the router cleans it so an error never echoes it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    url: str | None
+    exclude_id: StrictInt | None = None
 
 
 class LookupMatch(BaseModel):
