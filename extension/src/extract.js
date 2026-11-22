@@ -77,6 +77,33 @@ function orgName(h) {
   return Array.isArray(h) ? h.map(orgOne).find(Boolean) ?? "" : orgOne(h);
 }
 
+function hostOf(u) {
+  try {
+    return new URL(u).hostname;
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Drop a trailing segment that names the site (it contains a host label of 4+ letters), then keep the
+ * first " | " segment; " - " parts stay. Unrecognized titles are untouched.
+ * ponytail: a real trailing segment containing a host label ("Engineer - LinkedIn Ads") is dropped too (README, Known limits).
+ */
+export function cleanTitle(title, hostname) {
+  // clean() once with no cut (it is not idempotent on entities), cut to NAME_MAX last.
+  const t = clean(title, Infinity);
+  const cut = (s) => [...s].slice(0, NAME_MAX).join("");
+  const labels = String(hostname ?? "").toLowerCase().split(".").filter((l) => /^[a-z]{4,}$/.test(l));
+  const pipes = t.split(" | ");
+  const dashes = pipes.at(-1).split(/( (?:-|–|—|·) )/); // separators sit at odd indexes
+  const tail = dashes.at(-1).toLowerCase();
+  if (!labels.some((l) => tail.includes(l))) return cut(t);
+  const rest = dashes.slice(0, -2).join("");
+  const kept = rest ? [...pipes.slice(0, -1), rest] : pipes.slice(0, -1);
+  return cut(kept[0] || t);
+}
+
 function safeUrl(url) {
   if (typeof url !== "string") return "";
   const noFrag = url.split("#")[0];
@@ -102,8 +129,9 @@ export function extractPosting(raw) {
     if (jobName || company) source = "jsonld";
   }
   if (!jobName) {
-    const og = clean(r.metas?.ogTitle);
-    const title = clean(r.title);
+    const host = hostOf(tabUrl);
+    const og = cleanTitle(r.metas?.ogTitle, host);
+    const title = cleanTitle(r.title, host);
     if (og) jobName = og;
     else if (title) jobName = title;
     if (source === "none" && jobName) source = og ? "opengraph" : "title";

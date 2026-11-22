@@ -659,3 +659,12 @@
 - **Requests before Save:** `GET /me` on open, and the duplicate lookup on open and on URL blur when the value changed or the last lookup failed.
 - **Timing and errors:** a 4-second limit on reading the page, so a hung tab never leaves the popup on Loading; a 3-second "Starting up..." line for the Render cold start; a 45-second request timeout; "Try again" when the first sign-in check fails.
 - **E2 limit.** The e2e script opens the popup as a tab. The real toolbar-click `activeTab` grant and the real popup's `Sec-Fetch-Site` are manual checks in Chrome.
+
+---
+
+# Decision: Extension title cleanup (E2c)
+- **Date:** 2026-11-22
+- **Decision:** Real-browser checks showed that Indeed, LinkedIn and OnlineJobs.ph have no JSON-LD, so the popup filled the raw page title with the site name ("Acme Interns | Acme | LinkedIn"). `cleanTitle` in `extension/src/extract.js` now cleans the `og:title` and document-title fallback only. The JSON-LD title is never cleaned.
+- **Rule (generic, no domain list):** if the last segment (after the last " | ", and after a trailing " - ") contains a host label of 4 or more letters, it is dropped; then the first " | " segment is kept and inner " - " parts stay. A title with no such segment is left untouched.
+- **Cost, accepted.** A real trailing segment that contains a host label ("Platform Engineer - LinkedIn Ads") is dropped too. It is pinned by a test and listed in extension/README.md (Known limits).
+- **Rejected.** Company suggestion chips: a wrong value (such as Indeed's city) is worse than blank. Reading the page `h1`: an extra page read, and `collect.js` stays unchanged. Per-site rules: they rot.

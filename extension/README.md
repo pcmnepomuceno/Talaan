@@ -43,15 +43,30 @@ The `key` in `manifest.json` is the public key. It is committed because it fixes
 - No storage: no `chrome.storage`, `localStorage` or cookies of its own.
 - No third-party requests and no remote code.
 
+## Tested sites (2026-11-22)
+
+Checked by hand in Chrome on real postings.
+
+| Site | What the page exposes | What the popup fills |
+| --- | --- | --- |
+| JobStreet | JSON-LD with the title and `hiringOrganization` | Job title and company |
+| BossJob | JSON-LD with the title and `hiringOrganization` | Job title and company |
+| Indeed `/viewjob` | No JSON-LD; `og:title` is the page title with the location and the site name | "Title - Location", company blank |
+| LinkedIn `/jobs/view` (signed in) | No JSON-LD; only the document title, with the company and the site name | Title only, company blank |
+| OnlineJobs.ph | No JSON-LD; only the document title, with pay details and the site name | Title only, company blank |
+
 ## Known limits
 
 1. The stale JSON-LD check compares the URL path only, not the query. A site that keeps the posting id only in the query is not caught.
-2. On LinkedIn's split-view search pages (`/jobs/search/?currentJobId=...`) the posting's JSON-LD is dropped. Open the job's own page for best results.
+2. On LinkedIn's split-view search pages (`/jobs/search/?currentJobId=...`) the posting's JSON-LD is dropped. The title is still filled, but the saved link is the search-results URL, not the job's. Open the job's own page for best results.
 3. The company is never guessed. It is filled only from a JobPosting's `hiringOrganization`, because the page title names the job board (the `og:site_name` tag, which also names it, is not read).
 4. Several JobPostings with none matching the page URL (a list page) are ignored.
 5. Any extension with host permission on the Talaan site can read your data with your cookie, and an unpacked copy that reuses our public key gets our ID (docs/AUTH.md, residual risks). Personal API tokens (E3) are the planned fix.
 6. A page that cannot be read (`chrome://`, the Web Store, a PDF) gives an empty form.
 7. A page whose JSON-LD url path differs from the tab path (slug URLs, ATS embeds) has its JSON-LD ignored, so the company stays blank. We prefer blank over a possibly stale company.
+8. Indeed, LinkedIn and OnlineJobs.ph expose no structured data, so the company stays blank on them.
+9. Search pages (Indeed's "Job Search", for example) give nothing useful. Open the job's own page.
+10. The title cleanup is a heuristic and applies only to the `og:title` and document-title fallback, never to JSON-LD. It drops a last segment that contains part of the site's host name (for example linkedin, indeed or jobs), so a real title such as "Platform Engineer - LinkedIn Ads" on linkedin.com is shortened to "Platform Engineer". Edit the field if that happens.
 
 ## Development
 
