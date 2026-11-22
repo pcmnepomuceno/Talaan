@@ -614,3 +614,18 @@
 - **Per-site scrapers are rejected** as brittle: every site redesign breaks them and each one needs upkeep.
 - **Capture is user-initiated and reads only the open tab** (`activeTab`), because some sites forbid automated extraction. Nothing runs in the background and no other tab is read.
 - **What S0 decides:** whether an MV3 popup can call the API with the login cookie, which Origin and Sec-Fetch-Site headers arrive and what the origin check needs, whether the extension ID is stable, how a logged-out user is handled, and whether `activeTab` can read the title, JSON-LD and Open Graph tags. If the cookie path fails or needs a weakening of the origin check or `SameSite=Lax`, tokens (E3) move first and this entry gets a new dated entry.
+
+---
+
+# Decision: Job posting URL and duplicate lookup
+- **Date:** 2026-11-22
+- **Decision:** Applications get an optional `job_url`, stored exactly as typed, plus a hidden `job_url_key` (SHA-256 hex of the normalized URL) with a per-user index. `GET /applications/lookup?url=` returns the caller's newest application with the same key. The form shows a muted note when a posting is already saved, and the detail shows an "Open posting" link. Rules: docs/API.md (Job posting URL) and docs/DESIGN.md v2.9.
+- **Why a stored normalized key.** The lookup is an indexed equality, and one normalizer (`app/applications/job_url.py`) serves writes and lookups, so they cannot disagree. Alternative rejected: normalize at query time, which cannot use an index and would scan every row of the user.
+- **Why hashed.** A btree index entry is capped at about 2,704 bytes and URLs may be 2,000 characters, so a normalized URL as the key could fail an insert. A 64-character hex digest always fits. Nothing secret is hashed; the digest only bounds the size.
+- **No backfill.** Existing rows have no source URL to derive, so their key stays null and they never match.
+- **No scraping and no server fetch.** The server never requests a URL: no SSRF surface, no site terms to break, and the value stays what the user typed.
+- **Non-ASCII hosts** are accepted and not converted to punycode. Limit: a host typed in Unicode and the same host typed as `xn--...` do not match.
+- **Newest match.** With several rows for one posting, the lookup returns the newest (`created_at`, then `id`, descending).
+- **The match field is `job_name`**, the API's name for the job title; the lookup returns `{id, job_name, company}`.
+- **E2.** The extension will call the lookup with the captured page URL before it offers to save, show the same "already saved" note, and still let the user save. The server never blocks a duplicate.
+- **Production order.** Run the migration against Neon BEFORE merging (docs/DEPLOY.md, step 2): `DATABASE_URL=<Neon direct string> python -m alembic upgrade head`, then `python -m alembic check`. The old API ignores the new nullable columns, so migrating first is safe; Render does not migrate on boot.
