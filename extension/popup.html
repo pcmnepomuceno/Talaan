@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Talaan</title>
+<link rel="stylesheet" href="popup.css">
+<script type="module" src="popup.js"></script>
+</head>
+<body>
+<main>
+<p id="status" role="status" aria-live="polite"></p>
+
+<section id="loading">
+  <p id="loadingText">Loading...</p>
+</section>
+
+<section id="retry" hidden>
+  <p id="retryMessage"></p>
+  <button type="button" id="retryButton">Try again</button>
+</section>
+
+<section id="signedOut" hidden>
+  <p>Sign in to Talaan to save this job.</p>
+  <button type="button" id="openLogin">Open Talaan to sign in</button>
+  <button type="button" id="checkAgain" class="secondary">Check again</button>
+</section>
+
+<form id="form" novalidate hidden>
+  <p id="note" class="muted" hidden>Can't read this page. Fill in the fields by hand.</p>
+
+  <div class="field">
+    <label for="company">Company</label>
+    <input id="company" name="company" type="text" autocomplete="off" aria-describedby="company-error">
+    <p id="company-error" class="error" hidden></p>
+  </div>
+
+  <div class="field">
+    <label for="job_name">Job title</label>
+    <input id="job_name" name="job_name" type="text" autocomplete="off" aria-describedby="job_name-error">
+    <p id="job_name-error" class="error" hidden></p>
+  </div>
+
+  <div class="field">
+    <label for="job_url">Job posting URL</label>
+    <input id="job_url" name="job_url" type="text" autocomplete="off" inputmode="url" aria-describedby="job_url-error dup">
+    <p id="job_url-error" class="error" hidden></p>
+    <p id="dup" class="muted" hidden></p>
+  </div>
+
+  <fieldset class="field" aria-describedby="mode_of_work-error">
+    <legend>Work mode</legend>
+    <div class="segments">
+      <label><input type="radio" id="mode_on_site" name="mode_of_work" aria-describedby="mode_of_work-error" value="on_site">On-site</label>
+      <label><input type="radio" id="mode_hybrid" name="mode_of_work" aria-describedby="mode_of_work-error" value="hybrid">Hybrid</label>
+      <label><input type="radio" id="mode_remote" name="mode_of_work" aria-describedby="mode_of_work-error" value="remote">Remote</label>
+    </div>
+    <p id="mode_of_work-error" class="error" hidden></p>
+  </fieldset>
+
+  <div class="field">
+    <label for="status-select">Status</label>
+    <select id="status-select" name="status" aria-describedby="status-error">
+      <option value="saved" selected>Saved</option>
+      <option value="applied">Applied</option>
+      <option value="screening">Screening</option>
+      <option value="interviewing">Interviewing</option>
+      <option value="offered">Offered</option>
+      <option value="accepted">Accepted</option>
+      <option value="rejected">Rejected</option>
+      <option value="withdrawn">Withdrawn</option>
+      <option value="ghosted">Ghosted</option>
+    </select>
+    <p id="status-error" class="error" hidden></p>
+  </div>
+
+  <button type="submit" id="save">Save</button>
+</form>
+
+<section id="saved" hidden>
+  <h1>Saved</h1>
+  <a id="openLink" target="_blank" rel="noopener noreferrer">Open in Talaan</a>
+</section>
+</main>
+</body>
+</html>

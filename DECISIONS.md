@@ -642,3 +642,20 @@
 - **Residual risk (a), accepted until E3 tokens.** The ID comes from the public `key` in the manifest, so an unpacked copy that a user loads on purpose in developer mode and that reuses our key gets the same ID. It is inherent to the cookie-first design (spike Q4).
 - **Residual risk (b), accepted until E3 tokens.** GETs stay unchecked, so any extension with host permission on our host can read data with the cookie.
 - **Production.** `production_problems()` does not check the setting: empty is valid until the E2b extension ships.
+
+---
+
+# Decision: Chrome extension popup (E2b)
+- **Date:** 2026-11-22
+- **Decision:** The extension in `extension/` is a cookie-first popup: it calls the API with the user's login cookie and holds no token (E3 personal tokens come later). Rules and limits: extension/README.md.
+- **Minimum permissions:** `activeTab`, `scripting` and one host permission (`https://talaan-phi.vercel.app/*`). No background worker, no content script, no storage. The page reader takes only the URL, title, `og:title` and JSON-LD.
+- **Extraction:** JSON-LD `JobPosting` first, then `og:title`, then the document title. The company comes only from `hiringOrganization`. Rejected: guessing it from the title or `og:site_name`, which name the job board.
+- **Pinned ID.** The manifest holds the public `key`, so the ID is fixed. The private key is kept outside the repo.
+- **D1, no bundled font.** Rejected: a Google Fonts request on open, which breaks "sends nothing until Save" (apart from the sign-in and duplicate checks, see "Requests before Save"). Alternative: bundling the Plex woff2 files.
+- **D2, `popup.css` copies the tokens, with a parity test.** Rejected: a build step.
+- **D3, several JobPostings and none matching the tab: ignore the JSON-LD.** Rejected: take the first, which risks a wrong company.
+- **D4, typed values are not kept when the sign-in tab opens** (storage is forbidden). They do stay across "Check again".
+- **D5, the stale check compares the URL pathname only.** Known limit: a page whose JSON-LD url path differs from the tab path (slug URLs, ATS embeds) has its JSON-LD ignored, so the company stays blank. We prefer blank over a possibly stale company.
+- **Requests before Save:** `GET /me` on open, and the duplicate lookup on open and on URL blur when the value changed or the last lookup failed.
+- **Timing and errors:** a 4-second limit on reading the page, so a hung tab never leaves the popup on Loading; a 3-second "Starting up..." line for the Render cold start; a 45-second request timeout; "Try again" when the first sign-in check fails.
+- **E2 limit.** The e2e script opens the popup as a tab. The real toolbar-click `activeTab` grant and the real popup's `Sec-Fetch-Site` are manual checks in Chrome.

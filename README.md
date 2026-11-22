@@ -48,6 +48,7 @@ One decision worth knowing (details in [DECISIONS.md](DECISIONS.md)): the browse
 - Light and dark theme that follows the system, with an override on the account screen.
 - Phone, tablet and desktop layouts, with the list and detail side by side from 1280px.
 - Rate limits on login, sign-up and account deletion.
+- A Chrome extension (unpacked install, desktop) that saves the job posting you are viewing: see [extension/README.md](extension/README.md).
 
 ## Tech stack
 
@@ -102,6 +103,7 @@ cd frontend && npm run lint && npm run typecheck && npm test && npm run build
 - [docs/ROADMAP.md](docs/ROADMAP.md): scope, done milestones and backlog.
 - [DECISIONS.md](DECISIONS.md): decisions with their trade-offs.
 - [frontend/README.md](frontend/README.md): frontend routes and scripts.
+- [extension/README.md](extension/README.md): the Chrome extension.
 
 ## Limitations and next steps
 
