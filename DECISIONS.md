@@ -681,3 +681,12 @@
 - **Rejected.** Reading body text for the mode: too many false matches and a wider read.
 - **Rejected.** First-match page scan: a sidebar or description label decided the mode.
 - **Rejected.** Start/end-of-segment adjacency for title words: "Acme | Hybrid Cloud Engineer" would read hybrid.
+
+---
+
+# Decision: OnlineJobs.ph site default mode
+- **Date:** 2026-11-22
+- **Decision:** `SITE_HINTS` in `extension/src/collect.js` gains an OnlineJobs.ph row (`/jobseekers/job/`) carrying `defaultMode: "remote"`, returned in `hints`. `detectWorkMode` in `extension/src/extract.js` uses it as a last level (`source: "site"`), and the popup shows "Assumed from the site".
+- **Why:** the site lists remote jobs only, and a real-browser check showed its titles often carry no mode word, so Work mode stayed blank.
+- **Guards:** lowest priority: used only when no other level saw any mode, and never over an ambiguous title or conflicting page labels (those stay blank). Host and path gated like E2d (equal or subdomain, job pages only). The visible "Assumed from the site" note, one click to change, and Save still requires a mode. Wrong types and unknown values are ignored.
+- **Rejected.** Reading body text for the mode: too many false matches and a wider read.

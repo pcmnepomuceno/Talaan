@@ -28,7 +28,7 @@ describe("collect", () => {
       title: "Engineer at Acme",
       metas: { ogTitle: "OG Title" },
       jsonLd: ['{"@type":"JobPosting"}'],
-      hints: { companyText: null, modeTexts: [], titleMustContainCompany: false },
+      hints: { companyText: null, modeTexts: [], titleMustContainCompany: false, defaultMode: null },
     });
   });
 
@@ -108,7 +108,7 @@ describe("self-containment", () => {
     document.body.innerHTML = '<a href="/company/x">Acme</a><span>Remote</span>';
     setBase(u);
     expect(standalone(u)).toEqual(collect(u));
-    expect(collect(u).hints).toEqual({ companyText: "Acme", modeTexts: ["Remote"], titleMustContainCompany: true });
+    expect(collect(u).hints).toEqual({ companyText: "Acme", modeTexts: ["Remote"], titleMustContainCompany: true, defaultMode: null });
   });
 
   it("src/collect.js uses no forbidden API", () => {
@@ -132,7 +132,7 @@ const hints = (u) => {
   setBase(u);
   return collect(u).hints;
 };
-const NONE = { companyText: null, modeTexts: [], titleMustContainCompany: false };
+const NONE = { companyText: null, modeTexts: [], titleMustContainCompany: false, defaultMode: null };
 
 describe("site hints", () => {
   const indeedBody =
@@ -141,7 +141,7 @@ describe("site hints", () => {
 
   it("reads the Indeed company link, skipping non-company and empty links", () => {
     document.body.innerHTML = indeedBody;
-    expect(hints(IN)).toEqual({ companyText: "Kalye Labs Inc", modeTexts: [], titleMustContainCompany: false });
+    expect(hints(IN)).toEqual({ companyText: "Kalye Labs Inc", modeTexts: [], titleMustContainCompany: false, defaultMode: null });
   });
 
   it("gives null on a non-job Indeed path", () => {
@@ -157,7 +157,21 @@ describe("site hints", () => {
 
   it("reads the LinkedIn company and the leaf mode chip only", () => {
     document.body.innerHTML = liBody;
-    expect(hints(LI)).toEqual({ companyText: "Kalye Labs", modeTexts: ["Hybrid"], titleMustContainCompany: true });
+    expect(hints(LI)).toEqual({ companyText: "Kalye Labs", modeTexts: ["Hybrid"], titleMustContainCompany: true, defaultMode: null });
+  });
+
+  it("gives the OnlineJobs default mode and reads nothing from the body", () => {
+    document.body.innerHTML = '<span>Hybrid</span><a href="/company/x">Acme</a>';
+    const want = { companyText: null, modeTexts: [], titleMustContainCompany: false, defaultMode: "remote" };
+    expect(hints(new URL("https://www.onlinejobs.ph/jobseekers/job/1767571"))).toEqual(want);
+    expect(hints(new URL("https://onlinejobs.ph/jobseekers/job/1767571"))).toEqual(want);
+  });
+
+  it("gives no OnlineJobs default on look-alike hosts or other paths", () => {
+    document.body.innerHTML = "<span>Hybrid</span>";
+    for (const u of ["https://notonlinejobs.ph/jobseekers/job/1", "https://onlinejobs.ph.evil.test/jobseekers/job/1", "https://www.onlinejobs.ph/jobseekers/search"]) {
+      expect(hints(new URL(u))).toEqual(NONE);
+    }
   });
 
   it("gives null on LinkedIn split-view paths", () => {

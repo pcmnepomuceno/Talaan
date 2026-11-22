@@ -42,22 +42,24 @@ The `key` in `manifest.json` is the public key. It is committed because it fixes
 - No analytics.
 - No storage: no `chrome.storage`, `localStorage` or cookies of its own.
 - No third-party requests and no remote code.
+- On OnlineJobs.ph job pages the work mode is assumed from the site, not read from the page.
 
 ## Tested sites (2026-11-22)
 
-Checked by hand in Chrome on real postings, before the site hints below.
+Checked by hand in Chrome on real postings.
 
-| Site | What the page exposes | Company | Work mode |
+| Site | Title | Company | Work mode |
 | --- | --- | --- | --- |
-| JobStreet | JSON-LD with the title and `hiringOrganization` | JSON-LD | Remote when the JSON-LD says TELECOMMUTE (not measured) |
-| BossJob | JSON-LD with the title and `hiringOrganization` | JSON-LD | Remote when the JSON-LD says TELECOMMUTE (not measured) |
-| Indeed `/viewjob` | No JSON-LD; `og:title` is the page title with the location and the site name | From the company link | None |
-| LinkedIn `/jobs/view` (signed in) | No JSON-LD; the document title, a company link and a work-mode label | From the company link | From the label |
-| OnlineJobs.ph | No JSON-LD; only the document title, with pay details and the site name | Blank | From the title ("Remote") |
+| Indeed `/viewjob` | Yes | Yes | None |
+| LinkedIn `/jobs/view` (signed in) | Yes | Yes | From the top card |
+| LinkedIn split-view search | Yes | None | None |
+| JobStreet | Yes | Yes | None in the page data we saw |
+| BossJob | Yes | Yes | Yes |
+| OnlineJobs.ph | Yes | None | Assumed Remote from the site |
 
 ## Site hints
 
-Indeed (`/viewjob`) and LinkedIn (`/jobs/view/`) pages have no structured data, so `src/collect.js` keeps a small `SITE_HINTS` table matched on the URL host and path only (never class names). The scan is limited to `<main>` when the page has one, otherwise the whole body. The collector returns `{ companyText, modeTexts, titleMustContainCompany }`.
+Indeed (`/viewjob`), LinkedIn (`/jobs/view/`) and OnlineJobs.ph (`/jobseekers/job/`) pages have no structured data, so `src/collect.js` keeps a small `SITE_HINTS` table matched on the URL host and path only (never class names). The scan is limited to `<main>` when the page has one, otherwise the whole body. The collector returns `{ companyText, modeTexts, titleMustContainCompany, defaultMode }`. The OnlineJobs.ph row has no company or mode rule, only `defaultMode: "remote"`.
 
 Company: the first link to `/cmp/...` (Indeed) or `/company/...` (LinkedIn) with real text, on the same site as the page (links to another site are skipped, and so are SVG links). On LinkedIn the company must also appear in the document title as whole words: the title contains the company, or a middle title segment (not the first, and not a last segment that names the site) is inside the company. Otherwise the company stays blank. Indeed is exempt from this check. A company from JSON-LD is never checked.
 
@@ -66,6 +68,7 @@ Work mode is chosen from the first signal that exists, and anything unclear give
 1. JSON-LD `jobLocationType` TELECOMMUTE.
 2. The LinkedIn page level: up to 10 leaf elements reading exactly Remote, Hybrid or On-site are collected. It counts only when exactly one distinct mode appears (case-insensitive).
 3. The title scan, over the JSON-LD title, the `og:title` and the document title. It reads job-title segments only: the text is split on spaced separators (` | `, ` - `, ` / `, en dash, em dash and `·`), a last segment that names the site is dropped, and a segment equal to the company is dropped. A mode word counts only when it is a whole segment between separators, sits inside `()` or `[]`, or is a strong phrase: 100% remote, fully remote, work from home, WFH. Negations (non, not or no before a mode, also before fully or 100% remote, WFH or work from home) and "remote sensing/control/desktop" are ignored. Two different modes across the titles give blank.
+4. Site default (OnlineJobs.ph job pages only): Remote, shown as "Assumed from the site". Used only when no level above saw any mode.
 
 The popup says where the value came from and one click changes it.
 
@@ -80,7 +83,7 @@ To refresh a hint when a site changes: open the job page, find the company link 
 5. Any extension with host permission on the Talaan site can read your data with your cookie, and an unpacked copy that reuses our public key gets our ID (docs/AUTH.md, residual risks). Personal API tokens (E3) are the planned fix.
 6. A page that cannot be read (`chrome://`, the Web Store, a PDF) gives an empty form.
 7. A page whose JSON-LD url path differs from the tab path (slug URLs, ATS embeds) has its JSON-LD ignored, so the company stays blank. We prefer blank over a possibly stale company.
-8. OnlineJobs.ph and LinkedIn split-view or search pages give no company. Indeed gives no work mode. Work-mode detection is a heuristic; a wrong guess is one click to fix.
+8. OnlineJobs.ph and LinkedIn split-view or search pages give no company. OnlineJobs.ph mode is assumed Remote from the site; a non-remote posting there needs one click. Indeed gives no work mode. Work-mode detection is a heuristic; a wrong guess is one click to fix.
 9. Search pages (Indeed's "Job Search", for example) give nothing useful. Open the job's own page.
 10. The title cleanup is a heuristic and applies only to the `og:title` and document-title fallback, never to JSON-LD. It drops a last segment that contains part of the site's host name (for example linkedin, indeed or jobs), so a real title such as "Platform Engineer - LinkedIn Ads" on linkedin.com is shortened to "Platform Engineer". Edit the field if that happens.
 11. A bare title such as "Remote Engineer" is not detected as remote. The mode word must be a whole segment, in brackets, or a strong phrase.

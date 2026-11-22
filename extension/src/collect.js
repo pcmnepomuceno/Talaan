@@ -21,26 +21,32 @@ export function collect(loc = location) {
   // When a site changes its markup the hint just returns null (blank field). To refresh:
   // open the job page, find the company link / mode label, update the path regex or words here,
   // add a fixture test in tests/collect.test.js, and update the README tested-sites table.
+  // A row may also carry a defaultMode: a site-wide assumption, the lowest priority (extract.js).
+  // To refresh it, change the row, the tests and the README table.
   const SITE_HINTS = [
     { domain: "indeed.com", path: /^\/viewjob/, company: /^\/cmp\/[^/]+\/?$/ },
     { domain: "linkedin.com", path: /^\/jobs\/view\//, company: /^\/company\/[^/]+/, mode: true, titleMustContainCompany: true },
+    { domain: "onlinejobs.ph", path: /^\/jobseekers\/job\//, defaultMode: "remote" },
   ];
   const cut = (s) => [...s.slice(0, 400)].slice(0, 200).join("");
-  const hints = { companyText: null, modeTexts: [], titleMustContainCompany: false };
+  const hints = { companyText: null, modeTexts: [], titleMustContainCompany: false, defaultMode: null };
   const onDomain = (x, d) => x === d || x.endsWith("." + d);
   const h = (loc.hostname || "").toLowerCase();
   const hint = SITE_HINTS.find((x) => onDomain(h, x.domain) && x.path.test(loc.pathname));
   if (hint) {
-    const root = document.querySelector("main") || document.body;
+    const root = hint.company || hint.mode ? document.querySelector("main") || document.body : null;
     hints.titleMustContainCompany = hint.titleMustContainCompany === true;
-    for (const a of root.querySelectorAll("a[href]")) {
-      const ah = a.hostname || "";
-      if (ah !== h && !onDomain(ah, hint.domain)) continue;
-      if (!hint.company.test(a.pathname || "")) continue;
-      const t = (a.textContent || "").trim();
-      if (!t || /^(show more|show less|follow)$/i.test(t) || /followers/i.test(t)) continue;
-      hints.companyText = cut(t);
-      break;
+    hints.defaultMode = hint.defaultMode ?? null;
+    if (hint.company) {
+      for (const a of root.querySelectorAll("a[href]")) {
+        const ah = a.hostname || "";
+        if (ah !== h && !onDomain(ah, hint.domain)) continue;
+        if (!hint.company.test(a.pathname || "")) continue;
+        const t = (a.textContent || "").trim();
+        if (!t || /^(show more|show less|follow)$/i.test(t) || /followers/i.test(t)) continue;
+        hints.companyText = cut(t);
+        break;
+      }
     }
     if (hint.mode) {
       for (const el of root.querySelectorAll("*")) {

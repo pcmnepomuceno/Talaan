@@ -834,6 +834,21 @@ describe("detected work mode", () => {
     expect($("#mode-note").textContent).toBe("Detected from the title");
   });
 
+  it("a site default preselects remote and says it was assumed", async () => {
+    const raw = { ...RAW, url: "https://www.onlinejobs.ph/jobseekers/job/1", title: "Support Agent - OnlineJobs.ph", jsonLd: [], hints: { companyText: null, modeTexts: [], titleMustContainCompany: false, defaultMode: "remote" } };
+    const { f } = await mount({ raw });
+    expect(checked()).toBe("remote");
+    expect($("#mode-note").hidden).toBe(false);
+    expect($("#mode-note").textContent).toBe("Assumed from the site");
+    $("#mode_hybrid").click();
+    expect($("#mode-note").hidden).toBe(true);
+    expect($("#mode-note").textContent).toBe("");
+    typeInto("#company", "Kalye Labs");
+    submit();
+    await settle();
+    expect(JSON.parse(posts(f)[0][1].body).mode_of_work).toBe("hybrid");
+  });
+
   it("choosing another radio hides the note and Save sends the new value", async () => {
     const { f } = await mount({ raw: withLd({ jobLocationType: "TELECOMMUTE" }) });
     $("#mode_hybrid").click();

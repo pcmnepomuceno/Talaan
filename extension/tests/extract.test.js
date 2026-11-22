@@ -332,6 +332,34 @@ describe("work mode", () => {
   it("emoji and RTL titles give no mode", () => {
     expect(t("مهندس برمجيات 👩‍💻")).toEqual(["", ""]);
   });
+  describe("site default", () => {
+    const OJ = "https://www.onlinejobs.ph/jobseekers/job/1767571";
+    const site = (title, defaultMode = "remote", o = {}) => {
+      const r = extractPosting(raw({ url: OJ, title, hints: { companyText: null, modeTexts: [], titleMustContainCompany: false, defaultMode }, ...o }));
+      return [r.mode_of_work, r.mode_source];
+    };
+    it("applies when no level saw a signal", () => {
+      expect(site("Kalye Labs Support Agent 1234 - OnlineJobs.ph")).toEqual(["remote", "site"]);
+    });
+    it("a title mode wins over it", () => {
+      expect(site("Support Agent | Hybrid | $8/hr - OnlineJobs.ph")).toEqual(["hybrid", "title"]);
+    });
+    it("an ambiguous title stays blank", () => {
+      expect(site("Support Agent | Remote | Hybrid - OnlineJobs.ph")).toEqual(["", ""]);
+    });
+    it("JSON-LD wins over it", () => {
+      expect(site("Support Agent - OnlineJobs.ph", "remote", { jsonLd: [ld(posting({ jobLocationType: "TELECOMMUTE" }))] })).toEqual(["remote", "jsonld"]);
+    });
+    it("conflicting page labels stay blank", () => {
+      expect(site("Support Agent - OnlineJobs.ph", "remote", { hints: { modeTexts: ["Hybrid", "On-site"], defaultMode: "remote" } })).toEqual(["", ""]);
+    });
+    it("unknown or wrong-typed values are ignored without throwing", () => {
+      for (const d of [["remote"], 5, "constructor", "Remote", "hybrid", null]) {
+        expect(() => site("Support Agent - OnlineJobs.ph", d)).not.toThrow();
+        expect(site("Support Agent - OnlineJobs.ph", d)).toEqual(["", ""]);
+      }
+    });
+  });
   it("wrong types do not throw", () => {
     for (const hints of [5, "x", [], { modeTexts: 3, companyText: {} }, { modeTexts: [3, null] }, null]) {
       expect(() => extractPosting(raw({ hints }))).not.toThrow();
