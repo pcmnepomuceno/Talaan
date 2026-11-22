@@ -136,7 +136,7 @@ describe("defensive", () => {
   });
   it("prototype-key modeTexts fall through to the title", () => {
     for (const modeText of ["constructor", "__proto__", "toString"]) {
-      const r = raw({ title: "Remote Engineer", hints: { modeTexts: [modeText] } });
+      const r = raw({ title: "Engineer | Remote", hints: { modeTexts: [modeText] } });
       expect(detectWorkMode(r, null)).toEqual({ mode: "remote", source: "title" });
       expect(extractPosting(r)).toMatchObject({ mode_of_work: "remote", mode_source: "title" });
     }
@@ -265,16 +265,17 @@ describe("work mode", () => {
     expect(t("RouteWise | Remote | Part-Time")).toEqual(["remote", "title"]);
     expect(t("Dev (WFH)")[0]).toBe("remote");
     expect(t("Dev, Work From Home")[0]).toBe("remote");
-    expect(t("Dev Onsite")[0]).toBe("on_site");
-    expect(t("Dev, On site")[0]).toBe("on_site");
+    expect(t("Dev (Remote)")[0]).toBe("remote");
+    expect(t("Dev | Hybrid")[0]).toBe("hybrid");
+    expect(t("Dev [On-site]")[0]).toBe("on_site");
     expect(t("Dev - On-site")[0]).toBe("on_site");
     expect(m({ metas: metas({ ogTitle: "Dev | Hybrid" }) })).toEqual(["hybrid", "title"]);
-    expect(m(jl({ title: "Dev Remote" }))).toEqual(["remote", "title"]);
+    expect(m(jl({ title: "Dev | Remote" }))).toEqual(["remote", "title"]);
   });
   it("page level needs exactly one distinct label, case-insensitively", () => {
     expect(extractPosting(hint(["Hybrid", "hybrid"]))).toMatchObject({ mode_of_work: "hybrid", mode_source: "page" });
     expect(extractPosting(hint(["Hybrid", "Remote"]))).toMatchObject({ mode_of_work: "", mode_source: "" });
-    expect(extractPosting(hint(["Hybrid", "Remote"], { title: "Dev Onsite" }))).toMatchObject({ mode_of_work: "on_site", mode_source: "title" });
+    expect(extractPosting(hint(["Hybrid", "Remote"], { title: "Dev | On-site" }))).toMatchObject({ mode_of_work: "on_site", mode_source: "title" });
     expect(extractPosting(hint([]))).toMatchObject({ mode_of_work: "", mode_source: "" });
   });
   it("priority: first level with a signal wins", () => {
@@ -284,8 +285,30 @@ describe("work mode", () => {
     expect(extractPosting(hint("Hybrid", { title: "Dev Remote" }))).toMatchObject({ mode_of_work: "hybrid", mode_source: "page" });
   });
   it("ambiguous titles give blank", () => {
-    expect(t("Dev Remote/Hybrid")).toEqual(["", ""]);
-    expect(m({ metas: metas({ ogTitle: "Dev hybrid" }), title: "Dev remote" })).toEqual(["", ""]);
+    expect(t("Dev | Remote / Hybrid")).toEqual(["", ""]);
+    expect(m({ metas: metas({ ogTitle: "Dev | hybrid" }), title: "Dev | remote" })).toEqual(["", ""]);
+  });
+  it("a mode word that only starts or ends a segment is not read", () => {
+    for (const x of ["Dev Onsite", "Dev, On site", "Remote Customer Support", "Hybrid Cloud Engineer | $10/hr - OnlineJobs.ph", "Acme | Hybrid Cloud Engineer"]) {
+      expect(t(x), x).toEqual(["", ""]);
+    }
+  });
+  it("negated modes and hyphenated exclusions are ignored", () => {
+    for (const x of ["Receptionist (Non-Remote)", "Clerk | Not On-site", "Remote-Sensing Analyst", "Dev | No hybrid"]) {
+      expect(t(x), x).toEqual(["", ""]);
+    }
+  });
+  it("a segment that is the company is not a mode", () => {
+    const hy = (title, companyText, url) => extractPosting(raw({ url, title, hints: { companyText, modeTexts: [] } }));
+    expect(hy("Dev | Hybrid Theory Studios", "Hybrid Theory Studios")).toMatchObject({ mode_of_work: "" });
+    expect(hy("Dev | Remote Co", "Remote Co").mode_of_work).toBe("");
+    const li = extractPosting(raw({ url: "https://www.linkedin.com/jobs/view/1", title: "Backend Engineer | Remote | LinkedIn", hints: { companyText: "Remote", modeTexts: [], titleMustContainCompany: true } }));
+    expect(li).toMatchObject({ company: "Remote", mode_of_work: "", mode_source: "" });
+  });
+  it("a trailing site segment is not scanned", () => {
+    const at = (title) => extractPosting(raw({ url: "https://www.remote.com/jobs/1", title })).mode_of_work;
+    expect(at("Dev | Remote")).toBe("");
+    expect(at("Dev | Hybrid | Remote.com")).toBe("hybrid");
   });
   it("non-mode words are ignored", () => {
     for (const x of ["Remote Sensing Engineer", "Remote Control Technician", "Remote Desktop Support", "Remoteness", "Hybridization"]) {
@@ -293,7 +316,7 @@ describe("work mode", () => {
     }
   });
   it("unknown hint falls through to the title", () => {
-    expect(extractPosting(hint("Híbrido", { title: "Dev Remote" }))).toMatchObject({ mode_of_work: "remote", mode_source: "title" });
+    expect(extractPosting(hint("Híbrido", { title: "Dev | Remote" }))).toMatchObject({ mode_of_work: "remote", mode_source: "title" });
   });
   it("emoji and RTL titles give no mode", () => {
     expect(t("مهندس برمجيات 👩‍💻")).toEqual(["", ""]);
