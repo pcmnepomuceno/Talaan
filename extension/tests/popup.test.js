@@ -816,3 +816,41 @@ describe("source rules", () => {
     expect(read("popup.js")).not.toMatch(/https?:\/\/[a-z]/i);
   });
 });
+
+describe("detected work mode", () => {
+  const withLd = (extra) => ({ ...RAW, jsonLd: [JSON.stringify({ "@type": "JobPosting", title: "Backend Engineer", hiringOrganization: { name: "Kape Digital" }, url: PAGE, ...extra })] });
+  const checked = () => document.querySelector('input[name="mode_of_work"]:checked')?.value;
+
+  it("JSON-LD TELECOMMUTE preselects remote and says it came from the page", async () => {
+    await mount({ raw: withLd({ jobLocationType: "TELECOMMUTE" }) });
+    expect(checked()).toBe("remote");
+    expect($("#mode-note").hidden).toBe(false);
+    expect($("#mode-note").textContent).toBe("Detected from the page");
+  });
+
+  it("a title match says it came from the title", async () => {
+    await mount({ raw: { ...RAW, title: "Backend Engineer | Remote" } });
+    expect(checked()).toBe("remote");
+    expect($("#mode-note").textContent).toBe("Detected from the title");
+  });
+
+  it("choosing another radio hides the note and Save sends the new value", async () => {
+    const { f } = await mount({ raw: withLd({ jobLocationType: "TELECOMMUTE" }) });
+    $("#mode_hybrid").click();
+    expect($("#mode-note").hidden).toBe(true);
+    submit();
+    await settle();
+    expect(JSON.parse(posts(f)[0][1].body).mode_of_work).toBe("hybrid");
+  });
+
+  it("nothing detected leaves nothing checked and the note hidden", async () => {
+    await mount();
+    expect(checked()).toBeUndefined();
+    expect($("#mode-note").hidden).toBe(true);
+  });
+
+  it("the fieldset points at the note", () => {
+    document.documentElement.innerHTML = html;
+    expect($("fieldset").getAttribute("aria-describedby")).toBe("mode_of_work-error mode-note");
+  });
+});
