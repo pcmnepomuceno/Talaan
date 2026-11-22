@@ -31,7 +31,7 @@ The extension has no login form. If you are signed out it shows "Open Talaan to 
 2. Choose Load unpacked and select the `extension/` folder.
 3. Confirm the ID is `fjlnbbkeadlpibmnbpfhlgeingifocni`.
 
-The server must allow it with `EXTENSION_ORIGINS=chrome-extension://fjlnbbkeadlpibmnbpfhlgeingifocni` (docs/AUTH.md). Chrome 111 or newer is needed.
+The server must allow it with `EXTENSION_ORIGINS=chrome-extension://fjlnbbkeadlpibmnbpfhlgeingifocni` (docs/AUTH.md). Chrome 123 or newer is needed (the popup's colors use `light-dark()`).
 
 The `key` in `manifest.json` is the public key. It is committed because it fixes the ID. The matching private key was generated outside the repository, is never committed, and is needed only to pack a release. Never add a `*.pem` file.
 

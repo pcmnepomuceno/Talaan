@@ -2,6 +2,7 @@
   "manifest_version": 3,
   "name": "Talaan",
   "version": "0.1.0",
+  "minimum_chrome_version": "123",
   "description": "Save the job posting you are viewing to Talaan.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwqC7v9gL0H6ggY9lNqenJD6VktWvALxKnSTfrHvvgrQPZbVc2zCymm4Hd7uOSBbQaea6RFfhjuDqo8UV6KHrCMfzXXd/8ffygBqqEL24vpx8eYmiKrFn/Xh1AeDZDXDcRlckh38qCfxNCUfzvC8LJLKn4iQXQ14yUj4geDIc1jUTBaiXrGfyCbygqHWf9kwvbwZkrdFj3/eY2REA0STc4G0HCsZDbgEVMPAXab5sPHmH5pLJiH+yH/dlH3vaR40AzBBjVM7gKaXQD7gu0mu1dWDbZZa2slBjm7WvtXzwgVYG8D4NyV9vnI/kn8vqg7XFLSBnH1IEti7883g8yzCBVwIDAQAB",
   "action": {

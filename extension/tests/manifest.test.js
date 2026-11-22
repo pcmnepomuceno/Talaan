@@ -22,6 +22,7 @@ describe("manifest", () => {
     expect(manifest.manifest_version).toBe(3);
     expect(manifest.name).toBe("Talaan");
     expect(manifest.version).toBe("0.1.0");
+    expect(manifest.minimum_chrome_version).toBe("123");
     expect(manifest.action.default_popup).toBe("popup.html");
   });
 
