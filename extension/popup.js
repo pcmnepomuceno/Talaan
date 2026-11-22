@@ -276,7 +276,12 @@ export async function start({ chrome, fetch, document, setTimeout = globalThis.s
     return save();
   });
   $("job_url").addEventListener("blur", checkDup);
-  for (const r of radios()) r.addEventListener("change", () => ($("mode-note").hidden = true));
+  for (const r of radios()) {
+    r.addEventListener("change", () => {
+      $("mode-note").hidden = true;
+      $("mode-note").textContent = "";
+    });
+  }
   $("retryButton").addEventListener("click", run);
   $("checkAgain").addEventListener("click", run);
   $("openLogin").addEventListener("click", () => chrome.tabs.create({ url: `${API_BASE}/login` }));

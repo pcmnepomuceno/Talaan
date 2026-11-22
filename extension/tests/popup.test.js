@@ -838,6 +838,7 @@ describe("detected work mode", () => {
     const { f } = await mount({ raw: withLd({ jobLocationType: "TELECOMMUTE" }) });
     $("#mode_hybrid").click();
     expect($("#mode-note").hidden).toBe(true);
+    expect($("#mode-note").textContent).toBe("");
     submit();
     await settle();
     expect(JSON.parse(posts(f)[0][1].body).mode_of_work).toBe("hybrid");
