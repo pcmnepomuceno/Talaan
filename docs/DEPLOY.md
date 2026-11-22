@@ -53,6 +53,7 @@ Generate once: `openssl rand -hex 32` (the proxy secret). Never commit real valu
 | Render | `ENVIRONMENT` | `production` (the app refuses to start on a dev-grade config) |
 | Render | `COOKIE_SECURE` | `true` (cookie becomes `__Host-session_token`) |
 | Render | `ALLOWED_ORIGINS` | `https://<project>.vercel.app` (exact origin, no path, https, not localhost) |
+| Render | `EXTENSION_ORIGINS` | empty until the E2b extension ships; then `chrome-extension://<32 letters a-p>`, comma-separated, exact match (no wildcard, no trailing slash) |
 | Render | `PROXY_SECRET` | the generated secret (at least 32 characters) |
 | Render | `TRUST_PROXY` | `false` |
 | Render | `BCRYPT_ROUNDS` | `12` (production refuses lower) |
@@ -80,7 +81,7 @@ Startup errors are the check: a wrong production config exits with `Refusing to 
 ## 3. First deploy steps
 
 1. Create the Neon project and a database. Note both connection strings.
-2. From your machine (never on boot): `DATABASE_URL=<direct string> python -m alembic upgrade head`, then `python -m alembic check`.
+2. From your machine (never on boot): `DATABASE_URL=<direct string> python -m alembic upgrade head`, then `python -m alembic check`. Alembic needs the `postgresql+psycopg2://` scheme: Neon's own string starts with `postgresql://`, which picks the psycopg driver here, so change the prefix.
 3. Create the Render web service with the env vars above. Wait for `/health` = 200.
 4. Create the Vercel project (root directory `frontend`) with `BACKEND_URL` and `PROXY_SECRET`. Deploy.
 5. Add the final Vercel origin to `ALLOWED_ORIGINS` on Render if it differs from the one you guessed. Redeploy Render.
