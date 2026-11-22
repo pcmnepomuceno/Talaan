@@ -356,3 +356,12 @@ it("lookupJobUrl: no match is null; an error or a bad shape rejects", async () =
   fake.on("GET", /^\/applications\/lookup/, () => json(200, { match: { id: "x" } }));
   await expect(lookupJobUrl("https://a.ph/j", new AbortController().signal)).rejects.toBeInstanceOf(MappingError);
 });
+
+it("lookupJobUrl: a 401 rejects quietly and never redirects to login", async () => {
+  const replace = vi.fn();
+  vi.stubGlobal("location", { pathname: "/applications/new", search: "", replace });
+  fake.failNext("GET", /^\/applications\/lookup/, 401);
+  await expect(lookupJobUrl("https://a.ph/j", new AbortController().signal)).rejects.toMatchObject({ status: 401 });
+  expect(replace).not.toHaveBeenCalled();
+  vi.unstubAllGlobals();
+});
