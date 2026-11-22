@@ -25,7 +25,7 @@ export function collect(loc = location) {
     { domain: "indeed.com", path: /^\/viewjob/, company: /^\/cmp\/[^/]+\/?$/ },
     { domain: "linkedin.com", path: /^\/jobs\/view\//, company: /^\/company\/[^/]+/, mode: true },
   ];
-  const cut = (s) => [...s].slice(0, 200).join("");
+  const cut = (s) => [...s.slice(0, 400)].slice(0, 200).join("");
   const hints = { companyText: null, modeText: null };
   const h = (loc.hostname || "").toLowerCase();
   const hint = SITE_HINTS.find((x) => (h === x.domain || h.endsWith("." + x.domain)) && x.path.test(loc.pathname));

@@ -180,6 +180,23 @@ describe("site hints", () => {
     expect(hints(LI).companyText).toBe("<b>Acme</b> \u05e9\u05dc\u05d5\u05dd");
   });
 
+  it("slices a huge hint text before spreading it", () => {
+    document.body.innerHTML = `<a href="/company/a">${"x".repeat(1_000_000)}</a>`;
+    const orig = String.prototype[Symbol.iterator];
+    let longest = 0;
+    String.prototype[Symbol.iterator] = function () {
+      longest = Math.max(longest, this.length);
+      return orig.call(this);
+    };
+    try {
+      const got = hints(LI).companyText;
+      expect(longest).toBeLessThanOrEqual(400);
+      expect([...got]).toHaveLength(200);
+    } finally {
+      String.prototype[Symbol.iterator] = orig;
+    }
+  });
+
   it("does not mutate the DOM or call fetch on hint pages", () => {
     document.body.innerHTML = liBody;
     const before = document.documentElement.outerHTML;
