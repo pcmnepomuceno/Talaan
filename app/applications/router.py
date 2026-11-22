@@ -17,6 +17,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session as DBSession
 
+from app.applications import job_url
 from app.applications.dependencies import get_owned_application
 from app.applications.models import ApplicationStatus, JobApplication
 from app.applications.schemas import (
@@ -86,6 +87,8 @@ def _fill_date(row: JobApplication) -> None:
 def _to_columns(data: dict) -> dict:
     if data.get("contact_website") is not None:
         data["contact_website"] = str(data["contact_website"])
+    if "job_url" in data:
+        data["job_url_key"] = job_url.key(data["job_url"]) if data["job_url"] else None
     return data
 
 

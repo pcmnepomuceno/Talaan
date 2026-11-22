@@ -213,3 +213,81 @@ def test_list_has_no_n_plus_one(a):
     finally:
         event.remove(engine, "before_cursor_execute", _count)
     assert one == five >= 4  # auth 2 + count 1 + page 1
+
+
+# --- job_url ---
+
+JOB_URL = "https://example.com/jobs/1?utm_source=x"
+JOB_URL_BAD = [
+    "ftp://example.com/a",
+    "javascript:alert(1)",
+    "https://",
+    "https://u:p@example.com",
+    "https://example.com/a\x00b",
+    "https://example.com/a b",
+    "https://example.com:99999/a",
+    "https://example.com/" + "a" * 2000,
+]
+
+
+def _row_key(db, app_id):
+    return tuple(db.execute(text("SELECT job_url, job_url_key FROM job_applications WHERE id = :i"), {"i": app_id}).one())
+
+
+def test_create_job_url_round_trips_trimmed(a):
+    from app.applications import job_url
+
+    row = create(a, job_url=f"  {JOB_URL}  ")
+    assert row["job_url"] == JOB_URL
+    assert a.get(f"{URL}/{row['id']}").json()["job_url"] == JOB_URL
+    assert any(i["job_url"] == JOB_URL for i in a.get(URL).json()["items"])
+    assert job_url.key(JOB_URL) == job_url.key("https://example.com/jobs/1")
+
+
+@pytest.mark.parametrize("v", ["", "   ", None])
+def test_create_empty_job_url_is_null(a, v):
+    assert create(a, job_url=v)["job_url"] is None
+
+
+def test_create_without_job_url_is_null(a):
+    assert create(a)["job_url"] is None
+
+
+@pytest.mark.parametrize("v", JOB_URL_BAD)
+def test_create_bad_job_url(a, v):
+    r = a.post(URL, json={**BODY, "job_url": v})
+    assert r.status_code == 422
+    assert r.json()["detail"][0]["loc"][-1] == "job_url"
+
+
+def test_job_url_key_is_not_client_settable(a):
+    assert a.post(URL, json={**BODY, "job_url_key": "x"}).status_code == 422
+
+
+def test_patch_job_url_set_clear_and_untouched(a, db):
+    from app.applications import job_url
+
+    row = create(a, job_url=JOB_URL)
+    assert _row_key(db, row["id"]) == (JOB_URL, job_url.key(JOB_URL))
+
+    r = a.patch(f"{URL}/{row['id']}", json={"remarks": "x"})
+    assert r.json()["job_url"] == JOB_URL
+    assert _row_key(db, row["id"]) == (JOB_URL, job_url.key(JOB_URL))
+
+    new = "https://example.com/jobs/2"
+    assert a.patch(f"{URL}/{row['id']}", json={"job_url": new}).json()["job_url"] == new
+    assert _row_key(db, row["id"]) == (new, job_url.key(new))
+
+    assert a.patch(f"{URL}/{row['id']}", json={"job_url": None}).json()["job_url"] is None
+    assert _row_key(db, row["id"]) == (None, None)
+
+    a.patch(f"{URL}/{row['id']}", json={"job_url": new})
+    assert a.patch(f"{URL}/{row['id']}", json={"job_url": ""}).json()["job_url"] is None
+    assert _row_key(db, row["id"]) == (None, None)
+
+
+def test_patch_bad_job_url(a):
+    row = create(a)
+    r = a.patch(f"{URL}/{row['id']}", json={"job_url": "ftp://x.com"})
+    assert r.status_code == 422
+    assert r.json()["detail"][0]["loc"][-1] == "job_url"

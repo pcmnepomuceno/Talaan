@@ -4,6 +4,7 @@ from datetime import date, datetime
 from typing import Annotated, Literal
 
 from pydantic import (
+    AfterValidator,
     BaseModel,
     ConfigDict,
     EmailStr,
@@ -13,6 +14,7 @@ from pydantic import (
     model_validator,
 )
 
+from app.applications import job_url
 from app.applications.models import ApplicationStatus, ModeOfWork
 
 INT4_MAX = 2_147_483_647
@@ -20,6 +22,8 @@ INT4_MAX = 2_147_483_647
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 # HttpUrl accepts http/https only (javascript: etc. give 422); stored as str.
 Website = Annotated[HttpUrl, Field(max_length=2000)]
+# Trimmed; empty means None; http(s) only. The key for duplicate matching is set in the router.
+JobUrl = Annotated[str | None, AfterValidator(job_url.clean)]
 Salary = Annotated[int, Field(ge=0, le=INT4_MAX)]
 Remarks = Annotated[str, Field(max_length=5000)]
 
@@ -30,6 +34,7 @@ class ApplicationCreate(BaseModel):
     company: Name
     job_name: Name
     contact_website: Website | None = None
+    job_url: JobUrl = None
     contact_email: EmailStr | None = None
     status: ApplicationStatus
     salary: Salary | None = None
@@ -46,6 +51,7 @@ class ApplicationUpdate(BaseModel):
     company: Name | None = None
     job_name: Name | None = None
     contact_website: Website | None = None
+    job_url: JobUrl = None
     contact_email: EmailStr | None = None
     status: ApplicationStatus | None = None
     salary: Salary | None = None
@@ -68,6 +74,7 @@ class ApplicationRead(BaseModel):
     company: str
     job_name: str
     contact_website: str | None
+    job_url: str | None
     contact_email: str | None
     status: ApplicationStatus
     salary: int | None
