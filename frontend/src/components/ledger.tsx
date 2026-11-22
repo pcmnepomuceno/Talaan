@@ -160,6 +160,7 @@ export function DetailRows({ application: a }: { application: Application }) {
   const date = dateAppliedLabel(a.date_applied, a.status);
   const mode = workModeLabel(a.mode_of_work);
   const safe = a.contact_website && /^https?:\/\//i.test(a.contact_website);
+  const posting = a.job_url && /^https?:\/\//i.test(a.job_url) ? a.job_url : null; // else no row, never a dash
   return (
     <dl className={`${sheet} ${rules}`}>
       {salary && <DetailRow label="Monthly gross salary">{salary}</DetailRow>}
@@ -179,6 +180,19 @@ export function DetailRows({ application: a }: { application: Application }) {
           ) : (
             shortUrl(a.contact_website)
           )}
+        </DetailRow>
+      )}
+      {posting && (
+        <DetailRow label="Job posting">
+          <a
+            href={posting}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Open posting, ${a.company}`}
+            className="inline-flex min-h-11 items-center font-normal text-primary underline"
+          >
+            Open posting
+          </a>
         </DetailRow>
       )}
     </dl>
