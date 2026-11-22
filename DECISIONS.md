@@ -668,3 +668,14 @@
 - **Rule (generic, no domain list):** if the last segment (after the last " | ", and after a trailing " - ") contains a host label of 4 or more letters, it is dropped; then the first " | " segment is kept and inner " - " parts stay. A title with no such segment is left untouched.
 - **Cost, accepted.** A real trailing segment that contains a host label ("Platform Engineer - LinkedIn Ads") is dropped too. It is pinned by a test and listed in extension/README.md (Known limits).
 - **Rejected.** Company suggestion chips: a wrong value (such as Indeed's city) is worse than blank. Reading the page `h1`: an extra page read, and `collect.js` stays unchanged. Per-site rules: they rot.
+
+---
+
+# Decision: Extension site hints (E2d)
+- **Date:** 2026-11-22
+- **Decision:** `extension/src/collect.js` gains a small `SITE_HINTS` table (Indeed `/viewjob`, LinkedIn `/jobs/view/`): the text of the company link, and on LinkedIn the work-mode label. `extract.js` adds `detectWorkMode`, and the popup preselects the work mode with a "Detected from the page/title" note. The user can change it with one click, and Save still requires a mode.
+- **Reverses** the E2c rejection of "Per-site rules: they rot", for narrow URL-pattern hints only. Why: the goal is speed, and real pages showed no generic signal (no JSON-LD on Indeed, LinkedIn or OnlineJobs.ph).
+- **Failure mode is blank, never a guess.** Guards: match on URL host (equal or a subdomain) and path only, no class names, no split-view or search pages, leaf-element exact match for the mode label, text read with `textContent` and cut to 200 code points.
+- **Work-mode priority:** JSON-LD TELECOMMUTE, then the page label, then a whole-word title scan; the first level with a signal wins. Titles that name two different modes give blank. "Remote sensing/control/desktop" is ignored. The title scan uses the text before site cleanup, because `cleanTitle` drops "| 100% Remote".
+- **Enum value:** `on_site` (the API enum), not `on-site`.
+- **Rejected.** Reading body text for the mode: too many false matches and a wider read.
