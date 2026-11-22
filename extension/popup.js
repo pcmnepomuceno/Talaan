@@ -10,6 +10,7 @@ const URL_MAX = 2000;
 const LABELS = { company: "Company", job_name: "Job title", job_url: "Job posting URL", mode_of_work: "Work mode", status: "Status" };
 // Top to bottom on screen: the first invalid field gets focus.
 const FIELD_ORDER = ["company", "job_name", "job_url", "mode_of_work"];
+const MODE_NOTES = { title: "Detected from the title", site: "Assumed from the site" };
 const BAD_URL = "Enter a full address starting with http:// or https://";
 
 const points = (s) => [...s].length;
@@ -80,7 +81,7 @@ export async function start({ chrome, fetch, document, setTimeout = globalThis.s
     const radio = radios().find((r) => r.value === posting.mode_of_work);
     if (radio) {
       radio.checked = true;
-      $("mode-note").textContent = posting.mode_source === "title" ? "Detected from the title" : "Detected from the page";
+      $("mode-note").textContent = MODE_NOTES[posting.mode_source] ?? "Detected from the page";
       $("mode-note").hidden = false;
     }
   }
