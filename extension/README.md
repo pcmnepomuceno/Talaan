@@ -8,10 +8,10 @@ Click the toolbar icon on a job posting. A small popup opens with the company, j
 
 It reads only the active tab, and only after you click the icon, through `activeTab` and `scripting`. It reads the page URL and title, the `og:title` tag, and the text of JSON-LD script tags. It only reads and never writes to the page. Page reading gives up after 4 seconds, so a stuck tab leaves an empty form.
 
-Nothing is sent anywhere until you press Save, with two exceptions that happen when the popup opens:
+Nothing is sent anywhere until you press Save, with two exceptions:
 
-- The sign-in check, `GET /api/v1/me`.
-- The duplicate check, `POST /api/v1/applications/lookup`, which sends the posting URL so Talaan can tell you if you already saved it.
+- The sign-in check, `GET /api/v1/me`, when the popup opens.
+- The duplicate check, `POST /api/v1/applications/lookup`, which sends the posting URL so Talaan can tell you if you already saved it. It runs when the URL field is first filled (on open), and again when the field loses focus after you edit it or after the last lookup failed.
 
 ## Permissions and why
 
@@ -38,7 +38,7 @@ The `key` in `manifest.json` is the public key. It is committed because it fixes
 ## Privacy
 
 - It reads only the active tab, after a click.
-- It sends nothing until you press Save, except the two checks above when the popup opens and you are signed in.
+- It sends nothing until you press Save, except the sign-in check and the duplicate check above.
 - No analytics.
 - No storage: no `chrome.storage`, `localStorage` or cookies of its own.
 - No third-party requests and no remote code.
@@ -51,6 +51,7 @@ The `key` in `manifest.json` is the public key. It is committed because it fixes
 4. Several JobPostings with none matching the page URL (a list page) are ignored.
 5. Any extension with host permission on the Talaan site can read your data with your cookie, and an unpacked copy that reuses our public key gets our ID (docs/AUTH.md, residual risks). Personal API tokens (E3) are the planned fix.
 6. A page that cannot be read (`chrome://`, the Web Store, a PDF) gives an empty form.
+7. A page whose JSON-LD url path differs from the tab path (slug URLs, ATS embeds) has its JSON-LD ignored, so the company stays blank. We prefer blank over a possibly stale company.
 
 ## Development
 
