@@ -1,4 +1,5 @@
 import logging
+from contextlib import ExitStack
 
 import pytest
 
@@ -154,14 +155,17 @@ def test_the_url_never_reaches_logs_or_error_bodies(a, caplog):
     secret = "https://secret-host.example/jobs/42?token=abc123"
     create(a, job_url=secret)
     caplog.clear()
-    with caplog.at_level(logging.DEBUG):
-        for name in ("", "uvicorn", "uvicorn.access", "uvicorn.error", "app", "fastapi", "starlette"):
-            logging.getLogger(name).setLevel(logging.DEBUG)
+    # TestClient does not go through uvicorn.access, so this covers the app's own logging only.
+    names = ("", "uvicorn", "uvicorn.access", "uvicorn.error", "app", "fastapi", "starlette")
+    with ExitStack() as stack:
+        for name in names:
+            stack.enter_context(caplog.at_level(logging.DEBUG, logger=name))
         ok = look(a, secret)
         bad = a.post(LOOKUP, json={"url": secret + " bad", "exclude_id": "x"})
         bad2 = a.post(LOOKUP, json={"url": "ftp://secret-host.example/jobs/42?token=abc123"})
         bad3 = a.post(LOOKUP, content='"' + secret + '"', headers={"Content-Type": "application/json"})
+        bad4 = a.post(LOOKUP, content='{"url": "https://secret-host.example/x', headers={"Content-Type": "application/json"})
     assert ok.status_code == 200 and ok.json()["match"]
-    assert bad.status_code == bad2.status_code == bad3.status_code == 422
-    for text in (bad.text, bad2.text, bad3.text, caplog.text):
+    assert bad.status_code == bad2.status_code == bad3.status_code == bad4.status_code == 422
+    for text in (bad.text, bad2.text, bad3.text, bad4.text, caplog.text):
         assert "secret-host" not in text and "abc123" not in text

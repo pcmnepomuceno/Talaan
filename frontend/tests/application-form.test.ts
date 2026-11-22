@@ -45,7 +45,7 @@ it("website: empty ok; http and https only; at most 2000", () => {
 
 it("job posting URL: empty ok; http(s) with a host, no userinfo, no control or space; at most 2000 code points", () => {
   const msg = "Enter a full address starting with http:// or https://";
-  for (const good of ["", "   ", "https://a.ph/j?id=1#x", "  HTTPS://A.PH/j  ", "https://a.ph/😀", "https://日本.jp/x"]) expect(validate({ ...ok, job_url: good }).job_url, good).toBeUndefined();
+  for (const good of ["", "   ", "https://a.ph/j?id=1#x", "  HTTPS://A.PH/j  ", "https://a.ph/😀", "https://日本.jp/x", "https://h.ph/a@b", "https://h.ph?x=a@b", "https://h.ph#a@b", "https://[::1]/a@b"]) expect(validate({ ...ok, job_url: good }).job_url, good).toBeUndefined();
   for (const bad of ["a.ph/j", "ftp://a.ph", "javascript:alert(1)", "https://", "http:///x", "https://u:p@a.ph", "https://u@a.ph", "https://@a.ph", "https://:@a.ph", "https://a.ph@b.ph", "https://a.ph/\u0000", "https://a.ph/a\tb", "https://a.ph/a\nb", "https://a.ph/a b", "https://a.ph/\u007f"])
     expect(validate({ ...ok, job_url: bad }).job_url, JSON.stringify(bad)).toBe(msg);
   expect(validate({ ...ok, job_url: `https://a.ph/${"a".repeat(1987)}` }).job_url).toBeUndefined(); // exactly 2000
