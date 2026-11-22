@@ -1,9 +1,11 @@
 """Job Application routes. Every route is scoped to the caller (`created_by`)."""
 
 from datetime import datetime, timezone
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Body, Depends, Query, status
 from fastapi.exceptions import RequestValidationError
+from pydantic import ValidationError
 from sqlalchemy import (
     Date,
     Integer,
@@ -17,6 +19,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session as DBSession
 
+from app.applications import job_url
 from app.applications.dependencies import get_owned_application
 from app.applications.models import ApplicationStatus, JobApplication
 from app.applications.schemas import (
@@ -27,6 +30,9 @@ from app.applications.schemas import (
     ApplicationUpdate,
     FollowUpItem,
     FollowUpPage,
+    LookupBody,
+    LookupMatch,
+    LookupResult,
 )
 from app.auth.dependencies import get_current_user
 from app.config import MANILA
@@ -42,8 +48,8 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _bad(name: str, msg: str) -> RequestValidationError:
-    return RequestValidationError([{"type": "value_error", "loc": ("query", name), "msg": msg, "input": None}])
+def _bad(name: str, msg: str, where: str = "query") -> RequestValidationError:
+    return RequestValidationError([{"type": "value_error", "loc": (where, name), "msg": msg, "input": None}])
 
 
 def _pht_day(col):
@@ -86,6 +92,8 @@ def _fill_date(row: JobApplication) -> None:
 def _to_columns(data: dict) -> dict:
     if data.get("contact_website") is not None:
         data["contact_website"] = str(data["contact_website"])
+    if "job_url" in data:
+        data["job_url_key"] = job_url.key(data["job_url"]) if data["job_url"] else None
     return data
 
 
@@ -137,6 +145,37 @@ def list_applications(
         .all()
     )
     return ApplicationPage(items=items, total=total, limit=limit, offset=offset)
+
+
+# Order relative to /{application_id} does not matter: no other route takes POST on this path,
+# and a GET /lookup reaches GET /{application_id} and answers 422.
+# POST, not GET: a posting URL in a query string would reach access logs and proxies.
+@router.post("/lookup", response_model=LookupResult)
+def lookup_application(
+    payload: Annotated[Any, Body()],
+    user: User = Depends(get_current_user),
+    db: DBSession = Depends(get_db),
+):
+    """The caller's newest application saved from this posting (normalized match), or null."""
+    # Validated by hand so no error ever carries `input` (it could be the URL).
+    try:
+        body = LookupBody.model_validate(payload)
+    except ValidationError as e:
+        errs = e.errors(include_url=False, include_input=False, include_context=False)
+        raise RequestValidationError([{**x, "loc": ("body", *x["loc"]), "input": None} for x in errs]) from None
+    try:
+        cleaned = job_url.clean(body.url)
+    except ValueError as e:
+        raise _bad("url", str(e), "body") from None
+    if cleaned is None:
+        raise _bad("url", "Enter a full address starting with http:// or https://", "body")
+    q = db.query(JobApplication).filter(
+        JobApplication.created_by == user.id, JobApplication.job_url_key == job_url.key(cleaned)
+    )
+    if body.exclude_id is not None:
+        q = q.filter(JobApplication.id != body.exclude_id)
+    row = q.order_by(JobApplication.created_at.desc(), JobApplication.id.desc()).first()
+    return LookupResult(match=LookupMatch(id=row.id, job_name=row.job_name, company=row.company) if row else None)
 
 
 @router.get("/{application_id}", response_model=ApplicationRead)

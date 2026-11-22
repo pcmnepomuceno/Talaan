@@ -479,3 +479,36 @@ it("an interviews request in flight during a status change is still applied (a s
   expect(s.kind === "ready" && s.application.status).toBe("rejected");
   expect(fake.callsTo("GET", /^\/applications\/1\/interviews/)).toHaveLength(1); // not refetched
 });
+
+// ---- job posting link (E1) ----
+const postingLink = () => screen.queryByRole("link", { name: /^Open posting/ });
+
+it("the detail's Key details gets an Open posting link for an https job_url", async () => {
+  fake.db.apps[0].job_url = "https://jobs.example.ph/dev?id=7";
+  mount();
+  await screen.findByRole("list", { name: "Interviews" });
+  const a = screen.getByRole("link", { name: "Open posting, Pinagsama Tech" });
+  expect(a.textContent).toBe("Open posting");
+  expect(a.getAttribute("href")).toBe("https://jobs.example.ph/dev?id=7");
+  expect(a.getAttribute("target")).toBe("_blank");
+  expect(a.getAttribute("rel")).toBe("noopener noreferrer");
+  const labels = screen.getAllByRole("term").map((t) => t.textContent);
+  expect(labels.indexOf("Job posting")).toBe(labels.indexOf("Website") + 1);
+});
+
+it("no Open posting link, and no row, for a javascript: URL or a null job_url", async () => {
+  fake.db.apps[0].job_url = "javascript:alert(1)";
+  const first = mount();
+  await screen.findByRole("list", { name: "Interviews" });
+  expect(postingLink()).toBeNull();
+  expect(screen.queryByText("Job posting")).toBeNull();
+  first.unmount();
+
+  clearCaches();
+  fake.db.apps[0].job_url = null;
+  mount();
+  await screen.findByRole("list", { name: "Interviews" });
+  expect(postingLink()).toBeNull();
+  expect(screen.queryByText("Job posting")).toBeNull();
+  expect(screen.queryByText("—")).toBeNull();
+});

@@ -14,6 +14,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -52,6 +53,9 @@ class JobApplication(Base):
     company = Column(String, nullable=False)
     job_name = Column(String, nullable=False)
     contact_website = Column(String, nullable=True)
+    job_url = Column(String, nullable=True)
+    # hex SHA-256 of app.applications.job_url.normalize(job_url); hashed to stay under the btree size cap
+    job_url_key = Column(String, nullable=True)
     contact_email = Column(String, nullable=True)
     status = Column(
         Enum(ApplicationStatus, name="application_status", values_callable=_values),
@@ -73,3 +77,5 @@ class JobApplication(Base):
     created_by = Column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
+
+    __table_args__ = (Index("ix_job_applications_created_by_job_url_key", "created_by", "job_url_key"),)

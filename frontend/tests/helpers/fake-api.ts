@@ -10,6 +10,7 @@ export const makeApp = (id: number, rest: Partial<Application> = {}): Applicatio
   company: `Company ${id}`,
   job_name: `Job ${id}`,
   contact_website: null,
+  job_url: null,
   contact_email: null,
   status: "applied",
   salary: null,

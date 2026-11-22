@@ -63,6 +63,7 @@ export function fromApiApplication(v: unknown): Application {
     company: str(r, "company"),
     job_name: str(r, "job_name"),
     contact_website: strOrNull(r, "contact_website"),
+    job_url: r.job_url === undefined ? null : strOrNull(r, "job_url"), // missing: an API that predates the field
     contact_email: strOrNull(r, "contact_email"),
     status: oneOf(r, "status", STATUSES),
     salary: r.salary === null ? null : int(r, "salary"),
@@ -93,6 +94,15 @@ export function fromApiInterview(v: unknown): Interview {
 export function fromApiAgendaInterview(v: unknown): AgendaInterview {
   const r = obj(v, "interview");
   return { ...fromApiInterview(v), company: str(r, "company"), job_name: str(r, "job_name") };
+}
+
+/** POST /applications/lookup: the user's newest application with this posting URL, or null. */
+export type LookupMatch = { id: number; job_name: string; company: string };
+export function fromApiLookup(v: unknown): LookupMatch | null {
+  const m = obj(v, "lookup").match;
+  if (m === null) return null;
+  const r = obj(m, "match");
+  return { id: int(r, "id"), job_name: str(r, "job_name"), company: str(r, "company") };
 }
 
 export type Page<T> = { items: T[]; total: number };
@@ -129,6 +139,7 @@ export type ApplicationInput = {
   date_applied: string | null;
   salary: number | null;
   contact_website: string | null;
+  job_url: string | null;
   remarks: string | null;
 };
 
@@ -140,6 +151,7 @@ const FIELDS = [
   "date_applied",
   "salary",
   "contact_website",
+  "job_url",
   "remarks",
 ] as const satisfies readonly (keyof ApplicationInput)[];
 
@@ -151,13 +163,16 @@ export const toApplicationInput = (a: Application): ApplicationInput => ({
   date_applied: a.date_applied,
   salary: a.salary,
   contact_website: a.contact_website,
+  job_url: a.job_url,
   remarks: a.remarks,
 });
 
-export const toCreateBody = (i: ApplicationInput): ApplicationInput => {
+export const toCreateBody = (i: ApplicationInput): Omit<ApplicationInput, "job_url"> & { job_url?: string } => {
   const body: Record<string, unknown> = {};
-  for (const k of FIELDS) body[k] = i[k];
-  return body as ApplicationInput;
+  // No job_url key when there is none: an API older than job_url (extra=forbid) rejects the unknown
+  // key, so a create without a posting URL still works against it.
+  for (const k of FIELDS) if (k !== "job_url" || i[k] !== null) body[k] = i[k];
+  return body as Omit<ApplicationInput, "job_url"> & { job_url?: string };
 };
 
 /** Only the fields that differ from `initial`; `{}` means nothing to save. null clears a nullable field. */
@@ -176,6 +191,7 @@ export type FormValues = {
   mode_of_work: WorkMode | "";
   salary: string;
   contact_website: string;
+  job_url: string;
   remarks: string;
 };
 
@@ -187,6 +203,7 @@ export const toFormValues = (a: Application): FormValues => ({
   mode_of_work: a.mode_of_work,
   salary: a.salary === null ? "" : String(a.salary),
   contact_website: a.contact_website ?? "",
+  job_url: a.job_url ?? "",
   remarks: a.remarks ?? "",
 });
 
@@ -198,6 +215,7 @@ export const EMPTY_FORM: FormValues = {
   mode_of_work: "",
   salary: "",
   contact_website: "",
+  job_url: "",
   remarks: "",
 };
 
@@ -213,6 +231,7 @@ export function fromFormValues(v: FormValues): ApplicationInput {
     date_applied: v.date_applied === "" ? null : v.date_applied,
     salary: v.salary === "" ? null : Number(v.salary),
     contact_website: orNull(v.contact_website),
+    job_url: orNull(v.job_url),
     remarks: orNull(v.remarks),
   };
 }

@@ -10,6 +10,7 @@ import {
   getApplication,
   getApplications,
   getInterviews,
+  lookupJobUrl,
   parseFilter,
   parseId,
   parseStatus,
@@ -116,7 +117,9 @@ it("createApplication: POST with exactly the editable fields, returns the new id
   const id = await createApplication(input);
   const call = fake.calls.at(-1)!;
   expect([call.method, call.path]).toEqual(["POST", "/applications"]);
-  expect(call.body).toEqual(input);
+  const { job_url, ...rest } = input; // no posting URL: the key is not sent
+  expect(job_url).toBeNull();
+  expect(call.body).toEqual(rest);
   expect(fake.db.apps.find((a) => a.id === id)?.job_name).toBe("New");
 });
 
@@ -335,4 +338,35 @@ it("changeStatus: success patches the caches and resolves to nothing (the caches
   expect(getList()?.items[0].status).toBe("offered");
   expect(getList("applied")).toEqual({ items: [], total: 0, nextOffset: 0 });
   expect(getDetail(1)?.application.status).toBe("offered");
+});
+
+it("lookupJobUrl: POST with the url and exclude_id in the body, maps the match, touches no cache", async () => {
+  const url = "https://jobs.example.ph/j?id=1&b=2#x y";
+  fake.on("POST", /^\/applications\/lookup/, () => json(200, { match: { id: 4, job_name: "Dev", company: "Acme" } }), false);
+  const before = cacheVersion();
+  const ctl = new AbortController();
+  expect(await lookupJobUrl(url, 9, ctl.signal)).toEqual({ id: 4, job_name: "Dev", company: "Acme" });
+  expect(fake.calls.at(-1)).toMatchObject({ method: "POST", path: "/applications/lookup", body: { url, exclude_id: 9 } });
+  expect(fake.calls.at(-1)!.path).not.toContain("url=");
+  await lookupJobUrl(url, null, ctl.signal);
+  expect(fake.calls.at(-1)!.body).toEqual({ url, exclude_id: null });
+  expect(cacheVersion()).toBe(before);
+});
+
+it("lookupJobUrl: no match is null; an error or a bad shape rejects", async () => {
+  fake.on("POST", /^\/applications\/lookup/, () => json(200, { match: null }));
+  expect(await lookupJobUrl("https://a.ph/j", null, new AbortController().signal)).toBeNull();
+  fake.failNext("POST", /^\/applications\/lookup/, 500);
+  await expect(lookupJobUrl("https://a.ph/j", null, new AbortController().signal)).rejects.toMatchObject({ status: 500 });
+  fake.on("POST", /^\/applications\/lookup/, () => json(200, { match: { id: "x" } }));
+  await expect(lookupJobUrl("https://a.ph/j", null, new AbortController().signal)).rejects.toBeInstanceOf(MappingError);
+});
+
+it("lookupJobUrl: a 401 rejects quietly and never redirects to login", async () => {
+  const replace = vi.fn();
+  vi.stubGlobal("location", { pathname: "/applications/new", search: "", replace });
+  fake.failNext("POST", /^\/applications\/lookup/, 401);
+  await expect(lookupJobUrl("https://a.ph/j", null, new AbortController().signal)).rejects.toMatchObject({ status: 401 });
+  expect(replace).not.toHaveBeenCalled();
+  vi.unstubAllGlobals();
 });

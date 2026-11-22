@@ -425,3 +425,12 @@ it("a cached list refreshing never shows the line", async () => {
   await advance(10_000);
   expect(screen.queryByText(WAKE)).toBeNull();
 });
+
+it("rows never show a posting link, even when the row carries a job_url", async () => {
+  setup(3, () => ({ job_url: "https://jobs.example.ph/dev" }));
+  mount();
+  await screen.findByRole("list", { name: "Applications" });
+  expect(rowLinks()).toHaveLength(3);
+  expect(screen.queryByText(/Open posting/)).toBeNull();
+  expect(document.querySelector('a[href^="https://jobs.example.ph"]')).toBeNull();
+});

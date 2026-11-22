@@ -28,6 +28,7 @@ const variants = ["primary", "secondary", "ghost", "destructive"] as const;
 
 const base = {
   contact_email: null,
+  job_url: null,
   remarks: null,
   created_at: "2026-10-01T00:00:00Z",
   updated_at: "2026-10-01T00:00:00Z",

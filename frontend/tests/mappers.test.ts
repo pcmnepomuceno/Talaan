@@ -7,6 +7,7 @@ import {
   toInterviewFormValues,
   toInterviewPatchBody,
   fromApiApplication,
+  fromApiLookup,
   fromApiFollowUpRow,
   fromApiInterview,
   fromApiPage,
@@ -24,6 +25,7 @@ const raw = {
   job_name: "Frontend Engineer",
   contact_website: "https://pinagsama.example.ph/",
   contact_email: "hr@pinagsama.example.ph",
+  job_url: "https://jobs.example.ph/frontend-engineer",
   status: "applied",
   salary: 85000,
   mode_of_work: "hybrid",
@@ -90,8 +92,22 @@ it("page: maps items, rejects a bad shape", () => {
 it("create body lists exactly the editable fields (no contact_email, no server fields)", () => {
   const body = toCreateBody({ ...toApplicationInput(fromApiApplication(raw)), contact_email: "x@y.z", id: 1 } as never);
   expect(Object.keys(body).sort()).toEqual(
-    ["company", "contact_website", "date_applied", "job_name", "mode_of_work", "remarks", "salary", "status"],
+    ["company", "contact_website", "date_applied", "job_name", "job_url", "mode_of_work", "remarks", "salary", "status"],
   );
+});
+
+it("create body: no job_url key when there is no posting URL (older API forbids unknown keys)", () => {
+  const input = toApplicationInput(fromApiApplication({ ...raw, job_url: null }));
+  expect("job_url" in toCreateBody(input)).toBe(false);
+  const blank = toCreateBody(fromFormValues({ ...EMPTY_FORM, job_name: "Dev", company: "Acme", mode_of_work: "remote", job_url: "   " }));
+  expect("job_url" in blank).toBe(false);
+});
+
+it("patch body: job_url null on both sides is {}; a URL cleared is { job_url: null }", () => {
+  const init = toApplicationInput(fromApiApplication({ ...raw, job_url: null }));
+  expect(toPatchBody(init, { ...init })).toEqual({});
+  const withUrl = toApplicationInput(fromApiApplication(raw));
+  expect(toPatchBody(withUrl, { ...withUrl, job_url: null })).toEqual({ job_url: null });
 });
 
 it("patch body: unchanged is empty, one change is one key, cleared nullable is null", () => {
@@ -105,6 +121,35 @@ it("fromFormValues trims, turns blanks into null and needs a work mode", () => {
   const v = { ...EMPTY_FORM, job_name: "  Dev  ", company: " Acme ", remarks: "   ", contact_website: " https://a.ph ", mode_of_work: "remote" as const, salary: "007" };
   expect(fromFormValues(v)).toMatchObject({ job_name: "Dev", company: "Acme", remarks: null, contact_website: "https://a.ph", salary: 7 });
   expect(() => fromFormValues(EMPTY_FORM)).toThrow(MappingError);
+});
+
+it("job_url maps, a missing one is null (older API), a wrong type throws", () => {
+  expect(fromApiApplication(raw).job_url).toBe("https://jobs.example.ph/frontend-engineer");
+  expect(fromApiApplication({ ...raw, job_url: null }).job_url).toBeNull();
+  const old: Partial<typeof raw> = { ...raw };
+  delete old.job_url;
+  expect(fromApiApplication(old).job_url).toBeNull();
+  expect(() => fromApiApplication({ ...raw, job_url: 5 })).toThrow(MappingError);
+});
+
+it("job_url: form values round trip, blank becomes null, patch sends it only on change", () => {
+  const a = fromApiApplication(raw);
+  expect(toFormValues(a).job_url).toBe(raw.job_url);
+  expect(toFormValues({ ...a, job_url: null }).job_url).toBe("");
+  expect(EMPTY_FORM.job_url).toBe("");
+  expect(fromFormValues({ ...toFormValues(a), job_url: "  https://x.ph/j  " }).job_url).toBe("https://x.ph/j");
+  expect(fromFormValues({ ...toFormValues(a), job_url: "   " }).job_url).toBeNull();
+  const init = toApplicationInput(a);
+  expect(toPatchBody(init, { ...init, status: "offered" })).toEqual({ status: "offered" });
+  expect(toPatchBody(init, { ...init, job_url: "https://x.ph/j" })).toEqual({ job_url: "https://x.ph/j" });
+  expect(toPatchBody(init, { ...init, job_url: null })).toEqual({ job_url: null });
+});
+
+it("fromApiLookup: a match keeps id, job_name and company; no match is null; a bad shape throws", () => {
+  expect(fromApiLookup({ match: { id: 3, job_name: "Dev", company: "Acme", extra: 1 } })).toEqual({ id: 3, job_name: "Dev", company: "Acme" });
+  expect(fromApiLookup({ match: null })).toBeNull();
+  for (const bad of [null, {}, { match: { id: "3", job_name: "Dev", company: "Acme" } }, { match: { id: 3, company: "Acme" } }])
+    expect(() => fromApiLookup(bad)).toThrow(MappingError);
 });
 
 // ---- interviews (F6) ----
