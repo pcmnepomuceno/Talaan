@@ -124,12 +124,14 @@ const BRACKETED = Object.entries(MODE_ALT).map(([mode, alt]) => [mode, new RegEx
 const STRONG = word("100% remote|fully remote|work from home|wfh");
 const NOT_MODES = /remote[ -](?:sensing|control|desktop)|(?<![\p{L}\p{N}])(?:non|not|no)[- ](?:fully |100% )?(?:remote|hybrid|on-site|onsite|on site|wfh|work from home)/giu;
 const SEPARATOR = / (?:\||-|–|—|·|\/) /;
+const SITE_MODES = { remote: "remote" };
 const PAGE_MODES = { remote: "remote", hybrid: "hybrid", "on-site": "on_site" };
 
 /**
  * Work mode from the strongest signal that exists; the first level with a signal wins.
  * ponytail: a heuristic; ambiguous or unknown gives blank, never a guess.
- * @returns {{mode: "on_site"|"hybrid"|"remote"|"", source: "jsonld"|"page"|"title"|""}}
+ * The last level, a site default, applies only when no level above saw any signal.
+ * @returns {{mode: "on_site"|"hybrid"|"remote"|"", source: "jsonld"|"page"|"title"|"site"|""}}
  */
 export function detectWorkMode(raw, posting, company = "") {
   const jlt = posting?.jobLocationType;
@@ -157,7 +159,10 @@ export function detectWorkMode(raw, posting, company = "") {
       for (const [mode, re] of BRACKETED) if (re.test(text)) found.add(mode);
     }
   }
-  return found.size === 1 ? { mode: [...found][0], source: "title" } : { mode: "", source: "" };
+  if (found.size === 1) return { mode: [...found][0], source: "title" };
+  const d = raw?.hints?.defaultMode;
+  if (found.size === 0 && pages.size === 0 && typeof d === "string" && Object.hasOwn(SITE_MODES, d)) return { mode: SITE_MODES[d], source: "site" };
+  return { mode: "", source: "" };
 }
 
 // LinkedIn only: the company link must be backed by the document title (E2d). Both args are lowercased.
@@ -172,7 +177,7 @@ function titleHasCompany(title, company, hostname) {
 }
 
 /**
- * @param {{url?: string, title?: string, metas?: {ogTitle?: string|null}, jsonLd?: string[], hints?: {companyText?: string|null, modeTexts?: string[], titleMustContainCompany?: boolean}}} raw
+ * @param {{url?: string, title?: string, metas?: {ogTitle?: string|null}, jsonLd?: string[], hints?: {companyText?: string|null, modeTexts?: string[], titleMustContainCompany?: boolean, defaultMode?: string|null}}} raw
  * @returns {{company: string, job_name: string, job_url: string, source: "jsonld"|"opengraph"|"title"|"none", mode_of_work: string, mode_source: string}}
  */
 export function extractPosting(raw) {
