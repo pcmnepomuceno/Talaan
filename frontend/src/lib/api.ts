@@ -21,10 +21,12 @@ import {
   fromApiCalendarRange,
   fromApiFollowUpRow,
   fromApiInterview,
+  fromApiLookup,
   fromApiPage,
   idOf,
   MappingError,
   type InterviewInput,
+  type LookupMatch,
   type Page,
   toCreateBody,
   toInterviewCreateBody,
@@ -74,6 +76,14 @@ export async function getApplication(id: number): Promise<Application | null> {
     if (e instanceof ApiError && e.status === 404) return null;
     throw e;
   }
+}
+
+/**
+ * The user's newest application saved with this posting URL (the server normalizes it), or null.
+ * Ephemeral: touches no cache. The caller passes its AbortSignal and ignores every failure.
+ */
+export async function lookupJobUrl(url: string, signal: AbortSignal): Promise<LookupMatch | null> {
+  return fromApiLookup(await request<unknown>(`${BASE}/lookup?url=${encodeURIComponent(url)}`, { signal }));
 }
 
 /** Oldest first. Rejects with ApiError(404) when the application is gone. */

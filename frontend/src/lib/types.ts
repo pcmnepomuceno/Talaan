@@ -48,6 +48,7 @@ export type Application = {
   company: string;
   job_name: string;
   contact_website: string | null;
+  job_url: string | null; // where the posting was found; the detail links it, the form checks it for a duplicate
   contact_email: string | null; // typed, not shown (not in DESIGN.md section 2)
   status: Status;
   salary: number | null; // monthly gross, PHP

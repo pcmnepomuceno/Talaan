@@ -140,6 +140,7 @@ it("create: trims, sends exactly the form fields, toasts, and replaces to the de
     date_applied: null,
     salary: null,
     contact_website: null,
+    job_url: null,
     remarks: null,
   });
   expect(screen.getByText("Application saved.")).toBeTruthy();

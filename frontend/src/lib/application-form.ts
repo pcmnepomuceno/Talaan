@@ -1,12 +1,13 @@
 // Client-side rules for the application form, mirroring app/applications/schemas.py:
 //   company, job_name: trimmed, 1-200 characters      salary: whole number 0 to 2147483647 (or empty)
 //   contact_website: http(s) URL, at most 2000        remarks: at most 5000
+//   job_url: like contact_website, plus no userinfo, control characters or spaces (app/applications/job_url.py)
 //   status, mode_of_work: required enums (the work mode starts with nothing chosen)
 // Pydantic counts code points, JS .length counts UTF-16 units, so lengths use [...s].length;
 // the inputs' own maxLength is 2x the limit, only a typing cap (see capFor).
 import { type FormValues } from "./mappers";
 
-export const LIMITS = { name: 200, website: 2000, remarks: 5000, salaryMax: 2_147_483_647 } as const;
+export const LIMITS = { name: 200, website: 2000, jobUrl: 2000, remarks: 5000, salaryMax: 2_147_483_647 } as const;
 /** maxLength for an input: 2x, because an emoji is 2 UTF-16 units but 1 code point. */
 export const capFor = (limit: number) => limit * 2;
 
@@ -22,6 +23,7 @@ export const FIELD_ORDER: readonly FieldName[] = [
   "mode_of_work",
   "salary",
   "contact_website",
+  "job_url",
   "remarks",
 ];
 
@@ -38,6 +40,23 @@ function badUrl(raw: string): boolean {
     return true;
   }
 }
+
+function badJobUrl(raw: string): boolean {
+  // The URL parser forgives "http:///x" (host x); Python's urlsplit, the server's rule, does not.
+  if (/[\p{Cc}\s]/u.test(raw) || !/^https?:\/\/[^/?#]/i.test(raw)) return true;
+  try {
+    const u = new URL(raw);
+    return !((u.protocol === "http:" || u.protocol === "https:") && u.hostname !== "") || u.username !== "" || u.password !== "";
+  } catch {
+    return true;
+  }
+}
+
+/** True when the form's job URL is worth sending to the duplicate lookup: non-empty, short enough and valid. */
+export const isLookupable = (s: string): boolean => {
+  const t = s.trim();
+  return t !== "" && points(t) <= LIMITS.jobUrl && !badJobUrl(t);
+};
 
 /** `dateBad`: the browser's date input holds text it cannot turn into a date (its value is then ""). */
 export function validate(v: FormValues, { dateBad = false }: { dateBad?: boolean } = {}): Errors {
@@ -67,6 +86,12 @@ export function validate(v: FormValues, { dateBad = false }: { dateBad?: boolean
     else if (badUrl(site)) e.contact_website = "Enter a full address starting with http:// or https://";
   }
 
+  const posting = v.job_url.trim();
+  if (posting !== "") {
+    if (points(posting) > LIMITS.jobUrl) e.job_url = "Job posting URL must be 2,000 characters or fewer.";
+    else if (badJobUrl(posting)) e.job_url = "Enter a full address starting with http:// or https://";
+  }
+
   if (points(v.remarks.trim()) > LIMITS.remarks) e.remarks = "Notes must be 5,000 characters or fewer.";
   return e;
 }
@@ -78,6 +103,7 @@ const normalize = (v: FormValues) => ({
   company: v.company.trim(),
   salary: cleanSalaryInput(v.salary),
   contact_website: v.contact_website.trim(),
+  job_url: v.job_url.trim(),
   remarks: v.remarks.trim(),
 });
 

@@ -10,6 +10,7 @@ import {
   getApplication,
   getApplications,
   getInterviews,
+  lookupJobUrl,
   parseFilter,
   parseId,
   parseStatus,
@@ -335,4 +336,23 @@ it("changeStatus: success patches the caches and resolves to nothing (the caches
   expect(getList()?.items[0].status).toBe("offered");
   expect(getList("applied")).toEqual({ items: [], total: 0, nextOffset: 0 });
   expect(getDetail(1)?.application.status).toBe("offered");
+});
+
+it("lookupJobUrl: GET with the url encoded, maps the match, touches no cache", async () => {
+  const url = "https://jobs.example.ph/j?id=1&b=2#x y";
+  fake.on("GET", /^\/applications\/lookup/, () => json(200, { match: { id: 4, job_name: "Dev", company: "Acme" } }));
+  const before = cacheVersion();
+  const ctl = new AbortController();
+  expect(await lookupJobUrl(url, ctl.signal)).toEqual({ id: 4, job_name: "Dev", company: "Acme" });
+  expect(fake.calls.at(-1)).toMatchObject({ method: "GET", path: `/applications/lookup?url=${encodeURIComponent(url)}` });
+  expect(cacheVersion()).toBe(before);
+});
+
+it("lookupJobUrl: no match is null; an error or a bad shape rejects", async () => {
+  fake.on("GET", /^\/applications\/lookup/, () => json(200, { match: null }));
+  expect(await lookupJobUrl("https://a.ph/j", new AbortController().signal)).toBeNull();
+  fake.failNext("GET", /^\/applications\/lookup/, 500);
+  await expect(lookupJobUrl("https://a.ph/j", new AbortController().signal)).rejects.toMatchObject({ status: 500 });
+  fake.on("GET", /^\/applications\/lookup/, () => json(200, { match: { id: "x" } }));
+  await expect(lookupJobUrl("https://a.ph/j", new AbortController().signal)).rejects.toBeInstanceOf(MappingError);
 });

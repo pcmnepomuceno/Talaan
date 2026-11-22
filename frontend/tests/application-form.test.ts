@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { capFor, cleanSalaryInput, FIELD_ORDER, isDirty, LIMITS, mapServerErrors, validate } from "../src/lib/application-form";
+import { capFor, cleanSalaryInput, FIELD_ORDER, isDirty, isLookupable, LIMITS, mapServerErrors, validate } from "../src/lib/application-form";
 import { EMPTY_FORM, type FormValues } from "../src/lib/mappers";
 
 const ok: FormValues = { ...EMPTY_FORM, job_name: "Dev", company: "Acme", mode_of_work: "remote" };
@@ -41,6 +41,27 @@ it("website: empty ok; http and https only; at most 2000", () => {
   for (const bad of ["example.com", "ftp://a.ph", "javascript:alert(1)", "http://", "https://a b.ph", "//a.ph"])
     expect(validate({ ...ok, contact_website: bad }).contact_website, bad).toBe("Enter a full address starting with http:// or https://");
   expect(validate({ ...ok, contact_website: `https://a.ph/${"a".repeat(2000)}` }).contact_website).toBe("Website must be 2,000 characters or fewer.");
+});
+
+it("job posting URL: empty ok; http(s) with a host, no userinfo, no control or space; at most 2000 code points", () => {
+  const msg = "Enter a full address starting with http:// or https://";
+  for (const good of ["", "   ", "https://a.ph/j?id=1#x", "  HTTPS://A.PH/j  ", "https://a.ph/😀", "https://日本.jp/x"]) expect(validate({ ...ok, job_url: good }).job_url, good).toBeUndefined();
+  for (const bad of ["a.ph/j", "ftp://a.ph", "javascript:alert(1)", "https://", "http:///x", "https://u:p@a.ph", "https://u@a.ph", "https://a.ph/\u0000", "https://a.ph/a\tb", "https://a.ph/a\nb", "https://a.ph/a b", "https://a.ph/\u007f"])
+    expect(validate({ ...ok, job_url: bad }).job_url, JSON.stringify(bad)).toBe(msg);
+  expect(validate({ ...ok, job_url: `https://a.ph/${"a".repeat(1987)}` }).job_url).toBeUndefined(); // exactly 2000
+  expect(validate({ ...ok, job_url: `https://a.ph/${"a".repeat(1988)}` }).job_url).toBe("Job posting URL must be 2,000 characters or fewer.");
+  expect(validate({ ...ok, job_url: `https://a.ph/${"😀".repeat(1987)}` }).job_url).toBeUndefined(); // an emoji counts once
+});
+
+it("isLookupable: true only for a valid, non-empty, short enough address", () => {
+  expect(isLookupable("https://a.ph/j")).toBe(true);
+  for (const no of ["", "a.ph", "ftp://a.ph", "https://u@a.ph", `https://a.ph/${"a".repeat(2000)}`]) expect(isLookupable(no), no).toBe(false);
+});
+
+it("job posting URL comes right after the website in focus order and counts for dirty", () => {
+  expect(FIELD_ORDER.indexOf("job_url")).toBe(FIELD_ORDER.indexOf("contact_website") + 1);
+  expect(isDirty(ok, { ...ok, job_url: "https://a.ph" })).toBe(true);
+  expect(isDirty(ok, { ...ok, job_url: "   " })).toBe(false);
 });
 
 it("notes: at most 5000", () => {

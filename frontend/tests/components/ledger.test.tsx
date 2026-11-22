@@ -12,6 +12,7 @@ const app = (o: Partial<Application> = {}): Application => ({
   company: "Pinagsama Tech",
   job_name: "Senior Frontend Engineer",
   contact_website: "https://pinagsamatech.example.ph/",
+  job_url: null,
   contact_email: null,
   status: "interviewing",
   salary: 85000,
