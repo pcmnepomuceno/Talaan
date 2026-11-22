@@ -29,7 +29,7 @@ Signing up needs an invite code. Ask Prince, who owns this repository, for one. 
 
 ## What Talaan stores
 
-Talaan stores the applications and interviews you enter, your account name and email, and a bcrypt hash of your password (never the password itself). While you are logged in it also keeps a hashed session token. Rate limiting keeps short-lived records: those keyed by IP address stay for about a week, and those keyed by a hash of your email are deleted with your account. It does not store CV files. Deleting your account removes the account, its applications, interviews and sessions. The invite code you used stays marked as used and keeps its note; it is only unlinked from your account.
+Talaan stores the applications and interviews you enter (including a job posting link, if you save one), your account name and email, and a bcrypt hash of your password (never the password itself). While you are logged in it also keeps a hashed session token. Rate limiting keeps short-lived records: those keyed by IP address stay for about a week, and those keyed by a hash of your email are deleted with your account. It does not store CV files. Deleting your account removes the account, its applications, interviews and sessions. The invite code you used stays marked as used and keeps its note; it is only unlinked from your account.
 
 ## Why it exists
 

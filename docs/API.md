@@ -21,7 +21,7 @@ Contract first. Applications (milestone 3) and interviews (milestone 4) CRUD are
 | GET | `/applications` | paginated; `?status=`, or `?follow_up=true&days=` |
 | POST | `/applications` | 201 |
 | POST | `/applications/quick` | 201; quick-add |
-| GET | `/applications/lookup` | `?url=`; the caller's newest application saved from that posting, or null; see Job posting URL |
+| POST | `/applications/lookup` | body `{url, exclude_id?}`; the caller's newest application saved from that posting, or null; see Job posting URL |
 | GET/PATCH/DELETE | `/applications/{id}` | 200 / 200 / 204 |
 | GET | `/applications/{id}/interviews` | paginated |
 | POST | `/applications/{id}/interviews` | 201 |
@@ -134,8 +134,8 @@ Partial update. An omitted field is unchanged. `null` clears a nullable field; `
 - The server also stores a hidden `job_url_key`, never in any request or response. It is the SHA-256 hex of the normalized URL, recomputed whenever `job_url` is sent and set to null when it is cleared. A PATCH without `job_url` leaves both alone.
 - Normalization (used for the key and the lookup only): lowercase scheme and host; drop the default port (`:80` for http, `:443` for https) and keep any other; drop the fragment; drop the trailing slash of the path; drop query parameters starting with `utm_` (any case) and `fbclid`, `gclid`, `mc_cid`, `mc_eid`; sort the remaining parameters. Percent-encoding and path case are never changed, `www.` is kept (no match with the bare host), and a different `jobId` is a different posting.
 
-### `GET /applications/lookup?url=`
-Requires a session. `url` goes through the same rules as `job_url`; missing, empty or invalid is 422 (`loc` ends in `url`). Response 200: `{"match": {"id", "job_name", "company"}}` or `{"match": null}`. The match is the caller's own newest application (`created_at`, then `id`, descending) with the same key. Another user's rows are never matched or returned. The route is declared above `/applications/{id}` so `lookup` is not read as an id. The response is `Cache-Control: no-store` like every `/api/v1` response.
+### `POST /applications/lookup`
+Requires a session. Body: `{"url": string, "exclude_id": integer | null}`; unknown fields are 422 (`extra=forbid`). `url` goes through the same rules as `job_url`; missing, null, empty or invalid is 422 (`loc` ends in `url`). `exclude_id` is optional and must be a JSON integer (a string, float or boolean is 422, `loc` ends in `exclude_id`): the row with that id is skipped, so the edit form can ask whether another application shares the posting without matching itself. An id that is not the caller's skips nothing and leaks nothing. A 422 here never echoes the submitted value (`input` is null or absent). The URL is in the body and never in the query string because query strings reach access logs and proxies; the server never logs it. This route is a POST, so the origin check applies (docs/AUTH.md): the web form's same-origin POST through the Next proxy passes it, and the E2 extension, which calls from its own origin, will need that origin in `EXTENSION_ORIGINS`. Response 200: `{"match": {"id", "job_name", "company"}}` or `{"match": null}`. The match is the caller's own newest application (`created_at`, then `id`, descending) with the same key. Another user's rows are never matched or returned. The route is declared above `/applications/{id}` so `lookup` is not read as an id. The response is `Cache-Control: no-store` like every `/api/v1` response.
 
 ## Interviews
 `POST` and `GET` are nested under the application; `GET/PATCH/DELETE` are flat at `/interviews/{id}`. Ownership runs through the parent application: another user's or a missing application or interview is 404. An interview cannot move to another application (`job_application_id` is rejected with 422).
