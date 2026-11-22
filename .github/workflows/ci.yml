@@ -62,6 +62,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       frontend: ${{ steps.filter.outputs.frontend }}
+      extension: ${{ steps.filter_extension.outputs.extension }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -80,6 +81,20 @@ jobs:
             echo "frontend=true" >> "$GITHUB_OUTPUT"
           else
             echo "frontend=false" >> "$GITHUB_OUTPUT"
+          fi
+      - id: filter_extension
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          # Push to main: always run. Pull request: run only if extension/ or this workflow changed vs the base.
+          # tokens.css is listed because extension/tests/tokens.test.js compares popup.css against it.
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "extension=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$BASE_SHA"...HEAD | grep -qE '^(extension/|frontend/src/styles/tokens\.css$|\.github/workflows/ci\.yml$)'; then
+            echo "extension=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "extension=false" >> "$GITHUB_OUTPUT"
           fi
 
   frontend:
@@ -108,3 +123,22 @@ jobs:
         run: TZ=America/Los_Angeles npm test
       - name: Build
         run: npm run build
+
+  extension:
+    needs: changes
+    if: needs.changes.outputs.extension == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: extension
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24.21"
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+      - run: npm ci
+      - name: Test
+        run: npm test
