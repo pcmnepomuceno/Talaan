@@ -225,6 +225,14 @@ describe("company hints", () => {
     expect(li("Backend Engineer | Acme | LinkedIn", "Acme")).toBe("Acme");
     expect(li("Backend Engineer at ACME Corp", "acme  corp")).toBe("acme corp");
   });
+  it("the company check matches whole words only", () => {
+    expect(li("Retail Associate | LinkedIn", "AI")).toBe("");
+    expect(li("Dev | Other Co | LinkedIn", "Acme Dev Labs")).toBe("");
+  });
+  it("a company with special characters is matched literally", () => {
+    expect(li("Dev | C++ Labs | LinkedIn", "C++ Labs")).toBe("C++ Labs");
+    expect(li("Dev | Acme (PH) | LinkedIn", "Acme (PH)")).toBe("Acme (PH)");
+  });
   it("a middle title segment contained in the company passes", () => {
     expect(li("Acme Interns | IBM | LinkedIn", "IBM Consulting")).toBe("IBM Consulting");
   });
@@ -294,9 +302,12 @@ describe("work mode", () => {
     }
   });
   it("negated modes and hyphenated exclusions are ignored", () => {
-    for (const x of ["Receptionist (Non-Remote)", "Clerk | Not On-site", "Remote-Sensing Analyst", "Dev | No hybrid"]) {
+    for (const x of ["Receptionist (Non-Remote)", "Clerk | Not On-site", "Remote-Sensing Analyst", "Dev | No hybrid", "Hybrid (not fully remote)", "Admin Assistant (Onsite, No WFH)", "Dev | No work from home"]) {
       expect(t(x), x).toEqual(["", ""]);
     }
+  });
+  it("a negation must start a word", () => {
+    expect(t("Casino 100% remote")).toEqual(["remote", "title"]);
   });
   it("a segment that is the company is not a mode", () => {
     const hy = (title, companyText, url) => extractPosting(raw({ url, title, hints: { companyText, modeTexts: [] } }));

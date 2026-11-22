@@ -122,7 +122,7 @@ const MODE_ALT = { remote: "remote", hybrid: "hybrid", on_site: "on-site|onsite|
 const WHOLE = Object.entries(MODE_ALT).map(([mode, alt]) => [mode, new RegExp(`^(?:${alt})$`, "iu")]);
 const BRACKETED = Object.entries(MODE_ALT).map(([mode, alt]) => [mode, new RegExp(`[(\\[]\\s*(?:${alt})\\s*[)\\]]`, "iu")]);
 const STRONG = word("100% remote|fully remote|work from home|wfh");
-const NOT_MODES = /remote[ -](?:sensing|control|desktop)|(?:non|not|no)[- ](?:remote|hybrid|on-site|onsite|on site)/gi;
+const NOT_MODES = /remote[ -](?:sensing|control|desktop)|(?<![\p{L}\p{N}])(?:non|not|no)[- ](?:fully |100% )?(?:remote|hybrid|on-site|onsite|on site|wfh|work from home)/giu;
 const SEPARATOR = / (?:\||-|–|—|·|\/) /;
 const PAGE_MODES = { remote: "remote", hybrid: "hybrid", "on-site": "on_site" };
 
@@ -163,11 +163,12 @@ export function detectWorkMode(raw, posting, company = "") {
 // LinkedIn only: the company link must be backed by the document title (E2d). Both args are lowercased.
 // Middle " | " segments only: the first is the job title, the last may name the site.
 function titleHasCompany(title, company, hostname) {
-  if (title.includes(company)) return true;
+  const has = (text, needle) => word(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).test(text);
+  if (has(title, company)) return true;
   const labels = hostLabels(hostname);
   const segs = title.split(" | ").slice(1);
   if (segs.length && labels.some((l) => segs.at(-1).includes(l))) segs.pop();
-  return segs.some((s) => s.length >= 2 && company.includes(s));
+  return segs.some((s) => s.length >= 2 && has(company, s));
 }
 
 /**
