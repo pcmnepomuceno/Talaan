@@ -140,9 +140,9 @@ it("create: trims, sends exactly the form fields, toasts, and replaces to the de
     date_applied: null,
     salary: null,
     contact_website: null,
-    job_url: null,
     remarks: null,
   });
+  expect("job_url" in (fake.callsTo("POST", /^\/applications$/)[0].body as object)).toBe(false);
   expect(screen.getByText("Application saved.")).toBeTruthy();
 });
 
@@ -692,7 +692,7 @@ it("duplicate note: editing sends this application's id as exclude_id", async ()
 it("duplicate note: every failure is silent and saving still works", async () => {
   mountNew();
   await fillMinimum();
-  for (const respond of [() => json(500, { detail: "x" }), () => json(422, { detail: [{ loc: ["query", "url"], msg: "bad" }] }), () => json(200, { match: { id: "x" } })]) {
+  for (const respond of [() => json(500, { detail: "x" }), () => json(422, { detail: [{ loc: ["query", "url"], msg: "bad" }] }), () => json(200, { match: { id: "x" } }), () => json(405, { detail: "Method Not Allowed" })]) {
     fake.on("POST", /^\/applications\/lookup/, respond);
     typeUrl(`${POSTING}${Math.random()}`);
     blurUrl();

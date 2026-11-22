@@ -117,7 +117,9 @@ it("createApplication: POST with exactly the editable fields, returns the new id
   const id = await createApplication(input);
   const call = fake.calls.at(-1)!;
   expect([call.method, call.path]).toEqual(["POST", "/applications"]);
-  expect(call.body).toEqual(input);
+  const { job_url, ...rest } = input; // no posting URL: the key is not sent
+  expect(job_url).toBeNull();
+  expect(call.body).toEqual(rest);
   expect(fake.db.apps.find((a) => a.id === id)?.job_name).toBe("New");
 });
 

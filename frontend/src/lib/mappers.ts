@@ -167,10 +167,12 @@ export const toApplicationInput = (a: Application): ApplicationInput => ({
   remarks: a.remarks,
 });
 
-export const toCreateBody = (i: ApplicationInput): ApplicationInput => {
+export const toCreateBody = (i: ApplicationInput): Omit<ApplicationInput, "job_url"> & { job_url?: string } => {
   const body: Record<string, unknown> = {};
-  for (const k of FIELDS) body[k] = i[k];
-  return body as ApplicationInput;
+  // No job_url key when there is none: an API older than job_url (extra=forbid) rejects the unknown
+  // key, so a create without a posting URL still works against it.
+  for (const k of FIELDS) if (k !== "job_url" || i[k] !== null) body[k] = i[k];
+  return body as Omit<ApplicationInput, "job_url"> & { job_url?: string };
 };
 
 /** Only the fields that differ from `initial`; `{}` means nothing to save. null clears a nullable field. */

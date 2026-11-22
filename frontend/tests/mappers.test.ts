@@ -96,6 +96,20 @@ it("create body lists exactly the editable fields (no contact_email, no server f
   );
 });
 
+it("create body: no job_url key when there is no posting URL (older API forbids unknown keys)", () => {
+  const input = toApplicationInput(fromApiApplication({ ...raw, job_url: null }));
+  expect("job_url" in toCreateBody(input)).toBe(false);
+  const blank = toCreateBody(fromFormValues({ ...EMPTY_FORM, job_name: "Dev", company: "Acme", mode_of_work: "remote", job_url: "   " }));
+  expect("job_url" in blank).toBe(false);
+});
+
+it("patch body: job_url null on both sides is {}; a URL cleared is { job_url: null }", () => {
+  const init = toApplicationInput(fromApiApplication({ ...raw, job_url: null }));
+  expect(toPatchBody(init, { ...init })).toEqual({});
+  const withUrl = toApplicationInput(fromApiApplication(raw));
+  expect(toPatchBody(withUrl, { ...withUrl, job_url: null })).toEqual({ job_url: null });
+});
+
 it("patch body: unchanged is empty, one change is one key, cleared nullable is null", () => {
   const init = toApplicationInput(fromApiApplication(raw));
   expect(toPatchBody(init, { ...init })).toEqual({});
