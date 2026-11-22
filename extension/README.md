@@ -6,7 +6,7 @@ Click the toolbar icon on a job posting. A small popup opens with the company, j
 
 ## What it reads and when
 
-It reads only the active tab, and only after you click the icon, through `activeTab` and `scripting`. It reads the page URL and title, the `og:title` tag, and the text of JSON-LD script tags. On Indeed and LinkedIn job pages it also reads the text of the company link and, on LinkedIn, the work-mode label; nothing else. It only reads and never writes to the page. Page reading gives up after 4 seconds, so a stuck tab leaves an empty form.
+It reads only the active tab, and only after you click the icon, through `activeTab` and `scripting`. It reads the page URL and title, the `og:title` tag, and the text of JSON-LD script tags. On Indeed and LinkedIn job pages it also reads the text of the company link and, on LinkedIn, the exact work-mode labels, only inside `<main>` when the page has one; nothing else. It only reads and never writes to the page. Page reading gives up after 4 seconds, so a stuck tab leaves an empty form.
 
 Nothing is sent anywhere until you press Save, with two exceptions:
 
@@ -57,9 +57,17 @@ Checked by hand in Chrome on real postings, before the site hints below.
 
 ## Site hints
 
-Indeed (`/viewjob`) and LinkedIn (`/jobs/view/`) pages have no structured data, so `src/collect.js` keeps a small `SITE_HINTS` table matched on the URL host and path only (never class names): the first link to `/cmp/...` (Indeed) or `/company/...` (LinkedIn) with real text gives the company, and on LinkedIn a leaf element reading exactly Remote, Hybrid or On-site gives the work mode. Anything else stays blank.
+Indeed (`/viewjob`) and LinkedIn (`/jobs/view/`) pages have no structured data, so `src/collect.js` keeps a small `SITE_HINTS` table matched on the URL host and path only (never class names). The scan is limited to `<main>` when the page has one, otherwise the whole body. The collector returns `{ companyText, modeTexts, titleMustContainCompany }`.
 
-Work mode is chosen from the first signal that exists: JSON-LD `jobLocationType` TELECOMMUTE, then the LinkedIn label, then a whole-word match in the title (remote, work from home, WFH, hybrid, on-site). Two different modes in the titles, or none, give blank. The popup says where the value came from and one click changes it.
+Company: the first link to `/cmp/...` (Indeed) or `/company/...` (LinkedIn) with real text, on the same site as the page (links to another site are skipped, and so are SVG links). On LinkedIn the company must also appear in the document title as whole words: the title contains the company, or a middle title segment (not the first, and not a last segment that names the site) is inside the company. Otherwise the company stays blank. Indeed is exempt from this check. A company from JSON-LD is never checked.
+
+Work mode is chosen from the first signal that exists, and anything unclear gives blank:
+
+1. JSON-LD `jobLocationType` TELECOMMUTE.
+2. The LinkedIn page level: up to 10 leaf elements reading exactly Remote, Hybrid or On-site are collected. It counts only when exactly one distinct mode appears (case-insensitive).
+3. The title scan, over the JSON-LD title, the `og:title` and the document title. It reads job-title segments only: the text is split on spaced separators (` | `, ` - `, ` / `, en dash, em dash and `·`), a last segment that names the site is dropped, and a segment equal to the company is dropped. A mode word counts only when it is a whole segment between separators, sits inside `()` or `[]`, or is a strong phrase: 100% remote, fully remote, work from home, WFH. Negations (non, not or no before a mode, also before fully or 100% remote, WFH or work from home) and "remote sensing/control/desktop" are ignored. Two different modes across the titles give blank.
+
+The popup says where the value came from and one click changes it.
 
 To refresh a hint when a site changes: open the job page, find the company link or mode label, update the path regex or words in `SITE_HINTS`, add a fixture test in `tests/collect.test.js`, and update the table above.
 
@@ -75,6 +83,10 @@ To refresh a hint when a site changes: open the job page, find the company link 
 8. OnlineJobs.ph and LinkedIn split-view or search pages give no company. Indeed gives no work mode. Work-mode detection is a heuristic; a wrong guess is one click to fix.
 9. Search pages (Indeed's "Job Search", for example) give nothing useful. Open the job's own page.
 10. The title cleanup is a heuristic and applies only to the `og:title` and document-title fallback, never to JSON-LD. It drops a last segment that contains part of the site's host name (for example linkedin, indeed or jobs), so a real title such as "Platform Engineer - LinkedIn Ads" on linkedin.com is shortened to "Platform Engineer". Edit the field if that happens.
+11. A bare title such as "Remote Engineer" is not detected as remote. The mode word must be a whole segment, in brackets, or a strong phrase.
+12. A LinkedIn company that is missing from the document title is left blank, even when the company link is right.
+13. A segment that only starts with a mode word ("Remote Customer Support | Acme") is not read.
+14. A company whose name starts or ends with punctuation glued to a letter in the title may be left blank by the whole-word check.
 
 ## Development
 
