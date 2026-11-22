@@ -53,5 +53,4 @@ def test_job_url_migration_round_trip():
         command.upgrade(cfg, "head")
         with engine.begin() as conn:
             conn.execute(text("DELETE FROM users WHERE email = 'mig@example.com'"))
-    command.upgrade(cfg, "head")
     assert {"job_url", "job_url_key"} <= _cols()
