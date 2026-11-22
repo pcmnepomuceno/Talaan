@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useRef, useState } from "react";
-import { createApplication, updateApplication } from "../lib/api";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { createApplication, lookupJobUrl, updateApplication } from "../lib/api";
 import {
   type Errors,
   type FieldName,
@@ -11,6 +12,7 @@ import {
   capFor,
   cleanSalaryInput,
   isDirty,
+  isLookupable,
   mapServerErrors,
   validate,
 } from "../lib/application-form";
@@ -19,6 +21,7 @@ import {
   EMPTY_FORM,
   type FormValues,
   fromFormValues,
+  type LookupMatch,
   toApplicationInput,
   toFormValues,
   toPatchBody,
@@ -34,6 +37,57 @@ import { NotFoundState } from "./not-found-state";
 import { SegmentedControl } from "./segmented-control";
 import { stampLabel } from "./status-stamp";
 import { useToast } from "./toast";
+
+const LOOKUP_WAIT_MS = 500;
+
+// The "already saved" check for the job posting URL. Runs only when the trimmed value differs from the
+// stored one (an untouched edit never asks) and is a valid address; on blur at once, else 500 ms after
+// the last keystroke. `seq` and the AbortController drop an answer that is no longer the latest ask. The
+// answer is kept with the URL it was for, so typing hides the note at once and nothing is set while
+// the value is unchanged. Every failure is silent, and nothing here touches errors or saving.
+function useDuplicateNote(raw: string, stored: string, ownId: number | undefined) {
+  const url = raw.trim();
+  const enabled = url !== stored.trim() && isLookupable(url);
+  const [result, setResult] = useState<{ url: string; match: LookupMatch | null } | null>(null);
+  const seq = useRef(0);
+  const ctl = useRef<AbortController | null>(null);
+  const asked = useRef<string | null>(null);
+
+  const ask = useCallback(
+    (u: string) => {
+      if (asked.current === u) return;
+      asked.current = u;
+      ctl.current?.abort();
+      const c = new AbortController();
+      ctl.current = c;
+      const n = ++seq.current;
+      lookupJobUrl(u, c.signal).then(
+        (m) => {
+          if (n === seq.current) setResult({ url: u, match: m && m.id !== ownId ? m : null });
+        },
+        () => {
+          if (n === seq.current) asked.current = null; // silent; a later blur or keystroke may ask again
+        },
+      );
+    },
+    [ownId],
+  );
+
+  useEffect(() => {
+    if (!enabled) return;
+    const t = setTimeout(() => ask(url), LOOKUP_WAIT_MS);
+    return () => clearTimeout(t);
+  }, [enabled, url, ask]);
+  useEffect(
+    () => () => {
+      seq.current++;
+      ctl.current?.abort();
+    },
+    [],
+  );
+
+  return { match: enabled && result?.url === url ? result.match : null, onBlur: () => enabled && ask(url) };
+}
 
 // Shared create/edit form (DESIGN.md section 8, item 4). `application` present = edit.
 // - noValidate, our own inline errors; the first invalid field gets focus after a failed submit.
@@ -63,12 +117,14 @@ export function ApplicationForm({ application, qs }: { application?: Application
   const modeRef = useRef<HTMLFieldSetElement>(null);
   const salaryRef = useRef<HTMLInputElement>(null);
   const websiteRef = useRef<HTMLInputElement>(null);
+  const jobUrlRef = useRef<HTMLInputElement>(null);
   const remarksRef = useRef<HTMLTextAreaElement>(null);
 
   const backHref = edit ? `/applications/${application.id}${qs}` : `/applications${qs}`;
   const dirty = isDirty(initial, values);
 
   useLeaveGuard(dirty && !done && !gone);
+  const dup = useDuplicateNote(values.job_url, initial.job_url, application?.id);
 
   const set = <K extends FieldName>(key: K, value: FormValues[K]) => {
     setValues((v) => ({ ...v, [key]: value }));
@@ -86,6 +142,7 @@ export function ApplicationForm({ application, qs }: { application?: Application
       mode_of_work: modeRef,
       salary: salaryRef,
       contact_website: websiteRef,
+      job_url: jobUrlRef,
       remarks: remarksRef,
     }[first].current;
     if (el instanceof HTMLFieldSetElement) el.querySelector<HTMLInputElement>("input")?.focus();
@@ -250,6 +307,36 @@ export function ApplicationForm({ application, qs }: { application?: Application
             error={errors.contact_website}
             onChange={(e) => set("contact_website", e.target.value)}
           />
+          <div>
+            <TextField
+              ref={jobUrlRef}
+              label="Job posting URL"
+              type="url"
+              autoComplete="off"
+              placeholder="https://"
+              helper="Paste the link to the job posting."
+              maxLength={capFor(LIMITS.jobUrl)}
+              value={values.job_url}
+              error={errors.job_url}
+              onChange={(e) => set("job_url", e.target.value)}
+              onBlur={dup.onBlur}
+            />
+            {/* Always mounted: a status region that mounts together with its text is often not announced. */}
+            <div role="status" aria-live="polite">
+              {dup.match && (
+                <p className="mt-2 text-caption text-text-muted">
+                  You already saved this posting:{" "}
+                  <Link
+                    href={`/applications/${dup.match.id}${qs}`}
+                    className="inline-flex min-h-11 items-center text-primary underline"
+                  >
+                    {dup.match.job_name}, {dup.match.company}
+                  </Link>
+                  .
+                </p>
+              )}
+            </div>
+          </div>
           <Textarea
             ref={remarksRef}
             label="Notes"

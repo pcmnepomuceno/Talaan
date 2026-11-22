@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -483,4 +483,258 @@ it("saving an application that was deleted meanwhile shows not-found", async () 
   await userEvent.type(field("Company"), " Ltd");
   await userEvent.click(save());
   expect(await screen.findByText("Application not found.")).toBeTruthy();
+});
+
+// ---- job posting URL (E1) ----
+const POSTING = "https://jobs.example.ph/dev?id=7";
+const lookupCalls = () => fake.callsTo("GET", /^\/applications\/lookup/);
+const matchOf = (id: number, job_name = "Dev", company = "Acme") => () => json(200, { match: { id, job_name, company } });
+const noMatch = () => json(200, { match: null });
+const statusRegion = () => document.querySelector('[role="status"][aria-live="polite"]') as HTMLElement;
+const typeUrl = (v: string) => fireEvent.change(field("Job posting URL"), { target: { value: v } });
+const blurUrl = () => fireEvent.blur(field("Job posting URL"));
+
+it("job posting URL: a url field right after Company website, with its helper and placeholder", () => {
+  mountNew();
+  const site = field("Company website");
+  const posting = field("Job posting URL");
+  expect(site.compareDocumentPosition(posting) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(posting.compareDocumentPosition(field("Notes")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(posting.type).toBe("url");
+  expect(posting.placeholder).toBe("https://");
+  expect(posting.maxLength).toBe(4000);
+  expect(screen.getByText("Paste the link to the job posting.")).toBeTruthy();
+  expect(posting.getAttribute("aria-describedby")).toContain(`${posting.id}-helper`);
+});
+
+it("job posting URL: create sends it trimmed; an empty one is null", async () => {
+  mountNew();
+  await fillMinimum();
+  await userEvent.type(field("Job posting URL"), `  ${POSTING}  `);
+  await userEvent.click(save());
+  await waitFor(() => expect(replace).toHaveBeenCalled());
+  expect(fake.callsTo("POST", /./)[0].body).toMatchObject({ job_url: POSTING });
+});
+
+it("job posting URL: an edit that touches another field sends no job_url", async () => {
+  fake.db.apps[0].job_url = POSTING;
+  mountEdit("1");
+  await screen.findByDisplayValue("Frontend Engineer");
+  expect(field("Job posting URL").value).toBe(POSTING);
+  await userEvent.type(field("Company"), " Ltd");
+  await userEvent.click(save());
+  await waitFor(() => expect(replace).toHaveBeenCalled());
+  expect(fake.callsTo("PATCH", /./)[0].body).toEqual({ company: "Pinagsama Tech Ltd" });
+});
+
+it("job posting URL: clearing it sends null", async () => {
+  fake.db.apps[0].job_url = POSTING;
+  mountEdit("1");
+  await screen.findByDisplayValue("Frontend Engineer");
+  await userEvent.clear(field("Job posting URL"));
+  await userEvent.click(save());
+  await waitFor(() => expect(replace).toHaveBeenCalled());
+  expect(fake.callsTo("PATCH", /./)[0].body).toEqual({ job_url: null });
+});
+
+it("job posting URL: an invalid one shows its message and takes focus when it is the first invalid field", async () => {
+  mountNew();
+  await fillMinimum();
+  await userEvent.type(field("Job posting URL"), "ftp://a.ph/j");
+  await userEvent.click(save());
+  expect(screen.getByText("Enter a full address starting with http:// or https://")).toBeTruthy();
+  expect(document.activeElement).toBe(field("Job posting URL"));
+  expect(fake.callsTo("POST", /./)).toHaveLength(0);
+  await userEvent.clear(field("Job posting URL"));
+  await userEvent.paste(`https://a.ph/${"a".repeat(2000)}`);
+  await userEvent.click(save());
+  expect(screen.getByText("Job posting URL must be 2,000 characters or fewer.")).toBeTruthy();
+});
+
+it("job posting URL: a server 422 lands on the field", async () => {
+  fake.on("POST", /^\/applications$/, () => json(422, { detail: [{ loc: ["body", "job_url"], msg: "Value error, Enter a full address starting with http:// or https://" }] }));
+  mountNew();
+  await fillMinimum();
+  await userEvent.type(field("Job posting URL"), "https://a.ph/j");
+  await userEvent.click(save());
+  const msg = await screen.findByText("Enter a full address starting with http:// or https://.");
+  expect(msg.closest("p")?.id).toBe(`${field("Job posting URL").id}-error`);
+  expect(document.activeElement).toBe(field("Job posting URL"));
+});
+
+it("duplicate note: always-mounted polite status region, empty until a match", () => {
+  mountNew("?status=applied");
+  const region = statusRegion();
+  expect(region).toBeTruthy();
+  expect(region.textContent).toBe("");
+  expect(region.closest("form")).toBeTruthy();
+});
+
+it("duplicate note: on blur a match shows the neutral note and a link to that application, keeping the query", async () => {
+  fake.on("GET", /^\/applications\/lookup/, matchOf(4, "Backend Engineer", "Kape Digital"));
+  mountNew("?status=applied");
+  typeUrl(POSTING);
+  blurUrl();
+  const link = await screen.findByRole("link", { name: "Backend Engineer, Kape Digital" });
+  expect(link.getAttribute("href")).toBe("/applications/4?status=applied");
+  const note = statusRegion().querySelector("p")!;
+  expect(note.textContent).toBe("You already saved this posting: Backend Engineer, Kape Digital.");
+  expect(note.className).toContain("text-caption");
+  expect(note.className).toContain("text-text-muted");
+  expect(statusRegion().querySelector('[role="alert"]')).toBeNull();
+  expect(document.querySelector(".text-error-text")).toBeNull();
+  expect(lookupCalls()).toHaveLength(1);
+  expect(lookupCalls()[0].path).toBe(`/applications/lookup?url=${encodeURIComponent(POSTING)}`);
+});
+
+it("duplicate note: 500ms after the last keystroke, not before; typing again clears it at once", async () => {
+  fake.on("GET", /^\/applications\/lookup/, matchOf(4), false);
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  try {
+    mountNew();
+    typeUrl(POSTING);
+    act(() => void vi.advanceTimersByTime(499));
+    expect(lookupCalls()).toHaveLength(0);
+    typeUrl(`${POSTING}1`); // restarts the wait
+    act(() => void vi.advanceTimersByTime(499));
+    expect(lookupCalls()).toHaveLength(0);
+    await act(async () => void vi.advanceTimersByTime(1));
+    expect(lookupCalls()).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "Dev, Acme" })).toBeTruthy();
+    typeUrl(`${POSTING}12`);
+    expect(screen.queryByRole("link", { name: "Dev, Acme" })).toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("duplicate note: blur right after typing asks once, not again when the wait ends", async () => {
+  fake.on("GET", /^\/applications\/lookup/, noMatch, false);
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  try {
+    mountNew();
+    typeUrl(POSTING);
+    blurUrl();
+    await act(async () => void vi.advanceTimersByTime(2000));
+    expect(lookupCalls()).toHaveLength(1);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("duplicate note: no request for an empty, invalid or over-long value", async () => {
+  fake.on("GET", /^\/applications\/lookup/, noMatch, false);
+  mountNew();
+  for (const v of ["", "   ", "example.com", "ftp://a.ph", "https://u@a.ph", `https://a.ph/${"a".repeat(2000)}`]) {
+    typeUrl(v);
+    blurUrl();
+  }
+  await act(async () => {});
+  expect(lookupCalls()).toHaveLength(0);
+});
+
+it("duplicate note: an application is not a duplicate of itself", async () => {
+  fake.db.apps[0].job_url = "https://jobs.example.ph/old";
+  fake.on("GET", /url=.*%3Fid%3D7$/, matchOf(1, "Frontend Engineer", "Pinagsama Tech"), false);
+  fake.on("GET", /url=.*%3Fid%3D72$/, matchOf(2, "Product Designer", "Bayanihan Digital"), false);
+  mountEdit("1");
+  await screen.findByDisplayValue("Frontend Engineer");
+  typeUrl(POSTING);
+  blurUrl();
+  await waitFor(() => expect(lookupCalls()).toHaveLength(1));
+  await act(async () => {});
+  expect(statusRegion().textContent).toBe("");
+  // another application's match still shows
+  typeUrl(`${POSTING}2`);
+  blurUrl();
+  expect(await screen.findByRole("link", { name: "Product Designer, Bayanihan Digital" })).toBeTruthy();
+});
+
+it("duplicate note: an untouched edit form makes no lookup, even for a stored URL", async () => {
+  fake.db.apps[0].job_url = POSTING;
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  try {
+    mountEdit("1");
+    await act(async () => void vi.advanceTimersByTime(0));
+    await vi.waitFor(() => expect(field("Job posting URL").value).toBe(POSTING));
+    blurUrl();
+    await act(async () => void vi.advanceTimersByTime(2000));
+    expect(lookupCalls()).toHaveLength(0);
+    expect(statusRegion().textContent).toBe("");
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("duplicate note: every failure is silent and saving still works", async () => {
+  mountNew();
+  await fillMinimum();
+  for (const respond of [() => json(500, { detail: "x" }), () => json(422, { detail: [{ loc: ["query", "url"], msg: "bad" }] }), () => json(200, { match: { id: "x" } })]) {
+    fake.on("GET", /^\/applications\/lookup/, respond);
+    typeUrl(`${POSTING}${Math.random()}`);
+    blurUrl();
+    await waitFor(() => expect(lookupCalls().length).toBeGreaterThan(0));
+    fake.calls.length = 0;
+    await act(async () => {});
+    expect(statusRegion().textContent).toBe("");
+    expect(screen.queryAllByRole("alert").map((a) => a.textContent).join("")).toBe(""); // no banner, no toast text
+  }
+  fake.spy.mockRejectedValueOnce(new TypeError("offline"));
+  typeUrl(`${POSTING}offline`);
+  blurUrl();
+  await act(async () => {});
+  expect(statusRegion().textContent).toBe("");
+  expect(screen.queryAllByRole("alert").map((a) => a.textContent).join("")).toBe(""); // no banner, no toast text
+  await userEvent.click(save());
+  await waitFor(() => expect(replace).toHaveBeenCalled());
+});
+
+it("duplicate note: a match never blocks saving", async () => {
+  fake.on("GET", /^\/applications\/lookup/, matchOf(4), false);
+  mountNew();
+  await fillMinimum();
+  typeUrl(POSTING);
+  blurUrl();
+  await screen.findByRole("link", { name: "Dev, Acme" });
+  await userEvent.click(save());
+  await waitFor(() => expect(replace).toHaveBeenCalled());
+  expect(fake.callsTo("POST", /./)[0].body).toMatchObject({ job_url: POSTING });
+});
+
+it("duplicate note: a slow answer for an older value is dropped after newer input", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  fake.on("GET", /url=.*old/, async () => {
+    await gate;
+    return json(200, { match: { id: 8, job_name: "Old", company: "Old Co" } });
+  });
+  fake.on("GET", /url=.*new/, matchOf(9, "New", "New Co"));
+  mountNew();
+  typeUrl("https://a.ph/old");
+  blurUrl();
+  typeUrl("https://a.ph/new");
+  blurUrl();
+  expect(await screen.findByRole("link", { name: "New, New Co" })).toBeTruthy();
+  await act(async () => release());
+  expect(screen.queryByRole("link", { name: "Old, Old Co" })).toBeNull();
+  expect(statusRegion().textContent).toBe("You already saved this posting: New, New Co.");
+  // the older request was aborted
+  expect((fake.spy.mock.calls[0][1] as RequestInit).signal?.aborted).toBe(true);
+});
+
+it("duplicate note: the live region's text is written once for one match (a repeat blur changes nothing)", async () => {
+  fake.on("GET", /^\/applications\/lookup/, matchOf(4), false);
+  mountNew();
+  typeUrl(POSTING);
+  blurUrl();
+  await screen.findByRole("link", { name: "Dev, Acme" });
+  const seen: string[] = [];
+  const mo = new MutationObserver((list) => list.forEach((m) => seen.push(m.type)));
+  mo.observe(statusRegion(), { subtree: true, childList: true, characterData: true, attributes: true });
+  blurUrl();
+  blurUrl();
+  await act(async () => {});
+  mo.disconnect();
+  expect(seen).toEqual([]);
+  expect(lookupCalls()).toHaveLength(1);
 });
