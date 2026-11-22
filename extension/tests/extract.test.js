@@ -216,6 +216,26 @@ describe("company hints", () => {
     const r = extractPosting(h("Hint Co", { jsonLd: [ld({ "@type": "JobPosting", title: "E" })] }));
     expect(r).toMatchObject({ company: "Hint Co", source: "jsonld" });
   });
+  const li = (title, companyText) => extractPosting(raw({ url: "https://www.linkedin.com/jobs/view/1", title, hints: { companyText, modeTexts: [], titleMustContainCompany: true } })).company;
+  it("a flagged company missing from the title is dropped", () => {
+    expect(li("Backend Engineer | Acme | LinkedIn", "Sidebar Co")).toBe("");
+    expect(li("Dev | Other Co | LinkedIn", "Acme Dev Labs")).toBe("");
+  });
+  it("a flagged company in the title is kept", () => {
+    expect(li("Backend Engineer | Acme | LinkedIn", "Acme")).toBe("Acme");
+    expect(li("Backend Engineer at ACME Corp", "acme  corp")).toBe("acme corp");
+  });
+  it("a middle title segment contained in the company passes", () => {
+    expect(li("Acme Interns | IBM | LinkedIn", "IBM Consulting")).toBe("IBM Consulting");
+  });
+  it("Indeed (no flag) keeps a company the title does not contain", () => {
+    const r = extractPosting(raw({ url: "https://ph.indeed.com/viewjob?jk=1", title: "Dev", hints: { companyText: "Kalye Labs", modeTexts: [] } }));
+    expect(r.company).toBe("Kalye Labs");
+  });
+  it("JSON-LD company is kept with the flag", () => {
+    const r = extractPosting(raw({ url: "https://www.linkedin.com/jobs/view/1", title: "Dev", jsonLd: [ld(posting())], hints: { companyText: "Zed", modeTexts: [], titleMustContainCompany: true } }));
+    expect(r.company).toBe("Acme");
+  });
   it("hint text is cleaned", () => {
     expect(extractPosting(h("  <b>Kalye</b>\n  Labs ")).company).toBe("Kalye Labs");
   });

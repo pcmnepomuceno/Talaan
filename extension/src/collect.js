@@ -23,14 +23,18 @@ export function collect(loc = location) {
   // add a fixture test in tests/collect.test.js, and update the README tested-sites table.
   const SITE_HINTS = [
     { domain: "indeed.com", path: /^\/viewjob/, company: /^\/cmp\/[^/]+\/?$/ },
-    { domain: "linkedin.com", path: /^\/jobs\/view\//, company: /^\/company\/[^/]+/, mode: true },
+    { domain: "linkedin.com", path: /^\/jobs\/view\//, company: /^\/company\/[^/]+/, mode: true, titleMustContainCompany: true },
   ];
   const cut = (s) => [...s.slice(0, 400)].slice(0, 200).join("");
-  const hints = { companyText: null, modeTexts: [] };
+  const hints = { companyText: null, modeTexts: [], titleMustContainCompany: false };
+  const onDomain = (x, d) => x === d || x.endsWith("." + d);
   const h = (loc.hostname || "").toLowerCase();
-  const hint = SITE_HINTS.find((x) => (h === x.domain || h.endsWith("." + x.domain)) && x.path.test(loc.pathname));
+  const hint = SITE_HINTS.find((x) => onDomain(h, x.domain) && x.path.test(loc.pathname));
   if (hint) {
-    for (const a of document.querySelectorAll("a[href]")) {
+    const root = document.querySelector("main") || document.body;
+    hints.titleMustContainCompany = hint.titleMustContainCompany === true;
+    for (const a of root.querySelectorAll("a[href]")) {
+      if (a.hostname !== h && !onDomain(a.hostname, hint.domain)) continue;
       if (!hint.company.test(a.pathname)) continue;
       const t = (a.textContent || "").trim();
       if (!t || /^(show more|show less|follow)$/i.test(t) || /followers/i.test(t)) continue;
@@ -38,7 +42,6 @@ export function collect(loc = location) {
       break;
     }
     if (hint.mode) {
-      const root = document.querySelector("main") || document.body;
       for (const el of root.querySelectorAll("*")) {
         if (hints.modeTexts.length >= 10) break;
         if (el.childElementCount !== 0) continue;

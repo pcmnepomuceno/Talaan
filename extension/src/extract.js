@@ -90,11 +90,15 @@ function hostOf(u) {
  * first " | " segment; " - " parts stay. Unrecognized titles are untouched.
  * ponytail: a real trailing segment containing a host label ("Engineer - LinkedIn Ads") is dropped too (README, Known limits).
  */
+function hostLabels(hostname) {
+  return String(hostname ?? "").toLowerCase().split(".").filter((l) => /^[a-z]{4,}$/.test(l));
+}
+
 export function cleanTitle(title, hostname) {
   // clean() once with no cut (it is not idempotent on entities), cut to NAME_MAX last.
   const t = clean(title, Infinity);
   const cut = (s) => [...s].slice(0, NAME_MAX).join("");
-  const labels = String(hostname ?? "").toLowerCase().split(".").filter((l) => /^[a-z]{4,}$/.test(l));
+  const labels = hostLabels(hostname);
   const pipes = t.split(" | ");
   const dashes = pipes.at(-1).split(/( (?:-|–|—|·) )/); // separators sit at odd indexes
   const tail = dashes.at(-1).toLowerCase();
@@ -132,8 +136,8 @@ export function detectWorkMode(raw, posting) {
   if (types.some((x) => typeof x === "string" && x.toUpperCase().includes("TELECOMMUTE"))) {
     return { mode: "remote", source: "jsonld" };
   }
-  const labels = Array.isArray(raw?.hints?.modeTexts) ? raw.hints.modeTexts : [];
-  const pages = new Set(labels.map((x) => clean(x).toLowerCase()).filter((k) => Object.hasOwn(PAGE_MODES, k)).map((k) => PAGE_MODES[k]));
+  const pageTexts = Array.isArray(raw?.hints?.modeTexts) ? raw.hints.modeTexts : [];
+  const pages = new Set(pageTexts.map((x) => clean(x).toLowerCase()).filter((k) => Object.hasOwn(PAGE_MODES, k)).map((k) => PAGE_MODES[k]));
   if (pages.size === 1) return { mode: [...pages][0], source: "page" };
   const texts = [clean(posting?.title) || clean(posting?.name), clean(raw?.metas?.ogTitle), clean(raw?.title)];
   const found = new Set();
@@ -144,8 +148,18 @@ export function detectWorkMode(raw, posting) {
   return found.size === 1 ? { mode: [...found][0], source: "title" } : { mode: "", source: "" };
 }
 
+// LinkedIn only: the company link must be backed by the document title (E2d). Both args are lowercased.
+// Middle " | " segments only: the first is the job title, the last may name the site.
+function titleHasCompany(title, company, hostname) {
+  if (title.includes(company)) return true;
+  const labels = hostLabels(hostname);
+  const segs = title.split(" | ").slice(1);
+  if (segs.length && labels.some((l) => segs.at(-1).includes(l))) segs.pop();
+  return segs.some((s) => s.length >= 2 && company.includes(s));
+}
+
 /**
- * @param {{url?: string, title?: string, metas?: {ogTitle?: string|null}, jsonLd?: string[], hints?: {companyText?: string|null, modeTexts?: string[]}}} raw
+ * @param {{url?: string, title?: string, metas?: {ogTitle?: string|null}, jsonLd?: string[], hints?: {companyText?: string|null, modeTexts?: string[], titleMustContainCompany?: boolean}}} raw
  * @returns {{company: string, job_name: string, job_url: string, source: "jsonld"|"opengraph"|"title"|"none", mode_of_work: string, mode_source: string}}
  */
 export function extractPosting(raw) {
@@ -161,7 +175,9 @@ export function extractPosting(raw) {
     company = orgName(p.hiringOrganization);
     if (jobName || company) source = "jsonld";
   }
-  company ||= clean(r.hints?.companyText);
+  let hc = clean(r.hints?.companyText);
+  if (hc && r.hints?.titleMustContainCompany === true && !titleHasCompany(clean(r.title).toLowerCase(), hc.toLowerCase(), hostOf(tabUrl))) hc = "";
+  company ||= hc;
   if (!jobName) {
     const host = hostOf(tabUrl);
     const og = cleanTitle(r.metas?.ogTitle, host);
