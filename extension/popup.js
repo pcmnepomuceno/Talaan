@@ -77,6 +77,12 @@ export async function start({ chrome, fetch, document, setTimeout = globalThis.s
     $("company").value = posting.company;
     $("job_name").value = posting.job_name;
     $("job_url").value = posting.job_url;
+    const radio = radios().find((r) => r.value === posting.mode_of_work);
+    if (radio) {
+      radio.checked = true;
+      $("mode-note").textContent = posting.mode_source === "title" ? "Detected from the title" : "Detected from the page";
+      $("mode-note").hidden = false;
+    }
   }
 
   function setDup(match) {
@@ -270,6 +276,12 @@ export async function start({ chrome, fetch, document, setTimeout = globalThis.s
     return save();
   });
   $("job_url").addEventListener("blur", checkDup);
+  for (const r of radios()) {
+    r.addEventListener("change", () => {
+      $("mode-note").hidden = true;
+      $("mode-note").textContent = "";
+    });
+  }
   $("retryButton").addEventListener("click", run);
   $("checkAgain").addEventListener("click", run);
   $("openLogin").addEventListener("click", () => chrome.tabs.create({ url: `${API_BASE}/login` }));

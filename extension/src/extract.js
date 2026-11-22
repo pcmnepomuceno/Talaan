@@ -85,6 +85,10 @@ function hostOf(u) {
   }
 }
 
+function hostLabels(hostname) {
+  return String(hostname ?? "").toLowerCase().split(".").filter((l) => /^[a-z]{4,}$/.test(l));
+}
+
 /**
  * Drop a trailing segment that names the site (it contains a host label of 4+ letters), then keep the
  * first " | " segment; " - " parts stay. Unrecognized titles are untouched.
@@ -94,7 +98,7 @@ export function cleanTitle(title, hostname) {
   // clean() once with no cut (it is not idempotent on entities), cut to NAME_MAX last.
   const t = clean(title, Infinity);
   const cut = (s) => [...s].slice(0, NAME_MAX).join("");
-  const labels = String(hostname ?? "").toLowerCase().split(".").filter((l) => /^[a-z]{4,}$/.test(l));
+  const labels = hostLabels(hostname);
   const pipes = t.split(" | ");
   const dashes = pipes.at(-1).split(/( (?:-|–|—|·) )/); // separators sit at odd indexes
   const tail = dashes.at(-1).toLowerCase();
@@ -111,9 +115,65 @@ function safeUrl(url) {
   return noFrag;
 }
 
+const L = "(?<![\\p{L}\\p{N}])";
+const R = "(?![\\p{L}\\p{N}])";
+const word = (alt) => new RegExp(`${L}(?:${alt})${R}`, "iu");
+const MODE_ALT = { remote: "remote", hybrid: "hybrid", on_site: "on-site|onsite|on site" };
+const WHOLE = Object.entries(MODE_ALT).map(([mode, alt]) => [mode, new RegExp(`^(?:${alt})$`, "iu")]);
+const BRACKETED = Object.entries(MODE_ALT).map(([mode, alt]) => [mode, new RegExp(`[(\\[]\\s*(?:${alt})\\s*[)\\]]`, "iu")]);
+const STRONG = word("100% remote|fully remote|work from home|wfh");
+const NOT_MODES = /remote[ -](?:sensing|control|desktop)|(?<![\p{L}\p{N}])(?:non|not|no)[- ](?:fully |100% )?(?:remote|hybrid|on-site|onsite|on site|wfh|work from home)/giu;
+const SEPARATOR = / (?:\||-|–|—|·|\/) /;
+const PAGE_MODES = { remote: "remote", hybrid: "hybrid", "on-site": "on_site" };
+
 /**
- * @param {{url?: string, title?: string, metas?: {ogTitle?: string|null}, jsonLd?: string[]}} raw
- * @returns {{company: string, job_name: string, job_url: string, source: "jsonld"|"opengraph"|"title"|"none"}}
+ * Work mode from the strongest signal that exists; the first level with a signal wins.
+ * ponytail: a heuristic; ambiguous or unknown gives blank, never a guess.
+ * @returns {{mode: "on_site"|"hybrid"|"remote"|"", source: "jsonld"|"page"|"title"|""}}
+ */
+export function detectWorkMode(raw, posting, company = "") {
+  const jlt = posting?.jobLocationType;
+  const types = Array.isArray(jlt) ? jlt : [jlt];
+  if (types.some((x) => typeof x === "string" && x.toUpperCase().includes("TELECOMMUTE"))) {
+    return { mode: "remote", source: "jsonld" };
+  }
+  const pageTexts = Array.isArray(raw?.hints?.modeTexts) ? raw.hints.modeTexts : [];
+  const pages = new Set(pageTexts.map((x) => clean(x).toLowerCase()).filter((k) => Object.hasOwn(PAGE_MODES, k)).map((k) => PAGE_MODES[k]));
+  if (pages.size === 1) return { mode: [...pages][0], source: "page" };
+  const texts = [clean(posting?.title) || clean(posting?.name), clean(raw?.metas?.ogTitle), clean(raw?.title)];
+  const labels = hostLabels(hostOf(raw?.url));
+  const co = clean(company).toLowerCase();
+  const found = new Set();
+  for (const t of texts) {
+    const segs = t.split(SEPARATOR);
+    const multi = segs.length > 1;
+    if (multi && labels.some((l) => segs.at(-1).toLowerCase().includes(l))) segs.pop();
+    for (const seg of segs) {
+      const s = seg.toLowerCase().trim();
+      if (co && s === co) continue;
+      const text = s.replace(NOT_MODES, " ").trim();
+      if (STRONG.test(text)) found.add("remote");
+      for (const [mode, re] of WHOLE) if (multi && re.test(text)) found.add(mode);
+      for (const [mode, re] of BRACKETED) if (re.test(text)) found.add(mode);
+    }
+  }
+  return found.size === 1 ? { mode: [...found][0], source: "title" } : { mode: "", source: "" };
+}
+
+// LinkedIn only: the company link must be backed by the document title (E2d). Both args are lowercased.
+// Middle " | " segments only: the first is the job title, the last may name the site.
+function titleHasCompany(title, company, hostname) {
+  const has = (text, needle) => word(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).test(text);
+  if (has(title, company)) return true;
+  const labels = hostLabels(hostname);
+  const segs = title.split(" | ").slice(1);
+  if (segs.length && labels.some((l) => segs.at(-1).includes(l))) segs.pop();
+  return segs.some((s) => s.length >= 2 && has(company, s));
+}
+
+/**
+ * @param {{url?: string, title?: string, metas?: {ogTitle?: string|null}, jsonLd?: string[], hints?: {companyText?: string|null, modeTexts?: string[], titleMustContainCompany?: boolean}}} raw
+ * @returns {{company: string, job_name: string, job_url: string, source: "jsonld"|"opengraph"|"title"|"none", mode_of_work: string, mode_source: string}}
  */
 export function extractPosting(raw) {
   const r = raw && typeof raw === "object" ? raw : {};
@@ -128,6 +188,9 @@ export function extractPosting(raw) {
     company = orgName(p.hiringOrganization);
     if (jobName || company) source = "jsonld";
   }
+  let hc = clean(r.hints?.companyText);
+  if (hc && r.hints?.titleMustContainCompany === true && !titleHasCompany(clean(r.title).toLowerCase(), hc.toLowerCase(), hostOf(tabUrl))) hc = "";
+  company ||= hc;
   if (!jobName) {
     const host = hostOf(tabUrl);
     const og = cleanTitle(r.metas?.ogTitle, host);
@@ -136,5 +199,6 @@ export function extractPosting(raw) {
     else if (title) jobName = title;
     if (source === "none" && jobName) source = og ? "opengraph" : "title";
   }
-  return { company, job_name: jobName, job_url: safeUrl(tabUrl), source };
+  const { mode, source: modeSource } = detectWorkMode(r, p, company);
+  return { company, job_name: jobName, job_url: safeUrl(tabUrl), source, mode_of_work: mode, mode_source: modeSource };
 }
