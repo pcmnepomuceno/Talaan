@@ -1,6 +1,7 @@
 """Text every free-text input must pass. Postgres rejects NUL, and a lone surrogate cannot be
 UTF-8 encoded (database driver, bcrypt, hashing): both would be a 500. Rejected, never stripped.
-Passwords that are only verified, never stored, use `Encodable`: bcrypt handles NUL."""
+Passwords that are only verified, never stored, use `check_encodable` (with a 1024 cap):
+bcrypt handles NUL."""
 
 import re
 from typing import Annotated
@@ -23,4 +24,3 @@ def check(v: str | None) -> str | None:
 
 
 Text = Annotated[str, AfterValidator(check)]
-Encodable = Annotated[str, AfterValidator(check_encodable)]

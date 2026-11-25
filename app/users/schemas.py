@@ -66,7 +66,13 @@ class UserRead(BaseModel):
 
 class UserLogin(BaseModel):
     email: EmailStr
-    password: text.Encodable
+    # Verify-only, like AccountDelete: a lone surrogate is a 422, NUL is accepted, and any
+    # other wrong value up to the cap is a 401. The cap stops a huge body being scanned,
+    # encoded and rate-limit-counted per attempt; it runs before the character check, so an
+    # over-long value keeps its `string_too_long`. Signup caps passwords at 72 bytes.
+    password: Annotated[
+        str, Field(max_length=1024), AfterValidator(text.check_encodable)
+    ]
 
     @field_validator("email", mode="before")
     @classmethod

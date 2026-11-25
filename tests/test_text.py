@@ -418,6 +418,49 @@ def test_confirm_password_limit_is_1024(raw, url):
     assert r.status_code == 422 and r.json()["detail"][0]["type"] == "string_too_long"
 
 
+def login_keys(db):
+    return sorted(
+        k
+        for (k,) in db.query(RateLimitEvent.key).filter(
+            RateLimitEvent.key.like("login:%")
+        )
+    )
+
+
+def test_login_wrong_password_counts_one_attempt_per_key(raw, db):
+    """Positive control: a real 401 leaves one ip row and one email row, so the
+    "no rows" check on a 422 below cannot pass vacuously."""
+    r = send(raw, "POST", LOGIN, {"email": USER_EMAIL, "password": "Wr0ng!password"})
+    assert r.status_code == 401, r.text
+    keys = login_keys(db)
+    assert len([k for k in keys if k.startswith("login:ip:")]) == 1
+    assert len([k for k in keys if k.startswith("login:email:")]) == 1
+    assert len(keys) == 2
+
+
+@pytest.mark.parametrize(
+    "password, status",
+    [
+        ("a" * 1024, 401),
+        ("a" * 1025, 422),
+        ("", 401),
+        ("\x00", 401),
+        ("ab\ud800cd", 422),
+    ],
+    ids=["1024", "1025", "empty", "nul_only", "surrogate"],
+)
+def test_login_password_limit_is_1024(raw, db, password, status):
+    r = send(raw, "POST", LOGIN, {"email": USER_EMAIL, "password": password})
+    assert r.status_code == status, r.text
+    if status == 422:
+        [error] = r.json()["detail"]
+        assert error["loc"][-1] == "password" and error["input"] is None
+        if len(password) > 1024:
+            assert error["type"] == "string_too_long"
+        # Rejected before the route body runs: no rate-limit row was written.
+        assert login_keys(db) == []
+
+
 @pytest.mark.parametrize(
     "password, status",
     [
@@ -443,8 +486,4 @@ def test_fields_without_a_max_length_stay_unbounded(raw, db):
     long = "a" * 10_000
     assert (
         send(raw, "POST", SIGNUP, signup_body(db, account_name=long)).status_code == 200
-    )
-    assert (
-        send(raw, "POST", LOGIN, {"email": USER_EMAIL, "password": long}).status_code
-        == 401
     )
