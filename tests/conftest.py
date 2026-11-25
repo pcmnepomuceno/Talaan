@@ -5,15 +5,41 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from dotenv import load_dotenv
-from sqlalchemy.engine import make_url
+from sqlalchemy.engine import URL, make_url
+from sqlalchemy.exc import ArgumentError
 
 load_dotenv()
 
-_url = make_url(os.getenv("TEST_DATABASE_URL") or os.getenv("DATABASE_URL", ""))
-if os.getenv("TEST_DATABASE_URL") is None:
+
+def _parse_url(url, source: str) -> URL:
+    try:
+        return make_url(url)
+    except (ArgumentError, ValueError):  # the message never echoes the input: it may hold a password
+        pytest.exit(f"Refusing to run: {source} is empty or not a database URL", 2)
+
+
+def _shown(u: URL) -> str:
+    return u.set(query={}).render_as_string(hide_password=True)  # a query string can carry a password
+
+
+def require_test_db(url, source: str) -> URL:
+    """Abort the run unless the driver would get a database ending in _test (case-sensitive)."""
+    parsed = _parse_url(url, source)
+    try:
+        # What the driver is really given: a ?dbname= query parameter overrides url.database.
+        name = parsed.get_dialect()().create_connect_args(parsed)[1].get("dbname")
+    except Exception:  # noqa: BLE001 - refused below, outside this block, so the error (it may echo the URL) is never chained
+        name = None
+    if not (isinstance(name, str) and name.endswith("_test")):
+        pytest.exit(f"Refusing to run: {source} database {name!r} must end in _test ({_shown(parsed)})", 2)
+    return parsed
+
+
+_source = "TEST_DATABASE_URL" if os.getenv("TEST_DATABASE_URL") else "DATABASE_URL"
+_url = _parse_url(os.getenv(_source, ""), _source)
+if not os.getenv("TEST_DATABASE_URL") and _url.database:
     _url = _url.set(database=f"{_url.database}_test")
-if not (_url.database or "").endswith("_test"):
-    pytest.exit(f"Refusing to run: test database {_url.database!r} must end in _test", 2)
+require_test_db(_url, _source)
 
 # Must be set before any `app` import: app.config reads it at import time, and
 # app.database.engine / alembic/env.py both use it.
@@ -42,13 +68,29 @@ from app.database import engine, get_db
 from app.main import app
 from app.users.models import User
 
+# The guard above checked what conftest computed; this checks what the app and alembic will use.
+# They differ if app.config was imported first. create_engine is lazy: nothing has connected yet.
+if engine.url != _url:
+    pytest.exit(
+        "Refusing to run: app.config was imported before tests/conftest.py; engine uses "
+        f"{_shown(engine.url)}, tests expect {_shown(_url)}",
+        2,
+    )
+require_test_db(engine.url, "app.database.engine")
+
 USER_EMAIL = "user@example.com"
 USER_PASSWORD = "Str0ng!pass"
 
 
+def run_alembic(cmd, *args):
+    """Every alembic command the tests trigger goes through here (env.py uses this same engine)."""
+    require_test_db(engine.url, "alembic (app.database.engine)")
+    cmd(Config("alembic.ini"), *args)
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _migrated():
-    command.upgrade(Config("alembic.ini"), "head")
+    run_alembic(command.upgrade, "head")
 
 
 _LEAK_TABLES = ("users", "sessions", "job_applications", "interviews", "invite_codes", "rate_limit_events")

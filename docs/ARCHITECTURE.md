@@ -74,7 +74,7 @@ Deliberate deviations:
 - **No token rotation at login-time privilege change**: there are no roles.
 
 ## Testing
-- Separate `*_test` database. A guard aborts if the configured DB name does not end in `_test`.
+- Separate `*_test` database. A guard aborts if the configured DB name does not end in `_test`, and checks the engine/alembic URL again after import and before each test-triggered alembic command.
 - Schema built once per run with `alembic upgrade head` (tests the migrations too).
 - Each test runs in a connection-level transaction with a savepoint, rolled back at the end.
 - `pytest` + `httpx` against the FastAPI app.
