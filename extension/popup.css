@@ -122,5 +122,7 @@ button:disabled {
 }
 #openLink { text-decoration: none; }
 .muted a { color: var(--color-primary); }
+#disclosure { margin: 8px 0 0; padding-top: 12px; border-top: 1px solid var(--color-border-subtle); overflow-wrap: anywhere; }
+#disclosure a { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; }
 
 :focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }

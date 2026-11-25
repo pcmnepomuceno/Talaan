@@ -136,6 +136,17 @@ withEnv(async ({ base, createInvite }) => {
     check(`popup loads at ${popupUrl}`, (await popup.title()) === "Talaan");
     await form.waitFor({ state: "visible", timeout: 15000 });
     check("form visible", true);
+    const disclosureCheck = async (state) => {
+      const el = popup.locator("#disclosure");
+      const text =
+        "Reads this page's link, title and job details when you open Talaan, and sends the link to your Talaan account to check for duplicates. Nothing is saved until you press Save. Privacy";
+      check(`${state}: disclosure visible with the exact text`, (await el.isVisible()) && (await el.innerText()).trim() === text, await el.innerText());
+      const a = el.getByRole("link", { name: "Privacy" });
+      check(`${state}: disclosure link href, target and rel`, (await a.getAttribute("href")) === "https://talaan-phi.vercel.app/privacy" && (await a.getAttribute("target")) === "_blank" && (await a.getAttribute("rel")) === "noopener noreferrer", await a.getAttribute("href"));
+      const box = await a.boundingBox();
+      check(`${state}: disclosure link is at least 44x44`, box.width >= 44 && box.height >= 44, `${box.width}x${box.height}`);
+    };
+    await disclosureCheck("form");
     await popup.locator("#company").waitFor();
     check("prefill: Company is 'Fixture Co'", (await label("Company").inputValue()) === "Fixture Co", await label("Company").inputValue());
     check("prefill: Job title is 'Backend Engineer & SRE' (entity decoded)", (await label("Job title").inputValue()) === "Backend Engineer & SRE", await label("Job title").inputValue());
@@ -149,6 +160,7 @@ withEnv(async ({ base, createInvite }) => {
     await popup.getByRole("button", { name: "Save", exact: true }).dblclick();
     await popup.getByRole("heading", { name: "Saved" }).waitFor({ timeout: 15000 });
     check("saved view shows 'Saved'", true);
+    await disclosureCheck("saved");
     const href = await popup.getByRole("link", { name: "Open in Talaan" }).getAttribute("href");
     const m = /^(.*)\/applications\/(\d+)$/.exec(href || "");
     check("'Open in Talaan' href is <base>/applications/<id>", !!m && m[1] === base, href);

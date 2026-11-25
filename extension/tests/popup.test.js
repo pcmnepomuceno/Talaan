@@ -101,6 +101,53 @@ describe("module import", () => {
   });
 });
 
+describe("privacy disclosure", () => {
+  const TEXT =
+    "Reads this page's link, title and job details when you open Talaan, and sends the link to your Talaan account to check for duplicates. Nothing is saved until you press Save.";
+  const expectDisclosure = () => {
+    const el = $("#disclosure");
+    expect(el).not.toBeNull();
+    expect(el.textContent.trim()).toBe(`${TEXT} Privacy`);
+    for (let node = el; node; node = node.parentElement) expect(node.hidden).toBe(false);
+    const a = el.querySelector("a");
+    expect(a.textContent).toBe("Privacy");
+    expect(a.getAttribute("href")).toBe(`${API_BASE}/privacy`);
+    expect(a.getAttribute("target")).toBe("_blank");
+    expect(a.getAttribute("rel")).toBe("noopener noreferrer");
+  };
+
+  it("is visible while loading", async () => {
+    await mount({ routes: { "GET /api/v1/me": () => deferred().promise }, wait: false });
+    expect(shown("loading")).toBe(true);
+    expectDisclosure();
+  });
+
+  it.each([
+    ["retry", "retry", { "GET /api/v1/me": res(503, null) }],
+    ["signed out", "signedOut", { "GET /api/v1/me": res(401, {}) }],
+    ["the ready form", "form", {}],
+  ])("is visible in %s", async (_name, view, routes) => {
+    await mount({ routes });
+    expect(shown(view)).toBe(true);
+    expectDisclosure();
+  });
+
+  it.each([
+    ["saving", "form", () => deferred().promise, () => expect($("#save").disabled).toBe(true)],
+    ["a 422 error", "form", res(422, { detail: [{ loc: ["body", "company"], msg: "bad" }] }), () => expect($("#company-error").textContent).toBe("Company: Bad.")],
+    ["a 500 error", "form", res(500, null), () => expect($("#status").textContent).toBe("Something went wrong. Try again.")],
+    ["saved", "saved", res(201, { id: 42 }), () => expect($("#status").textContent).toBe("Saved")],
+  ])("is visible when %s", async (_name, view, create, reached) => {
+    await mount({ routes: { "POST /api/v1/applications": create } });
+    fillAndPickRemote();
+    submit();
+    await settle();
+    expect(shown(view)).toBe(true);
+    reached();
+    expectDisclosure();
+  });
+});
+
 describe("startup and sign-in", () => {
   it("signed in: shows the form prefilled, nothing chosen for work mode, status saved", async () => {
     const { chrome } = await mount();
