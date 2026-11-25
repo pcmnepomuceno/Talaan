@@ -7,7 +7,7 @@ import { NextResponse, type NextRequest } from "next/server";
 // cookie here instead would loop (/login would bounce back to the app).
 // It never redirects away from /login for the same reason: the login page asks /me itself.
 const COOKIES = ["session_token", "__Host-session_token"];
-const PUBLIC = ["/login", "/design"];
+const PUBLIC = ["/login", "/design", "/privacy"];
 
 // /api/* is forwarded to the backend HERE (not in next.config rewrites, which cannot add request
 // headers). The browser only talks to the Next origin, so the session cookie is first-party and no

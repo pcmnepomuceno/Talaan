@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { AppBar } from "@/components/app-bar";
-import { Button } from "@/components/button";
+import { Button, TextAction } from "@/components/button";
 import { Dialog } from "@/components/dialog";
 import { PasswordField, TextField } from "@/components/fields";
 import { Banner } from "@/components/banner";
@@ -103,6 +103,11 @@ export function AccountScreen() {
             {loggingOut ? "Logging out…" : "Log out"}
           </Button>
         </section>
+
+        {/* -ml-2 cancels TextAction's padding so the label lines up with the column. */}
+        <div className="mt-8 -ml-2">
+          <TextAction href="/privacy">Privacy</TextAction>
+        </div>
 
         <section aria-labelledby="danger" className="mt-8 flex flex-col items-start gap-3 border-t border-border-subtle pt-6">
           <h2 id="danger" className="text-body-medium text-text-primary">

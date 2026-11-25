@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Banner } from "@/components/banner";
-import { Button } from "@/components/button";
+import { Button, TextAction } from "@/components/button";
 import { PasswordField, TextField } from "@/components/fields";
 import { Wordmark } from "@/components/logo";
 import { WakingUp } from "@/components/waking-up";
@@ -260,6 +260,9 @@ export function LoginForm({
           </Button>
           <WakingUp pending={requesting} />
         </form>
+        <p className="mt-6 text-center">
+          <TextAction href="/privacy">Privacy</TextAction>
+        </p>
       </main>
     </>
   );

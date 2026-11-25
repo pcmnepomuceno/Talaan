@@ -43,6 +43,14 @@ async function fillLogin(email = "a@example.ph", password = "Secret1!") {
 const submitLogin = () => userEvent.click(screen.getByRole("button", { name: /^Log in|Logging in/ }));
 
 describe("shell", () => {
+  it("links to the privacy page on both log in and create account", async () => {
+    render(<LoginForm />);
+    const link = () => screen.getByRole("link", { name: "Privacy" });
+    expect(link().getAttribute("href")).toBe("/privacy");
+    await userEvent.click(screen.getByRole("radio", { name: "Create account" }));
+    expect(link().getAttribute("href")).toBe("/privacy");
+  });
+
   it("the logo on the login band is not a link", () => {
     render(<LoginForm />);
     expect(screen.queryByRole("link", { name: "Talaan, go to applications" })).toBeNull();

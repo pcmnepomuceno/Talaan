@@ -30,6 +30,12 @@ describe("proxy", () => {
     expect(redirect("/login", "session_token=stale")).toBeNull();
   });
 
+  it("leaves /privacy public: no cookie, no redirect", () => {
+    const res = call("/privacy");
+    expect(getRedirectUrl(res)).toBeNull();
+    expect(res.headers.get("x-middleware-next")).toBe("1");
+  });
+
   it("leaves /design public", () => {
     expect(redirect("/design")).toBeNull();
   });

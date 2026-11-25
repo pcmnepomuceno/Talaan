@@ -58,6 +58,12 @@ const emailBox = () => within(dialog()).getByLabelText("Your email");
 const passwordBox = () => within(dialog()).getByLabelText("Password");
 
 describe("profile", () => {
+  it("links to the privacy page", async () => {
+    render(<AccountScreen />);
+    await screen.findByText("ana@example.ph");
+    expect(screen.getByRole("link", { name: "Privacy" }).getAttribute("href")).toBe("/privacy");
+  });
+
   it("shows the account name and email, and keeps the theme toggle", async () => {
     render(<AccountScreen />);
     expect(await screen.findByText("Ana Cruz")).toBeTruthy();

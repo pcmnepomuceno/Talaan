@@ -6,6 +6,7 @@
 // exit, proof that the dev database and a foreign :8000 process were untouched). It creates its
 // own invite with the real admin CLI and a throwaway account, and deletes that account through the UI.
 // Exit code 1 on any FAIL.
+const path = require("node:path");
 const { chromium } = require("playwright");
 const { chromiumOptions, withEnv } = require("./local-env.cjs");
 
@@ -13,6 +14,21 @@ let failed = 0;
 function check(name, ok, extra = "") {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${extra ? "  " + extra : ""}`);
   if (!ok) failed++;
+}
+const SHOTS = path.resolve(__dirname, "../.screenshots/privacy");
+async function shoot(page, name) {
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const theme of ["light", "dark"]) {
+      await page.emulateMedia({ colorScheme: theme });
+      await page.waitForTimeout(150);
+      await page.screenshot({ path: path.join(SHOTS, `${name}-${width}-${theme}.png`), fullPage: true });
+      const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      check(`${name} ${width} ${theme}: no horizontal scroll`, over <= 0, String(over));
+    }
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.setViewportSize({ width: 1280, height: 720 });
 }
 const pathOf = (u) => {
   const x = new URL(u);
@@ -34,6 +50,18 @@ withEnv(async ({ base, createInvite }) => {
     await page.goto(`${base}/applications`);
     check("no cookie: /applications redirects to /login?next=", pathOf(page.url()) === "/login?next=%2Fapplications", pathOf(page.url()));
 
+    // Privacy page, signed out
+    const direct = await page.goto(`${base}/privacy`);
+    check("signed out: /privacy is 200, no redirect", direct.status() === 200 && pathOf(page.url()) === "/privacy", `${direct.status()} ${pathOf(page.url())}`);
+    check("signed out: privacy heading shown", await page.getByRole("heading", { level: 1, name: "Privacy" }).isVisible());
+    await shoot(page, "privacy");
+    await page.goto(`${base}/login?next=%2Fapplications`);
+    await shoot(page, "login");
+    await page.getByRole("link", { name: "Privacy" }).click();
+    await page.waitForURL(/\/privacy$/);
+    check("login page Privacy link reaches /privacy", pathOf(page.url()) === "/privacy", pathOf(page.url()));
+    await page.goto(`${base}/login?next=%2Fapplications`);
+
     // 1. Sign up with the invite, land on /applications
     await page.getByRole("radio", { name: "Create account" }).check({ force: true });
     await page.getByLabel("Invite code").fill(invite.toLowerCase().replace(/-/g, " "));
@@ -53,6 +81,12 @@ withEnv(async ({ base, createInvite }) => {
     await page.goto(`${base}/account`);
     await page.getByText(email).waitFor();
     check("account shows name and email", await page.getByText("E2E Tester").isVisible());
+    await shoot(page, "account");
+    await page.getByRole("link", { name: "Privacy" }).click();
+    await page.waitForURL(/\/privacy$/);
+    check("signed in: Account Privacy link reaches /privacy", await page.getByRole("heading", { level: 1, name: "Privacy" }).isVisible());
+    await page.goBack(); // not goto: no extra history entry, so the Back-after-logout check below still holds
+    await page.getByText(email).waitFor();
 
     // 3. Log out, Back must not show a private page
     await page.getByRole("button", { name: "Log out" }).click();
