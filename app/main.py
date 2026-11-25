@@ -8,8 +8,8 @@ import json
 
 from fastapi import FastAPI, Request, Response
 from fastapi.encoders import jsonable_encoder
-from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 from app import config, health, security
 from app.applications import router as applications
@@ -42,13 +42,13 @@ async def no_store(request: Request, call_next):
 
 @app.exception_handler(RequestValidationError)
 async def validation_error(request: Request, exc: RequestValidationError):
-    """FastAPI's 422 echoes the input, and a lone surrogate there cannot be UTF-8 encoded (500).
-    Only then, send the same body with it written as a \\udxxx escape."""
+    """FastAPI's 422 body with `input` always null: a submitted value (password, invite code,
+    whole body) is never echoed."""
+    content = {"detail": jsonable_encoder([{**e, "input": None} for e in exc.errors()])}
     try:
-        return await request_validation_exception_handler(request, exc)
-    except UnicodeEncodeError:
-        body = json.dumps({"detail": jsonable_encoder(exc.errors())})  # ensure_ascii by default
-        return Response(body, status_code=422, media_type="application/json")
+        return JSONResponse(content, status_code=422)
+    except UnicodeEncodeError:  # a lone surrogate left in loc or msg: write it as a \\udxxx escape
+        return Response(json.dumps(content), status_code=422, media_type="application/json")
 
 
 app.include_router(health.router)
