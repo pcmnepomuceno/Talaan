@@ -77,7 +77,9 @@ class UserLogin(BaseModel):
 
 
 class AccountDelete(BaseModel):
-    # No complexity rules: any wrong value up to the cap, however odd (empty, over 72 bytes),
-    # gets the same 403. The cap only stops a huge body being parsed and encoded per attempt.
+    # No complexity rules. A lone surrogate is a 422, because it cannot be encoded for bcrypt.
+    # NUL is accepted, because bcrypt handles it and nothing is stored. Any other wrong value up
+    # to the cap, however odd (empty, over 72 bytes), gets the same 403.
+    # The cap only stops a huge body being parsed and encoded per attempt.
     # Length before the character check, so an over-long value keeps its `string_too_long`.
     password: Annotated[str, Field(max_length=1024), AfterValidator(text.check_encodable)]
