@@ -38,7 +38,7 @@ Contract first. Applications (milestone 3) and interviews (milestone 4) CRUD are
 
 ## Errors
 FastAPI default: `{"detail": "message"}`. Validation errors (422) use FastAPI's `detail` list. Clients branch on status code, not on message text.
-Every 422 error has `"input": null`: the submitted value is never returned in `input`. `msg` comes from the validator and can quote part of the value (an `EmailStr` error names the invalid characters). A NUL or a lone surrogate in a stored text field is a 422 (rejected, never stripped). The login, account-delete and invite-create passwords are only checked, never stored: a lone surrogate there is a 422 and NUL is accepted. A surrogate left in `loc` or `msg` is written as a `\udxxx` escape.
+Every 422 error has `"input": null`: the submitted value is never returned in `input`. `msg` and `ctx` come from the validator and can quote part of the value (an `EmailStr` error names the invalid characters in both). A NUL or a lone surrogate in a stored text field is a 422 (rejected, never stripped). The login, account-delete and invite-create passwords are only checked, never stored, and are capped at 1024 characters: a lone surrogate there is a 422 and NUL is accepted. A surrogate left in `loc` or `msg` is written as a `\udxxx` escape.
 
 ## Cookie
 Name `session_token`, or `__Host-session_token` when `COOKIE_SECURE` is true (the default). Attributes: `HttpOnly`, `SameSite=Lax`, `Path=/`, `Max-Age=2592000` (30 days), no `Domain`, and `Secure` only when `COOKIE_SECURE` is true. Never `SameSite=None`. Logout and account deletion send the same name and attributes with `Max-Age=0`. A plain-http client (curl, Safari on `http://localhost`) does not send a Secure cookie back: set `COOKIE_SECURE=false` in local `.env`.

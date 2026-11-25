@@ -695,12 +695,12 @@
 
 # Decision: Reject NUL and lone surrogates in text input
 - **Date:** 2026-11-25
-- **Decision:** A NUL (`\x00`) or a lone surrogate (`\ud800` to `\udfff`) in a free-text field or password is a 422 that names the field. One helper (`app/text.py`) does the check; `job_url.clean` rejects surrogates next to its control-character check. Nothing is stripped or rewritten, and every existing length and format rule is unchanged.
-- **Why:** both ended in a 500. Postgres text cannot hold NUL, and a lone surrogate cannot be UTF-8 encoded by the database driver, before bcrypt, or when hashing the job URL.
+- **Decision:** A NUL (`\x00`) or a lone surrogate (`\ud800` to `\udfff`) in a **stored** free-text field (including the signup password) is a 422 that names the field. The login, account-delete and invite-create passwords are verify-only (never stored, only given to bcrypt): a lone surrogate there is a 422 and NUL is accepted. One helper (`app/text.py`, `Text` and `check_encodable`) does the check; `job_url.clean` rejects surrogates next to its control-character check. Nothing is stripped or rewritten, and length and format rules are unchanged, except the new 1024 cap on the login password.
+- **Why:** both ended in a 500. Postgres text cannot hold NUL, and a lone surrogate cannot be UTF-8 encoded by the database driver, before bcrypt, or when hashing the job URL. Verify-only passwords skip the NUL check because bcrypt 5.0.0 hashes and checks NUL correctly, so it adds no safety there. Accepting NUL keeps any existing account with a NUL in its password able to log in and delete itself. Signup rejects NUL, so no new such account can be made.
 - **Why reject, not strip.** Stripping would store something other than what the user sent, and would change a password silently.
-- **422 bodies never echo input.** `app/main.py` sets `input` to `null` in every validation error, as `/lookup` already did, so a 422 cannot return a password, an invite code (CLAUDE.md: never return one) or a whole body (a missing-field error used to echo the full signup body). This changes every 422: `input` used to hold the value. No frontend or extension code reads `input` (grep of `frontend/src` and `extension`, no match); the frontend reads `loc` and `msg` only. A surrogate left in `loc` or `msg` is still written as a `\udxxx` escape. A surrogate used as a key name is reported on the body, because pydantic cannot name it.
-- **Surrogate messages, accepted.** On `company`, `job_name`, both `remarks`, `interviewer` and the two 1024-capped passwords, pydantic rejects a surrogate first (`string_unicode`, "unable to parse raw data as a unicode string"), still as a 422 naming the field; `account_name`, the signup and login passwords and `note` get our message. `job_url` keeps its own address message.
-- **Consequence, accepted.** Signup used to accept NUL in a password (bcrypt 5 hashes it). Such an account can no longer log in or delete itself. This is extremely unlikely: a browser field cannot type NUL, and the app is invite-only.
+- **422 bodies never echo input.** `app/main.py` sets `input` to `null` in every validation error, as `/lookup` already did, so a 422 cannot return a password, an invite code (CLAUDE.md: never return one) or a whole body (a missing-field error used to echo the full signup body). `msg` and `ctx` come from the validator and can still quote part of the value (an `EmailStr` error names the invalid characters in both). This changes every 422: `input` used to hold the value. No frontend or extension code reads `input` (grep of `frontend/src` and `extension`, no match); the frontend reads `loc` and `msg` only. A surrogate left in `loc` or `msg` is still written as a `\udxxx` escape. A surrogate used as a key name is reported on the body, because pydantic cannot name it. The handler is unchanged.
+- **Surrogate messages, accepted.** On `company`, `job_name`, both `remarks`, `interviewer` and the three 1024-capped passwords (login, account-delete, invite-create), pydantic rejects a surrogate first (`string_unicode`, "unable to parse raw data as a unicode string"), still as a 422 naming the field; `account_name`, the signup password and `note` get our message. `job_url` keeps its own address message.
+- **Login password cap.** Login now caps the password at 1024 like the other verify-only passwords, so a huge value is a 422 before any scan, encode or rate-limit work. Signup's limit is 72 bytes, so no valid password is affected.
 - **Scope:** NUL and lone surrogates only. Other control characters stay allowed in free text.
 - **Follow-ups (deferred).**
   - A: a non-JSON body with invalid UTF-8 used to be a 500. It is now a 422 as a side effect of blanking, with no test yet.
@@ -709,12 +709,4 @@
   - D: the admin CLI `--note` does not check for surrogates.
   - E: the account-delete form shows "Incorrect password." for any 422.
   - C (a 422 echoing a password, invite code or whole body) is resolved by the blanking.
-
----
-
-# Decision: Verify-only passwords accept NUL
-- **Date:** 2026-11-25
-- **Decision:** login, account-delete and invite-create passwords reject lone surrogates only (`text.Encodable`).
-- **Why:** these fields are only passed to bcrypt and never stored, so the NUL check adds no safety. bcrypt 5.0.0 hashes and checks NUL correctly. Accepting NUL means an existing account with a NUL in its password can log in and delete itself again. Signup still rejects NUL, so no new such account can be made. This reverses the "Consequence, accepted" lockout in "Reject NUL and lone surrogates in text input".
-- **Also:** a correction to the "422 bodies never echo input" wording. `input` is always null, but `msg` can quote part of the value (`EmailStr`). The handler is unchanged.
-- **Alternative.** Keep the lockout (rejected: it costs an account and gains nothing), or replace `EmailStr` messages in the handler (rejected for now: it hides useful errors and the frontend shows its own text).
+- **Alternatives.** Keep the NUL lockout for verify-only passwords (rejected: it costs an account and gains nothing). Replace `EmailStr` messages in the handler (rejected for now: it hides useful errors and the frontend shows its own text). Strip `ctx` in the handler (rejected for now: same reason, and the handler stays unchanged).
