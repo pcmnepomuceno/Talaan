@@ -99,3 +99,32 @@ def test_refusal_does_not_show_a_query_string_password():
     with pytest.raises(pytest.exit.Exception) as excinfo:
         require_test_db("postgresql+psycopg2://u@127.0.0.1:1/talaan?password=QUERYSECRET", "unit")
     assert "QUERYSECRET" not in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    ("url", "forbidden", "driver"),
+    [
+        ("postgresql+psycopg2://u:pa@SECRETTAIL@127.0.0.1:1/talaan", ["SECRETTAIL", "pa@", "127.0.0.1"], "postgresql+psycopg2"),
+        ("postgresql://u:p%40ss@[::1]:1/talaan", ["p%40ss", "p@ss", "::1"], "postgresql"),
+        # make_url puts password text in the database name here, so the name must show as <hidden>
+        ("postgresql://u:pa@SE/CRET@127.0.0.1:1/talaan", ["SE", "CRET", "127.0.0.1"], "postgresql"),
+    ],
+)
+def test_refusal_redacts_host_and_credentials(url, forbidden, driver):
+    with pytest.raises(pytest.exit.Exception) as excinfo:
+        require_test_db(url, "unit")
+    msg = str(excinfo.value)
+    assert driver in msg
+    for bad in forbidden:
+        assert bad not in msg, msg
+    if "SE/CRET" in url:
+        assert "<hidden>" in msg
+
+
+def test_refusal_redacts_imported_first_message():
+    script = f"import app.config, sys, pytest; sys.exit(pytest.main({PYTEST_ARGS!r}))"
+    code, out = _run(["-c", script], DATABASE_URL="postgresql+psycopg2://u:pa@SECRETTAIL@127.0.0.1:1/talaan")
+    _assert_refused(code, out)
+    assert "app.config was imported before" in out, out
+    for bad in ("SECRETTAIL", "pa@", "127.0.0.1"):
+        assert bad not in out, out

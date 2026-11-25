@@ -18,8 +18,14 @@ def _parse_url(url, source: str) -> URL:
         pytest.exit(f"Refusing to run: {source} is empty or not a database URL", 2)
 
 
+def _name(n) -> str:
+    # make_url can put password text in the database name (`u:pa@SE/CRET@h/db`): hide odd-looking names.
+    ok = isinstance(n, str) and n.isprintable() and not any(c in n for c in "@/:?")
+    return repr(n) if ok else "'<hidden>'"
+
+
 def _shown(u: URL) -> str:
-    return u.set(query={}).render_as_string(hide_password=True)  # a query string can carry a password
+    return f"driver {u.drivername}, database {_name(u.database)}"  # never user, password, host, port or query
 
 
 def require_test_db(url, source: str) -> URL:
@@ -31,7 +37,7 @@ def require_test_db(url, source: str) -> URL:
     except Exception:  # noqa: BLE001 - refused below, outside this block, so the error (it may echo the URL) is never chained
         name = None
     if not (isinstance(name, str) and name.endswith("_test")):
-        pytest.exit(f"Refusing to run: {source} database {name!r} must end in _test ({_shown(parsed)})", 2)
+        pytest.exit(f"Refusing to run: {source} database {_name(name)} must end in _test ({parsed.drivername})", 2)
     return parsed
 
 
@@ -72,8 +78,8 @@ from app.users.models import User
 # They differ if app.config was imported first. create_engine is lazy: nothing has connected yet.
 if engine.url != _url:
     pytest.exit(
-        "Refusing to run: app.config was imported before tests/conftest.py; engine uses "
-        f"{_shown(engine.url)}, tests expect {_shown(_url)}",
+        "Refusing to run: app.config was imported before tests/conftest.py; app.database.engine "
+        f"({_shown(engine.url)}) differs from the URL the tests expect ({_shown(_url)})",
         2,
     )
 require_test_db(engine.url, "app.database.engine")
