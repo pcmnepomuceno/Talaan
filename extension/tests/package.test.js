@@ -1,23 +1,26 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFileSync, cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, posix } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, posix, relative } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { pack } from "../scripts/package.js";
+import { keep, pack } from "../scripts/package.js";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const realBytes = () => readFileSync(join(root, "manifest.json"));
 const real = JSON.parse(realBytes());
 const TOP = ["manifest.json", "popup.html", "popup.css", "popup.js"];
 
-function walk(dir) {
-  return readdirSync(join(root, dir), { withFileTypes: true }).flatMap((e) =>
-    e.isDirectory() ? walk(posix.join(dir, e.name)) : [posix.join(dir, e.name)],
-  );
+const scriptPath = join(root, "scripts", "package.js");
+// Files the packer ships under base: the walk applies the same filter as the packer.
+function walk(base, dir) {
+  return readdirSync(join(base, dir), { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? walk(base, posix.join(dir, e.name)) : [posix.join(dir, e.name)],
+  ).filter(keep);
 }
-const shipped = [...TOP, ...walk("src"), ...walk("icons")].sort();
+const files = (base) => [...TOP, ...walk(base, "src"), ...walk(base, "icons")].sort();
+const shipped = files(root);
 
 const made = [];
 function temp() {
@@ -84,11 +87,51 @@ describe("package", () => {
   it("leaves hidden and backup files out", () => {
     const dir = fixture((m, d) => {
       writeFileSync(join(d, "src", ".DS_Store"), "");
+      writeFileSync(join(d, "icons", ".DS_Store"), "");
       writeFileSync(join(d, `${Object.values(m.icons)[0]}~`), "");
     });
     const { store, friends } = pack({ root: dir, outDir: temp() });
-    expect(list(store)).toEqual(shipped);
-    expect(list(friends)).toEqual(shipped);
+    expect(files(dir)).not.toContain("src/.DS_Store");
+    expect(files(dir)).not.toContain("icons/.DS_Store");
+    expect(files(dir)).not.toContain(`${real.icons["128"]}~`);
+    expect(list(store)).toEqual(files(dir));
+    expect(list(friends)).toEqual(files(dir));
+  });
+
+  it("leaves zips from an earlier run in place", () => {
+    const out = temp();
+    const old = "talaan-extension-store-0.0.1.zip";
+    writeFileSync(join(out, old), "old");
+    pack({ outDir: out });
+    expect(readFileSync(join(out, old), "utf8")).toBe("old");
+    expect(readdirSync(out).sort()).toEqual([old, ...names(real.version)].sort());
+  });
+
+  it.each([
+    ["an absolute", (linkDir) => scriptPath],
+    ["a relative", (linkDir) => relative(linkDir, scriptPath)],
+  ])("runs through %s symlink", (_, target) => {
+    const linkDir = temp();
+    const link = join(linkDir, "package.js");
+    symlinkSync(target(linkDir), link);
+    const out = temp();
+    execFileSync(process.execPath, [link, "--out", out]);
+    expect(readdirSync(out).sort()).toEqual(names(real.version));
+  });
+
+  it("runs when started without the .js extension", () => {
+    const out = temp();
+    execFileSync(process.execPath, [join(root, "scripts", "package"), "--out", out]);
+    expect(readdirSync(out).sort()).toEqual(names(real.version));
+  });
+
+  it("does nothing when imported and argv[1] is a missing path", () => {
+    const stdout = execFileSync(
+      process.execPath,
+      ["--input-type=module", "-e", `await import(${JSON.stringify(pathToFileURL(scriptPath).href)})`, join(temp(), "no-such-file")],
+      { encoding: "utf8" },
+    );
+    expect(stdout).toBe("");
   });
 
   it("runs from any working directory", () => {

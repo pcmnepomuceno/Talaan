@@ -3,14 +3,14 @@ import { execFileSync } from "node:child_process";
 import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, posix, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual, parseArgs } from "node:util";
 
 const SHIP = ["manifest.json", "popup.html", "popup.css", "popup.js", "src", "icons"];
 const PERMISSIONS = ["activeTab", "scripting"];
 const HOSTS = ["https://talaan-phi.vercel.app/*"];
 // Editor and OS strays. Basename only: the extension may itself sit under a dot-directory.
-const keep = (path) => !basename(path).startsWith(".") && !path.endsWith("~");
+export const keep = (path) => !basename(path).startsWith(".") && !path.endsWith("~");
 
 function validate(manifest, root) {
   const check = (ok, message) => {
@@ -75,7 +75,8 @@ export function pack({ root = fileURLToPath(new URL("..", import.meta.url)), out
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// import.meta.main (Node 24.2+): true for symlinked and extensionless runs, false when imported.
+if (import.meta.main) {
   try {
     const { values } = parseArgs({ options: { out: { type: "string" } } });
     const { store, friends } = pack({ outDir: values.out });
