@@ -709,3 +709,12 @@
   - D: the admin CLI `--note` does not check for surrogates.
   - E: the account-delete form shows "Incorrect password." for any 422.
   - C (a 422 echoing a password, invite code or whole body) is resolved by the blanking.
+
+---
+
+# Decision: Verify-only passwords accept NUL
+- **Date:** 2026-11-25
+- **Decision:** login, account-delete and invite-create passwords reject lone surrogates only (`text.Encodable`).
+- **Why:** these fields are only passed to bcrypt and never stored, so the NUL check adds no safety. bcrypt 5.0.0 hashes and checks NUL correctly. Accepting NUL means an existing account with a NUL in its password can log in and delete itself again. Signup still rejects NUL, so no new such account can be made. This reverses the "Consequence, accepted" lockout in "Reject NUL and lone surrogates in text input".
+- **Also:** a correction to the "422 bodies never echo input" wording. `input` is always null, but `msg` can quote part of the value (`EmailStr`). The handler is unchanged.
+- **Alternative.** Keep the lockout (rejected: it costs an account and gains nothing), or replace `EmailStr` messages in the handler (rejected for now: it hides useful errors and the frontend shows its own text).
