@@ -690,3 +690,22 @@
 - **Why:** the site lists remote jobs only, and a real-browser check showed its titles often carry no mode word, so Work mode stayed blank.
 - **Guards:** lowest priority: used only when no other level saw any mode, and never over an ambiguous title or conflicting page labels (those stay blank). Host and path gated like E2d (equal or subdomain, job pages only). The visible "Assumed from the site" note, one click to change, and Save still requires a mode. Wrong types and unknown values are ignored.
 - **Rejected.** Reading body text for the mode: too many false matches and a wider read.
+
+---
+
+# Decision: Reject NUL and lone surrogates in text input
+- **Date:** 2026-11-25
+- **Decision:** A NUL (`\x00`) or a lone surrogate (`\ud800` to `\udfff`) in a free-text field or password is a 422 that names the field. One helper (`app/text.py`) does the check; `job_url.clean` rejects surrogates next to its control-character check. Nothing is stripped or rewritten, and every existing length and format rule is unchanged.
+- **Why:** both ended in a 500. Postgres text cannot hold NUL, and a lone surrogate cannot be UTF-8 encoded by the database driver, before bcrypt, or when hashing the job URL.
+- **Why reject, not strip.** Stripping would store something other than what the user sent, and would change a password silently.
+- **422 bodies never echo input.** `app/main.py` sets `input` to `null` in every validation error, as `/lookup` already did, so a 422 cannot return a password, an invite code (CLAUDE.md: never return one) or a whole body (a missing-field error used to echo the full signup body). This changes every 422: `input` used to hold the value. No frontend or extension code reads `input` (grep of `frontend/src` and `extension`, no match); the frontend reads `loc` and `msg` only. A surrogate left in `loc` or `msg` is still written as a `\udxxx` escape. A surrogate used as a key name is reported on the body, because pydantic cannot name it.
+- **Surrogate messages, accepted.** On `company`, `job_name`, both `remarks`, `interviewer` and the two 1024-capped passwords, pydantic rejects a surrogate first (`string_unicode`, "unable to parse raw data as a unicode string"), still as a 422 naming the field; `account_name`, the signup and login passwords and `note` get our message. `job_url` keeps its own address message.
+- **Consequence, accepted.** Signup used to accept NUL in a password (bcrypt 5 hashes it). Such an account can no longer log in or delete itself. This is extremely unlikely: a browser field cannot type NUL, and the app is invite-only.
+- **Scope:** NUL and lone surrogates only. Other control characters stay allowed in free text.
+- **Follow-ups (deferred).**
+  - A: a non-JSON body with invalid UTF-8 used to be a 500. It is now a 422 as a side effect of blanking, with no test yet.
+  - B: `NaN` or `Infinity` in a JSON body. Same as A.
+  - A and B go to a separate "malformed body hardening" PR.
+  - D: the admin CLI `--note` does not check for surrogates.
+  - E: the account-delete form shows "Incorrect password." for any 422.
+  - C (a 422 echoing a password, invite code or whole body) is resolved by the blanking.
