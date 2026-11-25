@@ -7,8 +7,11 @@ import sys
 from pathlib import Path
 
 import pytest
+from sqlalchemy import create_engine
 
-from tests.conftest import require_test_db
+import app.config as app_config
+import app.database as app_database
+from tests.conftest import require_test_db, run_alembic
 
 ROOT = Path(__file__).resolve().parent.parent
 UNREACHABLE = "postgresql+psycopg2://u:p@127.0.0.1:1/talaan"
@@ -128,3 +131,19 @@ def test_refusal_redacts_imported_first_message():
     assert "app.config was imported before" in out, out
     for bad in ("SECRETTAIL", "pa@", "127.0.0.1"):
         assert bad not in out, out
+
+
+@pytest.mark.parametrize("patched", ["engine", "config_url"])
+def test_run_alembic_checks_both_urls_at_call_time(monkeypatch, patched):
+    calls = []
+    if patched == "engine":
+        monkeypatch.setattr(app_database, "engine", create_engine(UNREACHABLE))  # lazy: never connects
+    else:
+        monkeypatch.setattr(app_config, "DATABASE_URL", UNREACHABLE)
+    try:
+        run_alembic(lambda *a: calls.append(a), "head")
+        exited = None
+    except pytest.exit.Exception as e:
+        exited = e
+    assert calls == [], "run_alembic ran the alembic command"
+    assert exited is not None

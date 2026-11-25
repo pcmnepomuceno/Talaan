@@ -65,6 +65,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+import app.config as app_config
+import app.database as app_database
 from alembic import command
 from app.auth import invites
 from app.auth.models import InviteCode
@@ -89,8 +91,10 @@ USER_PASSWORD = "Str0ng!pass"
 
 
 def run_alembic(cmd, *args):
-    """Every alembic command the tests trigger goes through here (env.py uses this same engine)."""
-    require_test_db(engine.url, "alembic (app.database.engine)")
+    """Run an alembic command after checking, at call time, the two URLs alembic/env.py reads:
+    app.database.engine.url (online mode) and app.config.DATABASE_URL (offline mode)."""
+    require_test_db(app_database.engine.url, "alembic (app.database.engine)")
+    require_test_db(app_config.DATABASE_URL, "alembic (app.config.DATABASE_URL)")
     cmd(Config("alembic.ini"), *args)
 
 

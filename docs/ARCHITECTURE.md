@@ -74,7 +74,7 @@ Deliberate deviations:
 - **No token rotation at login-time privilege change**: there are no roles.
 
 ## Testing
-- Separate `*_test` database. A guard aborts if the configured DB name does not end in `_test`, and checks the engine/alembic URL again after import and before each test-triggered alembic command.
+- Separate `*_test` database. A guard aborts unless the database name the driver will receive ends in `_test`. After the app imports, it checks `app.database.engine.url` again. Before each alembic command the tests run (through `run_alembic` in `tests/conftest.py`), it checks the two URLs `alembic/env.py` reads: `app.database.engine.url` and `app.config.DATABASE_URL`. Refusal messages show only the driver and the database name.
 - Schema built once per run with `alembic upgrade head` (tests the migrations too).
 - Each test runs in a connection-level transaction with a savepoint, rolled back at the end.
 - `pytest` + `httpx` against the FastAPI app.
