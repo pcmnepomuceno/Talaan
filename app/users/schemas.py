@@ -3,7 +3,10 @@
 Stub — request validation is yours to write (CLAUDE.md rule 2).
 Typical set: UserCreate (email + raw password in), UserRead (no password out).
 """
+from typing import Annotated
+
 from pydantic import (
+    AfterValidator,
     BaseModel,
     ConfigDict,
     EmailStr,
@@ -12,14 +15,14 @@ from pydantic import (
     field_validator,
 )
 
-from app import config
+from app import config, text
 
 # TODO: implement User schemas
 
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str
-    account_name: str
+    password: text.Text
+    account_name: text.Text
     # Required. No max_length here on purpose: pydantic would answer an over-length code with
     # a 422, which differs from the generic 400 every other bad code gets. The route bounds it.
     invite_code: str
@@ -63,7 +66,7 @@ class UserRead(BaseModel):
 
 class UserLogin(BaseModel):
     email: EmailStr
-    password: str
+    password: text.Text
 
     @field_validator("email", mode="before")
     @classmethod
@@ -76,4 +79,5 @@ class UserLogin(BaseModel):
 class AccountDelete(BaseModel):
     # No complexity rules: any wrong value up to the cap, however odd (empty, over 72 bytes),
     # gets the same 403. The cap only stops a huge body being parsed and encoded per attempt.
-    password: str = Field(max_length=1024)
+    # Length before the character check, so an over-long value keeps its `string_too_long`.
+    password: Annotated[str, Field(max_length=1024), AfterValidator(text.check)]

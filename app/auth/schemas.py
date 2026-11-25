@@ -2,9 +2,11 @@
 InviteCreated, once) a code."""
 
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
+
+from app import text
 
 
 class InviteItem(BaseModel):
@@ -27,14 +29,13 @@ class InviteCreate(BaseModel):
     note: str | None = Field(default=None, max_length=200)  # code points, after stripping
     expires_in_days: Literal[7, 14, 30]
     # Any wrong value up to the cap gets the same 403, like AccountDelete.
-    password: str = Field(max_length=1024)
+    password: Annotated[str, Field(max_length=1024), AfterValidator(text.check)]
 
     @field_validator("note", mode="before")
     @classmethod
     def strip_note(cls, value):
         if isinstance(value, str):
-            if "\x00" in value:  # Postgres text cannot hold NUL: would be a 500 at the insert
-                raise ValueError("Note cannot contain a null character.")
+            text.check(value)  # before the strip and the length limit
             return value.strip() or None
         return value
 

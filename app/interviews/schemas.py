@@ -13,11 +13,14 @@ from pydantic import (
     model_validator,
 )
 
+from app import text
 from app.applications.schemas import Remarks
 from app.interviews.models import InterviewMode, InterviewOutcome
 
 # Whitespace-only is 422, like application names; null is the way to say "none".
-Interviewer = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+Interviewer = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200), AfterValidator(text.check)
+]
 
 
 def _sane_range(v: datetime) -> datetime:
