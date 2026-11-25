@@ -1,10 +1,15 @@
+import asyncio
+import json
 import os
 import subprocess
 import sys
 
 import pytest
+from fastapi.exceptions import RequestValidationError
+from fastapi.testclient import TestClient
 
-from tests.conftest import USER_EMAIL, USER_PASSWORD
+from app.main import app, validation_error
+from tests.conftest import USER_EMAIL, USER_PASSWORD, as_user
 
 
 @pytest.fixture
@@ -133,3 +138,97 @@ def test_admin_cli_and_config_import_do_not_apply_the_production_check():
         capture_output=True, text=True, check=False,
     )
     assert r.returncode == 0, r.stderr
+
+
+# --- a body with a lone surrogate is a 422, never a 500 ---
+
+ECHO_APP = (
+    '"company": "Co", "job_name": "Dev", "status": "applied", "mode_of_work": "remote"'
+)
+
+
+@pytest.mark.parametrize(
+    "body, loc",
+    [
+        (
+            "{" + ECHO_APP + r', "contact_email": "a\ud800@b.com"}',
+            ["body", "contact_email"],
+        ),
+        (
+            r'{"company": {"x": "\ud800"}, "job_name": "Dev", "status": "applied", "mode_of_work": "remote"}',
+            ["body", "company"],
+        ),
+        # pydantic cannot name a surrogate key, so its error sits on the body itself
+        ("{" + ECHO_APP + r', "\ud800": 1}', ["body"]),
+    ],
+    ids=["contact_email", "nested_object", "extra_key"],
+)
+def test_422_for_a_lone_surrogate(client, users, body, loc):
+    as_user(client, "tok-a")
+    # No context manager: `client` already ran the app's lifespan and set the get_db override.
+    raw = TestClient(app, raise_server_exceptions=False, cookies=client.cookies)
+    r = raw.post(
+        "/api/v1/applications",
+        content=body,
+        headers={"Content-Type": "application/json"},
+    )
+    assert r.status_code == 422, r.text
+    assert r.headers["cache-control"] == "no-store"
+    assert r.json()["detail"][0]["loc"] == loc
+
+
+# --- a 422 never echoes what was submitted ---
+
+
+def test_422_never_echoes_invite_code_or_password(client):
+    code, password = "TLN-SECR-ETCO-DE12", "Secr3t!Passw0rd"
+    # account_name is missing, so FastAPI's default error would echo the whole body.
+    r = client.post(
+        "/api/v1/signup",
+        json={"email": "new@example.com", "password": password, "invite_code": code},
+    )
+    assert r.status_code == 422, r.text
+    assert code not in r.text and password not in r.text
+    assert [e["input"] for e in r.json()["detail"]] == [None]
+
+
+def test_422_never_echoes_a_rejected_password(client):
+    # Raw JSON: httpx cannot encode a lone surrogate itself; json.dumps writes it as an escape.
+    body = json.dumps({"email": "new@example.com", "password": "Secr3t\ud800pw"})
+    r = client.post(
+        "/api/v1/login", content=body, headers={"Content-Type": "application/json"}
+    )
+    assert r.status_code == 422, r.text
+    assert "Secr3t" not in r.text
+
+
+def test_422_blanks_input_and_keeps_loc_and_msg(client, users):
+    as_user(client, "tok-a")
+    body = {
+        "company": "a" * 201,
+        "job_name": "Dev",
+        "status": "applied",
+        "mode_of_work": "remote",
+    }
+    r = client.post("/api/v1/applications", json=body)
+    assert r.status_code == 422, r.text
+    [error] = r.json()["detail"]
+    assert error["input"] is None
+    assert error["loc"] == ["body", "company"]
+    assert error["msg"] == "String should have at most 200 characters"
+
+
+def test_422_escapes_a_surrogate_left_in_loc_or_msg():
+    # Called directly: with `input` blanked, no request body above reaches this fallback.
+    error = {
+        "type": "value_error",
+        "loc": ("body", "\ud800"),
+        "msg": "bad \udfff",
+        "input": "\ud800",
+    }
+    r = asyncio.run(validation_error(None, RequestValidationError([error])))
+    assert r.status_code == 422
+    assert r.media_type == "application/json"
+    assert json.loads(r.body) == {
+        "detail": [{**error, "loc": ["body", "\ud800"], "input": None}]
+    }

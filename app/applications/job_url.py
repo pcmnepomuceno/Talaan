@@ -20,7 +20,7 @@ def clean(v: str | None) -> str | None:
         return None
     if len(v) > MAX_LEN:
         raise ValueError(_TOO_LONG)
-    if any(c.isspace() or unicodedata.category(c) == "Cc" for c in v):
+    if any(c.isspace() or unicodedata.category(c) in ("Cc", "Cs") for c in v):
         raise ValueError(_BAD)
     try:
         p = urlsplit(v)

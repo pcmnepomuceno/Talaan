@@ -15,18 +15,21 @@ from pydantic import (
     model_validator,
 )
 
+from app import text
 from app.applications import job_url
 from app.applications.models import ApplicationStatus, ModeOfWork
 
 INT4_MAX = 2_147_483_647
 
-Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+Name = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200), AfterValidator(text.check)
+]
 # HttpUrl accepts http/https only (javascript: etc. give 422); stored as str.
 Website = Annotated[HttpUrl, Field(max_length=2000)]
 # Trimmed; empty means None; http(s) only. The key for duplicate matching is set in the router.
 JobUrl = Annotated[str | None, AfterValidator(job_url.clean)]
 Salary = Annotated[int, Field(ge=0, le=INT4_MAX)]
-Remarks = Annotated[str, Field(max_length=5000)]
+Remarks = Annotated[str, Field(max_length=5000), AfterValidator(text.check)]
 
 
 class ApplicationCreate(BaseModel):
