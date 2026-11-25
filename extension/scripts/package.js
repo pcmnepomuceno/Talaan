@@ -61,7 +61,7 @@ export function pack({ root = fileURLToPath(new URL("..", import.meta.url)), out
       execFileSync("zip", ["-qrXD", join(stage, file), ...SHIP], { cwd: dir });
       return [variant, file];
     });
-    // Copy only after both built, so a failure leaves nothing in outDir. Overwrites; zip never appends.
+    // Validation and both builds finish before anything is written to outDir. A copy failure midway can leave one new zip next to an old one; rerun. Overwrites; zip never appends.
     mkdirSync(outDir, { recursive: true });
     return Object.fromEntries(
       built.map(([variant, file]) => {
