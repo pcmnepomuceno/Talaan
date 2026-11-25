@@ -147,3 +147,16 @@ def test_run_alembic_checks_both_urls_at_call_time(monkeypatch, patched):
         exited = e
     assert calls == [], "run_alembic ran the alembic command"
     assert exited is not None
+
+
+def test_child_pytest_keeps_one_test_suffix():
+    grandchild = "import tests.conftest as c; print(c._url.database)"
+    script = (
+        "import os, subprocess, sys, tests.conftest; "
+        f"r = subprocess.run([sys.executable, '-c', {grandchild!r}], env=os.environ, "
+        "capture_output=True, text=True, timeout=30); print(r.stdout + r.stderr)"
+    )
+    code, out = _run(["-c", script], DATABASE_URL=UNREACHABLE)
+    assert code == 0, out
+    assert "talaan_test" in out.splitlines(), out
+    assert "talaan_test_test" not in out, out

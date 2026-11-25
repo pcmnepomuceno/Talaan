@@ -49,7 +49,9 @@ require_test_db(_url, _source)
 
 # Must be set before any `app` import: app.config reads it at import time, and
 # app.database.engine / alembic/env.py both use it.
-os.environ["DATABASE_URL"] = _url.render_as_string(hide_password=False)
+# A child pytest re-runs this file with this environment; it then uses TEST_DATABASE_URL as is
+# instead of appending _test again.
+os.environ["DATABASE_URL"] = os.environ["TEST_DATABASE_URL"] = _url.render_as_string(hide_password=False)
 # Minimum bcrypt cost keeps the suite fast; also read by app.config at import.
 os.environ["BCRYPT_ROUNDS"] = "4"
 # TestClient is plain http: a Secure cookie would never be sent back. Cookie tests patch it.
