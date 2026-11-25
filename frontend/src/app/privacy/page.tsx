@@ -89,15 +89,18 @@ export default function PrivacyPage() {
             account to check for duplicates. Nothing is saved until you press Save.
           </p>
           <List>
-            <li>It reads only the tab you are on, as soon as you open it from the toolbar. It never changes the page.</li>
             <li>
-              It reads the page link and title, the page&apos;s sharing title and its structured data (JSON-LD), of which it uses only the job details. On Indeed and
-              LinkedIn job pages it also reads the company link text, and on LinkedIn the work mode labels.
+              It reads only the tab you are on, as soon as you open it from the toolbar. It never changes the page.
+            </li>
+            <li>
+              It reads the page link and title, the page&apos;s sharing title and its structured data (JSON-LD), of
+              which it uses only the job details. On Indeed and LinkedIn job pages it also reads the company link text,
+              and on LinkedIn the work mode labels.
             </li>
             <li>
               When you open it, it checks that you are signed in. If you are, it sends the posting link to check for
-              duplicates, and may send it again when you leave the link field. The application is sent only when you press
-              Save.
+              duplicates, and may send it again when you leave the link field. The application is sent only when you
+              press Save.
             </li>
             <li>It talks only to https://talaan-phi.vercel.app.</li>
             <li>It signs in with your existing Talaan session cookie and stores nothing of its own.</li>
@@ -113,9 +116,13 @@ export default function PrivacyPage() {
             <li>GitHub Actions runs the scheduled cleanup against the database.</li>
           </List>
           <p>
+            As the operator I have access to the database and can see what is stored. I only look at it to run or fix
+            the service.
+          </p>
+          <p>
             Our server keeps a standard access log (request method, path, status and connecting address) and logs
-            warnings and errors. An error report can include values you submitted, such as your email or entries. Vercel and Render also
-            keep their own request logs as part of their service, for as long as they decide.
+            warnings and errors. An error report can include values you submitted, such as your email or entries. Vercel
+            and Render also keep their own request logs as part of their service, for as long as they decide.
           </p>
         </Section>
 
@@ -142,7 +149,9 @@ export default function PrivacyPage() {
 
         <Section title="How long we keep it and how to delete it">
           <List>
-            <li>Applications and interviews stay until you delete them or your account. Logging out ends that session.</li>
+            <li>
+              Applications and interviews stay until you delete them or your account. Logging out ends that session.
+            </li>
             <li>
               To delete your account, go to Account and choose Delete account. This permanently removes your account,
               applications, interviews and sessions, and the attempt limit records for your email address and your
@@ -150,9 +159,12 @@ export default function PrivacyPage() {
             </li>
             <li>
               What stays: the invite code record, still marked as used, with our note but no longer linked to your
-              account; and attempt limit records not removed above, such as those with an IP address, until the cleanup. Entries in server and host logs also remain until they are discarded.
+              account; and attempt limit records not removed above, such as those with an IP address, until the cleanup.
+              Entries in server and host logs also remain until they are discarded.
             </li>
-            <li>A cleanup scheduled to run daily deletes attempt limit records older than 7 days and expired sessions.</li>
+            <li>
+              A cleanup scheduled to run daily deletes attempt limit records older than 7 days and expired sessions.
+            </li>
             <li>
               We make no backups of our own. Our database host keeps restore history as part of its service,
               so deleted data can stay there until it ages out.

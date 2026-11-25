@@ -19,6 +19,15 @@ describe("privacy page", () => {
     expect(screen.getByRole("link", { name: "Back to Talaan" }).getAttribute("href")).toBe("/");
   });
 
+  it("says the operator can see the database", () => {
+    render(<PrivacyPage />);
+    expect(
+      screen.getByText(
+        "As the operator I have access to the database and can see what is stored. I only look at it to run or fix the service.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("repeats the popup disclosure and says how the extension signs in", () => {
     render(<PrivacyPage />);
     expect(screen.getByText(DISCLOSURE)).toBeTruthy();
