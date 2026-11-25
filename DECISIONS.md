@@ -710,3 +710,14 @@
   - E: the account-delete form shows "Incorrect password." for any 422.
   - C (a 422 echoing a password, invite code or whole body) is resolved by the blanking.
 - **Alternatives.** Keep the NUL lockout for verify-only passwords (rejected: it costs an account and gains nothing). Replace `EmailStr` messages in the handler (rejected for now: it hides useful errors and the frontend shows its own text). Strip `ctx` in the handler (rejected for now: same reason, and the handler stays unchanged).
+
+---
+
+# Decision: Public privacy page and popup disclosure
+- **Date:** 2026-11-25
+- **Decision:** A static page at `/privacy`, outside the app shell, public through `PUBLIC` in `proxy.ts`, linked from the login/signup screen, Account and the extension popup. The popup shows, in every state: "Reads this page's link, title and job details when you open Talaan, and sends the link to your Talaan account to check for duplicates. Nothing is saved until you press Save."
+- **Why:** the Chrome Web Store needs a privacy policy URL that matches the code and a disclosure in the extension UI. No backend or manifest change.
+- **Wording:** the first proposal said the page is read only when you click Save. That is wrong: the popup reads the page as soon as it opens and sends the link for the duplicate check, so the line says so.
+- **No analytics and no cookie banner:** there is one essential session cookie and a theme choice in local storage.
+- **Backups:** the page says we make none and that the database host keeps restore history. No period is stated, because none can be verified from the code.
+- **Rule:** the page describes current behavior; a change to what is stored, sent or deleted updates the page and its date.
