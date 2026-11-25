@@ -47,8 +47,11 @@ async def validation_error(request: Request, exc: RequestValidationError):
     content = {"detail": jsonable_encoder([{**e, "input": None} for e in exc.errors()])}
     try:
         return JSONResponse(content, status_code=422)
-    except UnicodeEncodeError:  # a lone surrogate left in loc or msg: write it as a \\udxxx escape
-        return Response(json.dumps(content), status_code=422, media_type="application/json")
+    # a lone surrogate left in loc or msg: write it as a \\udxxx escape
+    except UnicodeEncodeError:
+        return Response(
+            json.dumps(content), status_code=422, media_type="application/json"
+        )
 
 
 app.include_router(health.router)
