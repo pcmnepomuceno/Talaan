@@ -14,8 +14,9 @@ load_dotenv()
 def _parse_url(url, source: str) -> URL:
     try:
         return make_url(url)
-    except (ArgumentError, ValueError):  # the message never echoes the input: it may hold a password
-        pytest.exit(f"Refusing to run: {source} is empty or not a database URL", 2)
+    except (ArgumentError, ValueError):
+        pass  # refused below, outside this block, so the error (it may echo the URL) is never chained
+    pytest.exit(f"Refusing to run: {source} is empty or not a database URL", 2)
 
 
 def _name(n) -> str:
@@ -36,7 +37,7 @@ def require_test_db(url, source: str) -> URL:
         name = parsed.get_dialect()().create_connect_args(parsed)[1].get("dbname")
     except Exception:  # noqa: BLE001 - refused below, outside this block, so the error (it may echo the URL) is never chained
         name = None
-    if not (isinstance(name, str) and name.endswith("_test")):
+    if not (isinstance(name, str) and name.isprintable() and name.endswith("_test")):
         pytest.exit(f"Refusing to run: {source} database {_name(name)} must end in _test ({parsed.drivername})", 2)
     return parsed
 

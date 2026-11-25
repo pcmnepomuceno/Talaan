@@ -11,7 +11,7 @@ from sqlalchemy import create_engine
 
 import app.config as app_config
 import app.database as app_database
-from tests.conftest import require_test_db, run_alembic
+from tests.conftest import _parse_url, require_test_db, run_alembic
 
 ROOT = Path(__file__).resolve().parent.parent
 UNREACHABLE = "postgresql+psycopg2://u:p@127.0.0.1:1/talaan"
@@ -91,6 +91,8 @@ def test_require_test_db_accepts(url):
         "postgresql://u:p@127.0.0.1:1/x_test?dbname=talaan",
         "postgresql://u:p@127.0.0.1:1/x_test?dbname=a_test&dbname=b_test",
         "postgresql+psycopg://u:p@127.0.0.1:1/x_test?dbname=talaan",
+        "postgresql://u:p@127.0.0.1:1/talaan%00_test",
+        "postgresql+psycopg://u:p@127.0.0.1:1/talaan%00_test",
     ],
 )
 def test_require_test_db_rejects(url):
@@ -160,3 +162,11 @@ def test_child_pytest_keeps_one_test_suffix():
     assert code == 0, out
     assert "talaan_test" in out.splitlines(), out
     assert "talaan_test_test" not in out, out
+
+
+def test_parse_error_is_not_chained_or_echoed():
+    with pytest.raises(pytest.exit.Exception) as excinfo:
+        _parse_url("postgresql://user:secret/db", "unit")
+    assert excinfo.value.__cause__ is None
+    assert excinfo.value.__context__ is None
+    assert "secret" not in str(excinfo.value)
