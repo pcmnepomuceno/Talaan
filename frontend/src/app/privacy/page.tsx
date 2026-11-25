@@ -38,7 +38,7 @@ export default function PrivacyPage() {
         <h1 className="text-page-title text-text-primary">Privacy</h1>
         <p className="mt-2">Last updated 25 November 2026</p>
 
-        <Section title="Who runs Talaan and how to reach us">
+        <Section title="Who runs Talaan and how to reach me">
           <p>
             Talaan is a job application tracker, open by invitation only. Prince Czedrick Nepomuceno, a private
             individual in the Philippines, runs it and is responsible for your data.
@@ -54,7 +54,7 @@ export default function PrivacyPage() {
         <Section title="What the site stores">
           <List>
             <li>
-              Your account: email address, account name and a bcrypt hash of your password. We do not verify email
+              Your account: email address, account name and a bcrypt hash of your password. I do not verify email
               addresses.
             </li>
             <li>
@@ -71,7 +71,7 @@ export default function PrivacyPage() {
               expires.
             </li>
             <li>
-              Invite codes: a hash of the code, a note we write about it, when it was created, expires and was used, and
+              Invite codes: a hash of the code, a note I write about it, when it was created, expires and was used, and
               which account used it.
             </li>
             <li>
@@ -110,9 +110,9 @@ export default function PrivacyPage() {
 
         <Section title="Where your data goes">
           <List>
-            <li>Vercel hosts the website and passes requests, with your IP address, to our server.</li>
-            <li>Render runs our server, in Singapore.</li>
-            <li>Neon hosts our database, in Singapore.</li>
+            <li>Vercel hosts the website and passes requests, with your IP address, to my server.</li>
+            <li>Render runs my server, in Singapore.</li>
+            <li>Neon hosts my database, in Singapore.</li>
             <li>GitHub Actions runs the scheduled cleanup against the database.</li>
           </List>
           <p>
@@ -120,19 +120,19 @@ export default function PrivacyPage() {
             the service.
           </p>
           <p>
-            Our server keeps a standard access log (request method, path, status and connecting address) and logs
+            My server keeps a standard access log (request method, path, status and connecting address) and logs
             warnings and errors. An error report can include values you submitted, such as your email or entries. Vercel
             and Render also keep their own request logs as part of their service, for as long as they decide.
           </p>
         </Section>
 
-        <Section title="What we don't do">
+        <Section title="What I don't do">
           <List>
             <li>No analytics or trackers.</li>
             <li>No ads, and no sharing with advertisers.</li>
-            <li>We do not sell your data.</li>
-            <li>We do not send email.</li>
-            <li>We send nothing to AI providers.</li>
+            <li>I do not sell your data.</li>
+            <li>I do not send email.</li>
+            <li>I send nothing to AI providers.</li>
           </List>
         </Section>
 
@@ -142,12 +142,12 @@ export default function PrivacyPage() {
             is sent only over HTTPS.
           </p>
           <p>
-            If you choose the light or dark theme, your browser remembers that choice in its local storage. We use no
+            If you choose the light or dark theme, your browser remembers that choice in its local storage. I use no
             other cookies or browser storage.
           </p>
         </Section>
 
-        <Section title="How long we keep it and how to delete it">
+        <Section title="How long I keep it and how to delete it">
           <List>
             <li>
               Applications and interviews stay until you delete them or your account. Logging out ends that session.
@@ -158,7 +158,7 @@ export default function PrivacyPage() {
               account deletion attempts.
             </li>
             <li>
-              What stays: the invite code record, still marked as used, with our note but no longer linked to your
+              What stays: the invite code record, still marked as used, with my note but no longer linked to your
               account; and attempt limit records not removed above, such as those with an IP address, until the cleanup.
               Entries in server and host logs also remain until they are discarded.
             </li>
@@ -166,7 +166,7 @@ export default function PrivacyPage() {
               A cleanup scheduled to run daily deletes attempt limit records older than 7 days and expired sessions.
             </li>
             <li>
-              We make no backups of our own. Our database host keeps restore history as part of its service,
+              I make no backups of my own. My database host keeps restore history as part of its service,
               so deleted data can stay there until it ages out.
             </li>
           </List>
@@ -174,7 +174,7 @@ export default function PrivacyPage() {
 
         <Section title="Data requests">
           <p>
-            To ask what we hold about you, or to have it corrected or deleted, email the address above. We answer within
+            To ask what I hold about you, or to have it corrected or deleted, email the address above. I answer within
             30 days.
           </p>
         </Section>
@@ -188,7 +188,7 @@ export default function PrivacyPage() {
         </Section>
 
         <Section title="Changes">
-          <p>If this changes, we update this page and the date at the top.</p>
+          <p>If this changes, I update this page and the date at the top.</p>
         </Section>
 
         <div className="mt-8">
