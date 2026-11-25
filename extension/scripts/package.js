@@ -17,10 +17,14 @@ function validate(manifest, root) {
     if (!ok) throw new Error(message);
   };
   check(manifest.manifest_version === 3, "manifest_version must be 3");
-  check(
-    /^\d+(\.\d+){0,3}$/.test(manifest.version),
-    `version "${manifest.version}" must be 1 to 4 dot-separated integers (put a label in version_name)`,
-  );
+  const v = manifest.version;
+  const parts = typeof v === "string" ? v.split(".") : [];
+  check(parts.length >= 1 && parts.length <= 4,
+    `version "${v}" must be 1 to 4 dot-separated integers (put a label in version_name)`);
+  for (const part of parts)
+    check(/^(0|[1-9]\d*)$/.test(part) && Number(part) <= 65535,
+      `version "${v}": part "${part}" must be an integer from 0 to 65535 with no leading zero (put a label in version_name)`);
+  check(parts.some((p) => p !== "0"), `version "${v}" must not be all zeros`);
   check(manifest.name?.length <= 75, "name must be at most 75 characters");
   check(manifest.description?.length <= 132, "description must be at most 132 characters");
   check(manifest.icons?.["128"], 'icons must include a "128" entry');
@@ -30,6 +34,7 @@ function validate(manifest, root) {
   );
   for (const path of paths) {
     check(existsSync(join(root, path)), `missing file: ${path}`);
+    check(keep(path), `file would be left out of the zip (hidden or ~ backup): ${path}`);
     // normalize first, so "src/../README.md" does not pass as "src".
     check(SHIP.includes(posix.normalize(path).split("/")[0]), `file is not in the shipping set: ${path}`);
   }

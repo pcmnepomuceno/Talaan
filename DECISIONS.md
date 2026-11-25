@@ -729,7 +729,7 @@
 - **Decision:** `extension/scripts/package.js` (`npm run package`) builds two zips from the real `extension/manifest.json` without modifying it: `store`, whose manifest has no `key`, and `friends`, which keeps it. Both hold only the manifest, the popup files, `src/` and `icons/`.
 - **Why two:** the Chrome Web Store assigns its own ID and may reject a manifest with `key`. Friends' "Load unpacked" copies need `key` so the pinned ID, which `EXTENSION_ORIGINS` allows, stays stable. The Store ID has to be added to `EXTENSION_ORIGINS` after the first upload.
 - **No new dependency:** the script calls the system `zip` through `execFileSync`, with no shell. Node has no stdlib zip writer.
-- **Validation lives in the script,** so every build runs it, before anything is written: `manifest_version` 3, numeric version, name and description limits, a 128 icon, referenced files exist, the exact permissions and host permissions, and a `key`.
+- **Validation lives in the script,** so every build runs it, before anything is written: `manifest_version` 3, numeric version, name and description limits, a 128 icon, referenced files exist and are not hidden files or `~` backups (the packer would drop them), the exact permissions and host permissions, and a `key`.
 - **Name limit 75,** from the official manifest docs. The brief said 45, which no doc states. Description is 132.
-- **Numeric versions only** (1 to 4 dot-separated integers). A suffixed version is rejected with a hint to use `version_name`.
+- **Numeric versions only**: 1 to 4 dot-separated integers, each 0 to 65535, with no leading zero on a non-zero part and not all zeros (Chrome's manifest rule, so "0" and "0.0.0.0" are rejected). A suffixed version is rejected with a hint to use `version_name`.
 - **Rejected.** A hand-written zip writer (more code to get wrong) and archiver or jszip (a new dependency).

@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, posix } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -139,5 +139,26 @@ describe("package", () => {
     ["an extra host permission", (m) => m.host_permissions.push("https://example.com/*"), /host_permissions/],
     ["no key", (m) => delete m.key, /key/],
     ["a suffixed version", (m) => (m.version = "0.2.0-beta"), /version_name/],
+    ["a part over 65535", (m) => (m.version = "1.70000"), /part "70000"/],
+    ["a leading zero", (m) => (m.version = "01.2"), /part "01"/],
+    ["five parts", (m) => (m.version = "1.2.3.4.5"), /1 to 4/],
+    ["an empty middle part", (m) => (m.version = "1..2"), /part ""/],
+    ["an empty version", (m) => (m.version = ""), /part ""/],
+    ["version 0", (m) => (m.version = "0"), /all zeros/],
+    ["version 0.0.0.0", (m) => (m.version = "0.0.0.0"), /all zeros/],
   ])("rejects %s", (_, edit, message) => rejects(edit, message));
+
+  it.each(["0.1.0", "1", "65535.0.0.1"])("accepts version %s", (version) => {
+    const dir = fixture((m) => (m.version = version));
+    const out = temp();
+    pack({ root: dir, outDir: out });
+    expect(readdirSync(out).sort()).toEqual(names(version));
+  });
+
+  it("rejects a referenced hidden file the packer would drop", () => {
+    rejects((m, d) => {
+      copyFileSync(join(d, m.icons["128"]), join(d, "icons/.icon-128.png"));
+      m.icons["128"] = "icons/.icon-128.png";
+    }, /left out of the zip/);
+  });
 });

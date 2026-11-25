@@ -104,9 +104,9 @@ It needs the system `zip` command. Both zips hold only `manifest.json`, `popup.h
 - `talaan-extension-store-<version>.zip` is for the Chrome Web Store upload. Its manifest has no `key`, because the Store assigns its own ID and may reject the field.
 - `talaan-extension-friends-<version>.zip` is for friends: unzip it, then use Load unpacked on the folder. It keeps `key`, so the ID stays `fjlnbbkeadlpibmnbpfhlgeingifocni`.
 - After the first Store upload, add the Store-assigned ID (`chrome-extension://<id>`) to `EXTENSION_ORIGINS` in Render, alongside the pinned one.
-- Bump `"version"` before every Store upload. It must be 1 to 4 dot-separated numbers; put a label such as "beta" in `version_name`.
+- Bump `"version"` before every Store upload. It must be 1 to 4 dot-separated integers, each 0 to 65535, with no leading zeros and not all zero; put a label such as "beta" in `version_name`.
 
-The build checks the manifest first: `manifest_version` is 3, the version is numeric, `name` is at most 75 characters and `description` at most 132, there is a 128 icon, every icon and popup file exists and is among the shipped files, `permissions` and `host_permissions` are exactly the ones listed above, and `key` is present. If a check fails, the script prints one line saying which (for example `description must be at most 132 characters`), exits 1 and writes no zip. Zips from an earlier run are left as they were.
+The build checks the manifest first: `manifest_version` is 3, the version follows Chrome's rules (above), `name` is at most 75 characters and `description` at most 132, there is a 128 icon, every icon and popup file exists, is not a hidden file or `~` backup, and is among the shipped files, `permissions` and `host_permissions` are exactly the ones listed above, and `key` is present. If a check fails, the script prints one line saying which (for example `description must be at most 132 characters`), exits 1 and writes no zip. Zips from an earlier run are left as they were.
 
 ## Development
 
