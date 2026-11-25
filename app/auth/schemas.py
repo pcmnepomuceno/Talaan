@@ -29,7 +29,7 @@ class InviteCreate(BaseModel):
     note: str | None = Field(default=None, max_length=200)  # code points, after stripping
     expires_in_days: Literal[7, 14, 30]
     # Any wrong value up to the cap gets the same 403, like AccountDelete.
-    password: Annotated[str, Field(max_length=1024), AfterValidator(text.check)]
+    password: Annotated[str, Field(max_length=1024), AfterValidator(text.check_encodable)]
 
     @field_validator("note", mode="before")
     @classmethod

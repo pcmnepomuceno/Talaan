@@ -179,7 +179,9 @@ def test_422_never_echoes_invite_code_or_password(client):
 
 
 def test_422_never_echoes_a_rejected_password(client):
-    r = client.post("/api/v1/login", json={"email": "new@example.com", "password": "Secr3t\u0000pw"})
+    # Raw JSON: httpx cannot encode a lone surrogate itself; json.dumps writes it as an escape.
+    body = json.dumps({"email": "new@example.com", "password": "Secr3t\ud800pw"})
+    r = client.post("/api/v1/login", content=body, headers={"Content-Type": "application/json"})
     assert r.status_code == 422, r.text
     assert "Secr3t" not in r.text
 

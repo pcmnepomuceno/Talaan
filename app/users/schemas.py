@@ -66,7 +66,7 @@ class UserRead(BaseModel):
 
 class UserLogin(BaseModel):
     email: EmailStr
-    password: text.Text
+    password: text.Encodable
 
     @field_validator("email", mode="before")
     @classmethod
@@ -80,4 +80,4 @@ class AccountDelete(BaseModel):
     # No complexity rules: any wrong value up to the cap, however odd (empty, over 72 bytes),
     # gets the same 403. The cap only stops a huge body being parsed and encoded per attempt.
     # Length before the character check, so an over-long value keeps its `string_too_long`.
-    password: Annotated[str, Field(max_length=1024), AfterValidator(text.check)]
+    password: Annotated[str, Field(max_length=1024), AfterValidator(text.check_encodable)]

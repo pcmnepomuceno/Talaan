@@ -1,4 +1,5 @@
 """NUL and lone surrogates in text input are a 422 naming the field, never a 500 (app/text.py).
+Verify-only passwords (login, account delete, invite create) accept NUL; surrogates stay 422.
 
 Bodies are sent as raw JSON text so the escapes reach the server exactly as written.
 """
@@ -13,6 +14,7 @@ from sqlalchemy import func, select
 from app import config
 from app.applications.models import JobApplication
 from app.auth.models import InviteCode, RateLimitEvent
+from app.auth.security import hash_password
 from app.database import get_db
 from app.interviews.models import Interview
 from app.main import app
@@ -178,11 +180,14 @@ def _cases():
         (_delete, ["password"]),
         (_invite, ["password", "note"]),
     ]
+    # Only checked, never stored: NUL is allowed.
+    verify_only = {_login, _delete, _invite}
     return [
         pytest.param(build, field, bad, id=f"{build.__name__[1:]}-{field}-{bad}")
         for build, fields in groups
         for field in fields
         for bad in BAD
+        if not (build in verify_only and field == "password" and bad == "nul")
     ]
 
 
@@ -203,6 +208,34 @@ def test_bad_character_is_422_on_the_field(raw, db, ids, build, field, bad):
     assert r.status_code == 422, r.text
     assert r.json()["detail"][0]["loc"][-1] == field
     assert snapshot(db) == before
+
+
+@pytest.mark.parametrize("password", ["Str0ng!pass\x00", "\x00", "\x00" * 3, ""])
+@pytest.mark.parametrize(
+    "build, status", [(_login, 401), (_delete, 403), (_invite, 403)]
+)
+def test_verify_only_password_accepts_nul(raw, db, ids, build, status, password):
+    method, url, body = build("password", password, db, ids)
+    r = send(raw, method, url, body)
+    assert r.status_code == status, r.text
+
+
+def test_nul_password_account_can_log_in_and_delete(raw, db, user):
+    # An account made while signup still accepted NUL (bcrypt hashes it).
+    nul_password = "Str0ng!pass\x00x"
+    user.password_hash = hash_password(nul_password)
+    db.commit()
+    r = send(raw, "POST", LOGIN, {"email": USER_EMAIL, "password": nul_password})
+    assert r.status_code == 200, r.text
+    r = send(raw, "POST", DELETE, {"password": nul_password})
+    assert r.status_code == 204, r.text
+
+
+def test_invite_password_surrogate_422_input_null(raw):
+    r = send(raw, "POST", INVITES, invite_body(password="ab\ud800cd"))
+    assert r.status_code == 422, r.text
+    [error] = r.json()["detail"]
+    assert error["loc"][-1] == "password" and error["input"] is None
 
 
 def test_raw_surrogate_bytes_are_422(raw):
