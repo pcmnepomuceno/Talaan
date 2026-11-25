@@ -3,8 +3,10 @@ import subprocess
 import sys
 
 import pytest
+from fastapi.testclient import TestClient
 
-from tests.conftest import USER_EMAIL, USER_PASSWORD
+from app.main import app
+from tests.conftest import USER_EMAIL, USER_PASSWORD, as_user
 
 
 @pytest.fixture
@@ -133,3 +135,29 @@ def test_admin_cli_and_config_import_do_not_apply_the_production_check():
         capture_output=True, text=True, check=False,
     )
     assert r.returncode == 0, r.stderr
+
+
+# --- a 422 that echoes a lone surrogate must not become a 500 ---
+
+ECHO_APP = '"company": "Co", "job_name": "Dev", "status": "applied", "mode_of_work": "remote"'
+
+
+@pytest.mark.parametrize(
+    "body, loc",
+    [
+        ("{" + ECHO_APP + r', "contact_email": "a\ud800@b.com"}', ["body", "contact_email"]),
+        (r'{"company": {"x": "\ud800"}, "job_name": "Dev", "status": "applied", "mode_of_work": "remote"}',
+         ["body", "company"]),
+        # pydantic cannot name a surrogate key, so its error sits on the body itself
+        ("{" + ECHO_APP + r', "\ud800": 1}', ["body"]),
+    ],
+    ids=["contact_email", "nested_object", "extra_key"],
+)
+def test_422_echoing_a_lone_surrogate(client, users, body, loc):
+    as_user(client, "tok-a")
+    # No context manager: `client` already ran the app's lifespan and set the get_db override.
+    raw = TestClient(app, raise_server_exceptions=False, cookies=client.cookies)
+    r = raw.post("/api/v1/applications", content=body, headers={"Content-Type": "application/json"})
+    assert r.status_code == 422, r.text
+    assert r.headers["cache-control"] == "no-store"
+    assert r.json()["detail"][0]["loc"] == loc
