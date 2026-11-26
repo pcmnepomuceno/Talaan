@@ -44,8 +44,8 @@ HttpOnly cookie value; raw token never stored), user_id → Users.id, created_at
 note?, created_at, expires_at, used_at?, used_by_user_id? → Users.id (`ON DELETE SET NULL`, indexed `ix_invite_codes_used_by_user_id`)
 
 **PasswordResetTokens** (matches model): id, user_id → Users.id (`ON DELETE CASCADE`, indexed), token_hash (UNIQUE, SHA-256 hex;
-the raw token is never stored), created_at, expires_at, used_at?, created_by? → Users.id (the admin; `ON DELETE SET NULL`,
-indexed; NULL for CLI links)
+the raw token is never stored), created_at, expires_at, used_at?, created_by? → Users.id (the admin; `ON DELETE CASCADE`, so a
+deleted admin's links die with the account and cannot pass for CLI links; indexed; NULL for CLI links)
 
 **Job Applications** (matches model)
 id, company, job_name, contact_website?, contact_email?, status (ENUM),

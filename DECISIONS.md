@@ -758,6 +758,9 @@
 - **Admins:** the page refuses the caller's own account and other admins; only the CLI resets an admin. The email lookup comes after the password check, so it cannot probe emails without the admin password.
 - **Same password as before:** allowed.
 - **Limits:** their own `ADMIN_RESET_*` budget (so invites and resets do not eat each other's) and `RESET_PASSWORD_IP_*` for the public route. No per-token key: a 256-bit token cannot be guessed.
-- **`created_by`** is `ON DELETE SET NULL`, so deleting an admin account never fails.
+- **`created_by`** is `ON DELETE CASCADE` (its own migration, after the table's first one), so deleting an admin account never fails and a deleted admin's links die with it. Rejected: SET NULL, because a link then looks like a CLI link, and a CLI link may reset an admin account.
+- **Re-check at consume:** an admin-made link (`created_by` set) works only while its creator exists and is still an admin and the target is not an admin; otherwise the generic 400 and the link stays unused. CLI links (`created_by` NULL) work for any account.
+- **Login re-checks the password hash:** after `delete_event`, `SELECT password_hash ... FOR SHARE` in the same transaction; a different hash is the usual 401. A login that verified the old password cannot keep a session past a reset.
+- **Limiter clear after the commit:** the reset deletes the `login:email:` rows in a separate best-effort transaction, so it never waits on a limiter row while it holds the user row (login holds a limiter row, then wants the user row: a deadlock, tested). A failure there logs one warning and the reset is still 204. Rejected: keeping it in the reset transaction and changing login's lock order (more risk in the hot path).
 - **Retention:** used and expired links are purged 7 days after creation; account deletion removes them.
 - **Not built:** email, a list of links in the UI, an audit log.

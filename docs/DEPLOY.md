@@ -55,6 +55,8 @@ DATABASE_URL="$NEON_URL" python -m alembic check
 unset NEON_URL
 ```
 
+`alembic upgrade head` applies both password reset migrations in order: first `password_reset_tokens`, then the `created_by` `ON DELETE CASCADE` change (a separate revision, because the first may already be applied elsewhere). `alembic check` after it must report no new upgrade operations.
+
 A reset link for an admin account (the page refuses those) comes from the CLI, with the same `read -rsp` lines: `DATABASE_URL="$NEON_URL" python -m app.admin create-reset-link EMAIL`. It prints `/reset#<token>` once; put the frontend's origin in front of it.
 
 ## 1. Secrets and env vars

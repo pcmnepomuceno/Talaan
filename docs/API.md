@@ -85,18 +85,18 @@ Admin gate as for invites. Body (unknown fields are 422): `email` (trimmed, lowe
 
 `201 {"token", "expires_at"}`, expiring 24 hours after creation. The token is in this response only (stored as a SHA-256 hash). Creating a link voids the account's earlier unused ones. Errors, in the order they are checked:
 - `404 {"detail": "Not Found"}` not an admin, `401` no session.
+- `422` malformed JSON (FastAPI parses the body before it runs the gate, so a non-admin gets this too). Field validation errors (a missing or bad field, an extra field) come after the gate: a non-admin with a well-formed body gets 404.
 - `429` rate limited (10 attempts per admin and 10 per IP per hour, `ADMIN_RESET_USER_*`, `ADMIN_RESET_IP_*`, every attempt counted). `503` when the limiter cannot reach the database.
 - `403 {"detail": "Incorrect password."}`.
 - `404 {"detail": "No account with that email."}`.
 - `400 {"detail": "You can't reset your own password here."}`.
 - `400 {"detail": "Admin accounts are reset with the CLI."}`.
-- `422` validation.
 
 ### `POST /auth/reset-password`
-No session needed. Body: `token` and `new_password` (the signup password rules). `204` on success: the password is changed, every session of the account ends (log in again) and its failed-login count is cleared.
+No session needed. Body: `token` and `new_password` (the signup password rules). `204` on success: the password is changed, every session of the account ends (log in again) and its failed-login count is cleared (after the commit, best effort: if that clear fails the password is still changed and the count ends with its window).
 - `429` rate limited (10 attempts per IP per hour, `RESET_PASSWORD_IP_*`, successes and failures counted; a 422 is not counted). `503` when the limiter cannot reach the database.
 - `422` a missing field or a `new_password` that breaks the rules. The body never holds the token or password.
-- `400 {"detail": "Invalid or expired reset link."}` for every bad token: unknown, expired, used, replaced by a newer one, non-ASCII or over 64 characters, or its account deleted.
+- `400 {"detail": "Invalid or expired reset link."}` for every bad token: unknown, expired, used, replaced by a newer one, non-ASCII or over 64 characters, its account deleted, or a link made from `/admin` that no longer qualifies when used (its creator was deleted or is no longer in `ADMIN_EMAILS`, or the account has become an admin since); that link stays unused. Links made by the CLI work for any account.
 - `403` blocked cross-site request.
 
 ## Signup
