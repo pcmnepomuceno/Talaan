@@ -24,7 +24,7 @@ from app.auth.security import hash_password, hash_session_token
 from app.database import SessionLocal
 from app.main import app
 from app.users.models import User
-from tests.concurrency import join_all, purge, spawn
+from tests.concurrency import join_all, purge, spawn, wait_for_lock_waiter
 from tests.conftest import USER_EMAIL, USER_PASSWORD, as_user
 
 CREATE = "/api/v1/admin/password-resets"
@@ -630,3 +630,121 @@ def test_a_dead_connection_during_the_lockout_clear_is_still_a_204(client, db, f
     monkeypatch.undo()
     db.expire_all()
     assert login(client, NEW).status_code == 200
+
+
+# --- create vs the admin deleting their own account ---
+
+@pytest.fixture
+def admin_target(request, monkeypatch):
+    """A committed admin (real password, session cookie "adm-tok") and a committed non-admin
+    target, with or without an old unused link the admin made. Indirect parameter: old link or not."""
+    for name in ("ADMIN_RESET_IP_LIMIT", "ADMIN_RESET_USER_LIMIT",
+                 "ACCOUNT_DELETE_IP_LIMIT", "ACCOUNT_DELETE_USER_LIMIT"):
+        monkeypatch.setattr(config, name, 10_000)
+    tag = uuid.uuid4().hex[:8]
+    admin_email, target_email = f"adm-{tag}@example.com", f"tgt-{tag}@example.com"
+    monkeypatch.setattr(config, "ADMIN_EMAILS", frozenset({admin_email}))
+    setup = SessionLocal()
+    admin_user = User(email=admin_email, password_hash=hash_password(USER_PASSWORD), account_name="Adm")
+    target = User(email=target_email, password_hash="x", account_name="Tgt")
+    setup.add_all([admin_user, target])
+    setup.commit()
+    admin_id, target_id = admin_user.id, target.id
+    now = datetime.now(timezone.utc)
+    setup.add(SessionModel(token_hash=hash_session_token("adm-tok"), user_id=admin_id, created_at=now,
+                           expires_at=now + timedelta(days=1)))
+    if request.param:
+        _, token_hash = password_resets.generate()
+        setup.add(PasswordResetToken(user_id=target_id, token_hash=token_hash, created_at=now,
+                                     expires_at=now + timedelta(hours=1), created_by=admin_id))
+    setup.commit()
+    setup.close()
+    limiter_key = rate_limit.email_key(admin_email)  # before the yield: a test may have patched email_key
+    yield admin_id, admin_email, target_email, target_id
+    purge(
+        ("DELETE FROM users WHERE id IN (:a, :t)", {"a": admin_id, "t": target_id}),
+        ("DELETE FROM rate_limit_events WHERE key IN ('admin-reset:ip:unknown', 'account-delete:ip:unknown', :ru, :du, :k)",
+         {"ru": f"admin-reset:user:{admin_id}", "du": f"account-delete:user:{admin_id}",
+          "k": limiter_key}),
+    )
+
+
+def committed_token_count(user_id) -> int:
+    db = SessionLocal()
+    try:
+        return db.query(PasswordResetToken).filter_by(user_id=user_id).count()
+    finally:
+        db.close()
+
+
+def admin_requests(admin_email, target_email, details, delete_finished=None):
+    """Two request functions for run_request: the admin creates a link, the admin deletes themselves.
+    Only the error detail is kept: a create response holds the token."""
+    def post(c, name, path, payload):
+        c.cookies.set("session_token", "adm-tok")
+        try:
+            r = c.post(path, json=payload)
+            details[name] = r.json().get("detail") if r.content else None
+            return r
+        finally:
+            if name == "delete" and delete_finished is not None:
+                delete_finished.set()
+
+    return (
+        lambda c: post(c, "create", CREATE, {"email": target_email, "admin_password": USER_PASSWORD}),
+        lambda c: post(c, "delete", "/api/v1/account/delete", {"password": USER_PASSWORD}),
+    )
+
+
+OLD_LINK = pytest.mark.parametrize("admin_target", [True, False], indirect=True, ids=["old_link", "no_old_link"])
+
+
+@OLD_LINK
+def test_create_then_the_admins_own_delete_neither_deadlocks_nor_fails(admin_target, monkeypatch):
+    """The create holds the target row and is about to insert (its foreign key wants the admin row);
+    the admin's delete wants the admin row first. The create must take the admin row first."""
+    _, admin_email, target_email, target_id = admin_target
+    create_paused, delete_finished = threading.Event(), threading.Event()
+    real_generate = password_resets.generate
+
+    def generate_paused():  # after the create's locks and the void, before its INSERT
+        create_paused.set()
+        # Done also ends the wait: without the fix a delete with no old link commits unobstructed.
+        wait_for_lock_waiter(timeout=10, done=delete_finished)
+        return real_generate()
+
+    monkeypatch.setattr(password_resets, "generate", generate_paused)
+    results, errors, details = {}, [], {}
+    send_create, send_delete = admin_requests(admin_email, target_email, details, delete_finished)
+    creating = spawn(run_request, results, errors, "create", send_create)
+    assert create_paused.wait(10)
+    join_all([creating, spawn(run_request, results, errors, "delete", send_delete)], timeout=60)
+    assert not errors, errors
+    assert results == {"create": 201, "delete": 204}
+    assert committed_token_count(target_id) == 0  # the new link went with its creator
+
+
+@OLD_LINK
+def test_the_admins_own_delete_then_create_answers_404_not_a_500(admin_target, monkeypatch):
+    """The delete holds the admin row; the create must wait for it and then find no admin."""
+    _, admin_email, target_email, target_id = admin_target
+    delete_paused, first = threading.Event(), threading.Event()
+    real_email_key = rate_limit.email_key
+
+    def email_key_paused(email):  # the delete calls this after locking the admin row, before deleting it
+        if not first.is_set():
+            first.set()
+            delete_paused.set()
+            wait_for_lock_waiter(timeout=10)  # the create, blocked on the admin row
+        return real_email_key(email)
+
+    monkeypatch.setattr(rate_limit, "email_key", email_key_paused)
+    results, errors, details = {}, [], {}
+    send_create, send_delete = admin_requests(admin_email, target_email, details)
+    deleting = spawn(run_request, results, errors, "delete", send_delete)
+    assert delete_paused.wait(10)
+    join_all([deleting, spawn(run_request, results, errors, "create", send_create)], timeout=60)
+    assert not errors, errors
+    assert results == {"create": 404, "delete": 204}
+    assert details["create"] == password_resets.NO_ACCOUNT
+    assert committed_token_count(target_id) == 0

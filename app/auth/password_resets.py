@@ -4,9 +4,13 @@ An admin (or the CLI) creates a single-use, 24-hour token and passes the link on
 SHA-256 of the token is stored. Never log a token: it leaves the server once, in the create
 response (or the one CLI print).
 
-Lock order, shared with account delete: the user row first, then its token rows. A reset never
-waits on a limiter row while it holds the user row (login holds a limiter row, then wants the
-user row), so the login lockout is cleared after the commit, best effort.
+Lock order, shared with account delete: a create takes the creator's row (FOR KEY SHARE), then the
+target's row, then the token rows. Account delete takes the user row, then the rows that cascade
+from it, so an admin deleting their own account cannot deadlock with a create. No path takes a
+target row and then a creator row (a reset reads the creator without a lock; creators are admins
+and targets are not). A reset never waits on a limiter row while it holds the user row (login
+holds a limiter row, then wants the user row), so the login lockout is cleared after the commit,
+best effort.
 """
 
 import logging
@@ -59,8 +63,16 @@ def invalid() -> HTTPException:
 
 def create(db: Session, user_id: int, created_by: int | None) -> tuple[str, datetime] | None:
     """Void the user's unused tokens and add a new one; return (token, expires_at), or None if the
-    account is gone. Flushes only: the caller commits. The user row lock serializes concurrent
-    creates, so exactly one unused token remains."""
+    account (or the creator) is gone. Flushes only: the caller commits. The target row lock
+    serializes concurrent creates, so exactly one unused token remains."""
+    if created_by is not None:
+        # The lock the INSERT's foreign key check takes anyway, taken first. It waits for (and is
+        # waited for by) the creator's own account delete, so neither can deadlock with this create.
+        creator = db.execute(
+            text("SELECT id FROM users WHERE id = :id FOR KEY SHARE"), {"id": created_by}
+        ).first()
+        if creator is None:
+            return None
     locked = db.execute(text("SELECT id FROM users WHERE id = :id FOR UPDATE"), {"id": user_id}).first()
     if locked is None:
         return None
