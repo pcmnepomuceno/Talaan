@@ -82,7 +82,8 @@ afterEach(() => {
 });
 
 const noteBox = () => screen.getByLabelText("Note") as HTMLInputElement;
-const passwordBox = () => screen.getByLabelText("Your password") as HTMLInputElement;
+const section = (id: string) => within(document.querySelector<HTMLElement>(`section[aria-labelledby="${id}"]`)!);
+const passwordBox = () => section("create").getByLabelText("Your password") as HTMLInputElement;
 const daysBox = () => screen.getByLabelText("Expires in") as HTMLSelectElement;
 const createButton = () => screen.getByRole("button", { name: /Create code|Creating/ }) as HTMLButtonElement;
 const polite = () => document.querySelector('p[aria-live="polite"].sr-only')!;
@@ -498,5 +499,125 @@ describe("revoke", () => {
     expect(confirm().disabled).toBe(true);
     await act(async () => d.resolve(json(204)));
     await screen.findByText("Invite revoked.");
+  });
+});
+
+describe("reset a password", () => {
+  const RESET = "POST /api/v1/admin/password-resets";
+  const TOKEN = "fake-reset-token"; // assertions on it are booleans so no failure message prints it
+  const made = () => json(201, { token: TOKEN, expires_at: "2026-11-27T10:00:00+00:00" });
+  const reset = () => section("reset");
+  const email = () => reset().getByLabelText("Email") as HTMLInputElement;
+  const pw = () => reset().getByLabelText("Your password") as HTMLInputElement;
+  const link = () => document.querySelector('section[aria-labelledby="reset"] p.select-all');
+  const linkIs = (token: string) => link()?.textContent === `${window.location.origin}/reset#${token}`;
+  async function send(address = "ana@example.ph", password = "Secret1!") {
+    if (address) {
+      await userEvent.clear(email());
+      await userEvent.type(email(), address);
+    }
+    if (password) await userEvent.type(pw(), password);
+    await userEvent.click(reset().getByRole("button", { name: /Create reset link|Creating/ }));
+  }
+  beforeEach(() => vi.stubGlobal("location", { origin: "https://talaan.example", pathname: "/admin", search: "", replace: locationReplace }));
+
+  it("sits between Create invite and Invites, with its own form without native validation", async () => {
+    await loaded();
+    const headings = [...document.querySelectorAll("section[aria-labelledby] > h2")].map((h) => h.textContent);
+    expect(headings).toEqual(["Create invite", "Reset a password", "Invites"]);
+    expect(document.querySelector<HTMLFormElement>('section[aria-labelledby="reset"] form')!.noValidate).toBe(true);
+  });
+
+  it("shows the link once with this origin, clears the fields, and the next one replaces it", async () => {
+    handlers[RESET] = made;
+    await loaded();
+    await send();
+    expect(await reset().findByText("Reset link, shown once")).toBeTruthy();
+    expect(linkIs(TOKEN)).toBe(true);
+    expect(link()!.className.includes("[overflow-wrap:anywhere]")).toBe(true);
+    expect(reset().getByText("Expires Nov 27, 2026, 6:00 PM PHT")).toBeTruthy();
+    expect([email().value, pw().value]).toEqual(["", ""]);
+    expect(document.activeElement).toBe(reset().getByRole("button", { name: "Copy link" }));
+    expect(JSON.parse(String(calls(RESET)[0][1]?.body))).toEqual({ email: "ana@example.ph", admin_password: "Secret1!" });
+    handlers[RESET] = () => json(201, { token: "fake-second-token", expires_at: "2026-11-27T11:00:00+00:00" });
+    await send();
+    await waitFor(() => expect(linkIs("fake-second-token")).toBe(true));
+  });
+
+  it("copies the link, and a blocked clipboard gives the failure toast", async () => {
+    handlers[RESET] = made;
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    await loaded();
+    await send();
+    await reset().findByText("Reset link, shown once");
+    setClipboard({ writeText });
+    await userEvent.click(reset().getByRole("button", { name: "Copy link" }));
+    expect(await screen.findByText("Link copied.")).toBeTruthy();
+    expect(writeText.mock.calls[0][0] === `https://talaan.example/reset#${TOKEN}`).toBe(true);
+    setClipboard({ writeText: vi.fn().mockRejectedValue(new Error("blocked")) });
+    await userEvent.click(reset().getByRole("button", { name: "Copy link" }));
+    expect(await screen.findByText("Couldn't copy the link. Select it and copy it yourself.")).toBeTruthy();
+  });
+
+  it("empty fields are inline errors and nothing is sent", async () => {
+    await loaded();
+    await send("", "");
+    expect(reset().getByText("Enter their email.")).toBeTruthy();
+    expect(reset().getByText("Enter your password.")).toBeTruthy();
+    expect(document.activeElement).toBe(email());
+    expect(calls(RESET)).toHaveLength(0);
+  });
+
+  it.each([
+    [404, "No account with that email."],
+    [400, "You can't reset your own password here."],
+    [400, "Admin accounts are reset with the CLI."],
+  ])("a %i %j is an error on the email field", async (status, detail) => {
+    handlers[RESET] = () => json(status, { detail });
+    await loaded();
+    await send();
+    expect(await reset().findByText(detail)).toBeTruthy();
+    expect(email().getAttribute("aria-invalid")).toBe("true");
+    expect(email().value).toBe("ana@example.ph");
+    expect(pw().value).toBe("");
+    expect(document.activeElement).toBe(email());
+    expect(link()).toBeNull();
+  });
+
+  it("a wrong password is an error on the password field", async () => {
+    handlers[RESET] = () => json(403, { detail: "Incorrect password." });
+    await loaded();
+    await send();
+    expect(await reset().findByText("Incorrect password.")).toBeTruthy();
+    expect(pw().getAttribute("aria-invalid")).toBe("true");
+    expect(email().getAttribute("aria-invalid")).toBeNull();
+    expect(document.activeElement).toBe(pw());
+  });
+
+  it("the admin gate's 404 shows Page not found", async () => {
+    handlers[RESET] = () => json(404, { detail: "Not Found" });
+    await loaded();
+    await send();
+    expect(await screen.findByText("Page not found.")).toBeTruthy();
+  });
+
+  it.each([
+    [429, "Too many attempts. Try again later."],
+    [403, "This request was blocked. Reload the page and try again."],
+    [503, "Talaan isn't responding right now. Try again in a moment."],
+  ])("any other %i is a banner", async (status, message) => {
+    handlers[RESET] = () => json(status, { detail: "x" });
+    await loaded();
+    await send();
+    expect(await reset().findByText(message)).toBeTruthy();
+    expect(email().getAttribute("aria-invalid")).toBeNull();
+  });
+
+  it("a 422 on the email lands on the field", async () => {
+    handlers[RESET] = () => json(422, { detail: [{ loc: ["body", "email"], msg: "value is not a valid email address" }] });
+    await loaded();
+    await send("nope");
+    expect(await reset().findByText("value is not a valid email address")).toBeTruthy();
+    expect(email().getAttribute("aria-invalid")).toBe("true");
   });
 });

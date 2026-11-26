@@ -66,7 +66,7 @@ withEnv(async ({ base, apiBase, createInvite }) => {
 
       if (theme === "light" && width === 390) {
         await page.getByLabel("Note").fill("Fresh code");
-        await page.getByLabel("Your password", { exact: true }).fill(PASSWORD);
+        await page.locator('section[aria-labelledby="create"]').getByLabel("Your password", { exact: true }).fill(PASSWORD);
         await page.getByRole("button", { name: "Create code" }).click();
         const code = page.locator('section[aria-labelledby="new-code"] p.select-all');
         await code.waitFor();
