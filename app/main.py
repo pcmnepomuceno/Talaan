@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 
 from app import config, health, security
 from app.applications import router as applications
-from app.auth import admin_invites
+from app.auth import admin_invites, password_resets
 from app.auth import router as auth
 from app.interviews import router as interviews
 from app.users import router as users
@@ -57,6 +57,8 @@ async def validation_error(request: Request, exc: RequestValidationError):
 app.include_router(health.router)
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(admin_invites.router, prefix="/api/v1")
+app.include_router(password_resets.admin_router, prefix="/api/v1")
+app.include_router(password_resets.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
 app.include_router(interviews.router, prefix="/api/v1")
 app.include_router(applications.router, prefix="/api/v1")

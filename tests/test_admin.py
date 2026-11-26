@@ -1,3 +1,4 @@
+import hashlib
 import re
 from datetime import timedelta
 
@@ -181,7 +182,7 @@ from sqlalchemy import text
 
 from app import config
 from app.auth import rate_limit
-from app.auth.models import RateLimitEvent
+from app.auth.models import PasswordResetToken, RateLimitEvent
 from app.auth.models import Session as SessionModel
 
 NOW = datetime(2026, 11, 9, 12, 0, tzinfo=timezone.utc)
@@ -206,7 +207,7 @@ def event_ages(db):
 
 def test_purge_on_empty_tables(db, clock, capsys):
     assert admin.run(db, ["purge"]) == 0
-    assert capsys.readouterr().out.strip() == "Purged 0 rate_limit_events, 0 sessions"
+    assert capsys.readouterr().out.strip() == "Purged 0 rate_limit_events, 0 sessions, 0 password_reset_tokens"
 
 
 def test_purge_removes_events_older_than_the_longest_window_only(db, clock, capsys):
@@ -310,10 +311,73 @@ def test_purge_runs_as_a_real_process():
             [sys.executable, "-m", "app.admin", "purge"], capture_output=True, text=True, env={**os.environ}, check=False,
         )
         assert out.returncode == 0, out.stderr
-        assert re.fullmatch(r"Purged \d+ rate_limit_events, \d+ sessions", out.stdout.strip()), out.stdout
+        assert re.fullmatch(r"Purged \d+ rate_limit_events, \d+ sessions, \d+ password_reset_tokens", out.stdout.strip()), out.stdout
         assert cleanup.query(RateLimitEvent).filter_by(key="purge-proc-test").count() == 0
     finally:
         cleanup.rollback()
         cleanup.query(RateLimitEvent).filter_by(key="purge-proc-test").delete()
         cleanup.commit()
         cleanup.close()
+
+
+# --- purge: old password_reset_tokens ---
+
+def add_reset_token(db, user_id, name, age, expires_in, used=False):
+    created = NOW - age
+    db.add(PasswordResetToken(user_id=user_id, token_hash=name, created_at=created,
+                              expires_at=NOW + expires_in, used_at=created if used else None))
+    db.commit()
+
+
+def test_purge_removes_used_and_expired_reset_tokens_older_than_seven_days(db, clock, user, capsys):
+    week, second, day = timedelta(days=7), timedelta(seconds=1), timedelta(days=1)
+    add_reset_token(db, user.id, "used-old", week, -day, used=True)
+    add_reset_token(db, user.id, "expired-old", week + second, -day)
+    add_reset_token(db, user.id, "live-old", week * 2, day)  # unused and unexpired: kept
+    add_reset_token(db, user.id, "used-recent", week - second, -day, used=True)
+    add_reset_token(db, user.id, "expired-recent", day * 2, -day)
+    assert admin.run(db, ["purge"]) == 0
+    out = capsys.readouterr().out
+    assert "0 sessions, 2 password_reset_tokens" in out
+    left = {r.token_hash for r in db.query(PasswordResetToken)}
+    assert left == {"live-old", "used-recent", "expired-recent"}
+
+
+# --- create-reset-link ---
+
+LINK_RE = r"/reset#([A-Za-z0-9_-]{43})(?![A-Za-z0-9_-])"
+
+
+def run_reset_cli(db, capsys, email):
+    """Run the command and consume its output at once, so a failing assert cannot re-print it."""
+    code = admin.run(db, ["create-reset-link", email])
+    captured = capsys.readouterr()
+    return code, captured.out, captured.err
+
+
+@pytest.mark.parametrize("is_admin", [False, True])
+def test_create_reset_link_prints_the_path_once_and_stores_only_the_hash(db, user, capsys, monkeypatch, is_admin):
+    monkeypatch.setattr(config, "ADMIN_EMAILS", frozenset({user.email} if is_admin else ()))
+    code, out, err = run_reset_cli(db, capsys, f"  {user.email.upper()} ")
+    assert code == 0 and not err
+    found = re.findall(LINK_RE, out)
+    count = len(found)
+    assert count == 1
+    row = db.query(PasswordResetToken).one()
+    stored_hash = row.token_hash == hashlib.sha256(found[0].encode()).hexdigest()
+    assert stored_hash
+    times_shown = out.count(found[0])
+    assert times_shown == 1
+    assert (row.user_id, row.created_by, row.used_at) == (user.id, None, None)
+    assert row.expires_at - row.created_at == timedelta(hours=24)
+    header = out.splitlines()[0] == f"Reset link for Test User expires {row.expires_at.isoformat()}"
+    assert header
+    labelled = out.splitlines()[1].startswith("Path (shown once, not stored): /reset#")
+    assert labelled
+
+
+def test_create_reset_link_unknown_email_exits_1(db, capsys):
+    code, out, err = run_reset_cli(db, capsys, "nobody@example.com")
+    assert code == 1 and not out
+    assert "no account" in err
+    assert db.query(PasswordResetToken).count() == 0

@@ -1,8 +1,11 @@
-"""Admin CLI: `python -m app.admin {create-invite,list-invites,revoke-invite,purge}`.
+"""Admin CLI: `python -m app.admin {create-invite,list-invites,revoke-invite,create-reset-link,purge}`.
 
 Runs against DATABASE_URL. An admin-gated HTTP endpoint (app/auth/admin_invites.py) shares the
 invite logic in app/auth/invites.py. The plaintext code is printed once by create-invite; it is
 not stored, logged, or shown again.
+
+`create-reset-link EMAIL` works for any account, admins included (the HTTP endpoint refuses them).
+It prints the link's path, token included, once.
 """
 
 import argparse
@@ -14,12 +17,13 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app import config
-from app.auth import invites, rate_limit
+from app.auth import invites, password_resets, rate_limit
 from app.auth.models import InviteCode
 from app.users.models import User  # registers `users` for the invite FK
 
 BATCH_SIZE = 1000  # rows per DELETE; tests patch it
 DEFAULT_EXPIRES_IN = "14d"
+RESET_TOKEN_RETENTION = timedelta(days=7)  # after creation, for used and expired links
 MAX_HOURS = 365 * 24
 
 
@@ -46,12 +50,15 @@ def build_parser() -> argparse.ArgumentParser:
     create.add_argument("--expires-in", type=parse_expires_in, default=parse_expires_in(DEFAULT_EXPIRES_IN),
                         metavar="Nd|Nh", help="lifetime, default 14d (1h to 365d)")
 
-    sub.add_parser("purge", help="delete rate-limit events older than 7 days and expired sessions")
+    sub.add_parser("purge", help="delete old rate-limit events, expired sessions and old reset links")
 
     sub.add_parser("list-invites", help="list invites (never shows codes or hashes)")
 
     revoke = sub.add_parser("revoke-invite", help="delete an UNUSED invite")
     revoke.add_argument("id", type=int)
+
+    reset = sub.add_parser("create-reset-link", help="create a 24-hour password reset link")
+    reset.add_argument("email")
     return parser
 
 
@@ -78,8 +85,9 @@ def _delete_in_batches(db: Session, table: str, condition: str, params: dict) ->
             return total
 
 
-def purge(db: Session) -> tuple[int, int]:
-    """(events deleted, sessions deleted). Events older than config.MAX_WINDOW_SECONDS (7 days) are
+def purge(db: Session) -> tuple[int, int, int]:
+    """(events deleted, sessions deleted, reset tokens deleted). Reset tokens go when used or
+    expired and created at least RESET_TOKEN_RETENTION ago. Events older than config.MAX_WINDOW_SECONDS (7 days) are
     outside every key's window (config refuses any longer window), so removing them cannot change
     any limiter count. The cutoff is that fixed ceiling, not the API's own *_WINDOW_SECONDS: this
     runs from GitHub Actions with only DATABASE_URL and never sees the API's env. Sessions use the same
@@ -90,7 +98,11 @@ def purge(db: Session) -> tuple[int, int]:
     cutoff = now - timedelta(seconds=config.MAX_WINDOW_SECONDS)
     events = _delete_in_batches(db, "rate_limit_events", "created_at <= :cutoff", {"cutoff": cutoff})
     sessions = _delete_in_batches(db, "sessions", "expires_at <= :now", {"now": now})
-    return events, sessions
+    resets = _delete_in_batches(
+        db, "password_reset_tokens", "(used_at IS NOT NULL OR expires_at <= :now) AND created_at <= :cutoff",
+        {"now": now, "cutoff": now - RESET_TOKEN_RETENTION},
+    )
+    return events, sessions, resets
 
 
 def run(db: Session, argv: list[str]) -> int:
@@ -104,8 +116,22 @@ def run(db: Session, argv: list[str]) -> int:
         return 0
 
     if args.command == "purge":
-        events, sessions = purge(db)
-        print(f"Purged {events} rate_limit_events, {sessions} sessions")
+        events, sessions, resets = purge(db)
+        print(f"Purged {events} rate_limit_events, {sessions} sessions, {resets} password_reset_tokens")
+        return 0
+
+    if args.command == "create-reset-link":
+        target = (
+            db.query(User.id, User.account_name).filter(User.email == args.email.strip().lower()).first()
+        )
+        created = password_resets.create(db, target.id, None) if target else None
+        if created is None:
+            print("no account with that email", file=sys.stderr)
+            return 1
+        db.commit()
+        token, expires_at = created
+        print(f"Reset link for {target.account_name} expires {expires_at.isoformat()}")
+        print(f"Path (shown once, not stored): /reset#{token}")
         return 0
 
     if args.command == "list-invites":

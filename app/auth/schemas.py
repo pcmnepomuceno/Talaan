@@ -1,12 +1,20 @@
-"""Pydantic schemas for the admin invite endpoints. Never a code hash, email or (except in
-InviteCreated, once) a code."""
+"""Pydantic schemas for the admin invite and password reset endpoints. Responses never hold a
+hash or email, and a code or reset token appears only once, in its *Created model."""
 
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+)
 
 from app import text
+from app.users.schemas import check_password_rules
 
 
 class InviteItem(BaseModel):
@@ -48,3 +56,29 @@ class InviteCreated(BaseModel):
     code: str
     note: str | None
     expires_at: datetime
+
+
+class PasswordResetCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: EmailStr
+    # Same rule as AccountDelete: verify-only.
+    admin_password: Annotated[str, Field(max_length=1024), AfterValidator(text.check_encodable)]
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value):
+        return value.strip().lower() if isinstance(value, str) else value
+
+
+class PasswordResetCreated(BaseModel):
+    """The one place a plaintext reset token leaves the server."""
+
+    token: str = Field(repr=False)
+    expires_at: datetime
+
+
+class PasswordReset(BaseModel):
+    # No constraints on purpose (like invite_code): the route answers every bad token alike.
+    token: str = Field(repr=False)
+    new_password: Annotated[text.Text, AfterValidator(check_password_rules)] = Field(repr=False)

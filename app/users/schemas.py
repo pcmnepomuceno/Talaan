@@ -19,9 +19,27 @@ from app import config, text
 
 # TODO: implement User schemas
 
+def check_password_rules(value: str) -> str:
+    """Rules for a password about to be stored (signup and password reset)."""
+    # checks if there is atleast one uppercase letter, one lowercase letter, one digit, and one special character
+    if not any(c.isupper() for c in value):
+        raise ValueError("Password must contain at least one uppercase letter.")
+    if not any(c.islower() for c in value):
+        raise ValueError("Password must contain at least one lowercase letter.")
+    if not any(c.isdigit() for c in value):
+        raise ValueError("Password must contain at least one digit.")
+    if not any(c in "!@#$%^&*()-_=+[]{}|;:'\",.<>?/`~" for c in value):
+        raise ValueError("Password must contain at least one special character.")
+    if len(value) < 8:
+        raise ValueError("Password must be at least 8 characters long.")
+    if len(value.encode("utf-8")) > 72:
+        raise ValueError("Password must be at most 72 bytes long.")
+    return value
+
+
 class UserCreate(BaseModel):
     email: EmailStr
-    password: text.Text
+    password: Annotated[text.Text, AfterValidator(check_password_rules)]
     account_name: text.Text
     # Required. No max_length here on purpose: pydantic would answer an over-length code with
     # a 422, which differs from the generic 400 every other bad code gets. The route bounds it.
@@ -33,24 +51,6 @@ class UserCreate(BaseModel):
         if value is None:
             return value
         return str(value).strip().lower()
-
-    @field_validator("password")
-    @classmethod
-    def check_password_rules(cls, value: str) -> str:
-        # checks if there is atleast one uppercase letter, one lowercase letter, one digit, and one special character
-        if not any(c.isupper() for c in value):
-            raise ValueError("Password must contain at least one uppercase letter.")
-        if not any(c.islower() for c in value):
-            raise ValueError("Password must contain at least one lowercase letter.")
-        if not any(c.isdigit() for c in value):
-            raise ValueError("Password must contain at least one digit.")
-        if not any(c in "!@#$%^&*()-_=+[]{}|;:'\",.<>?/`~" for c in value):
-            raise ValueError("Password must contain at least one special character.")
-        if len(value) < 8:
-            raise ValueError("Password must be at least 8 characters long.")
-        if len(value.encode("utf-8")) > 72:
-            raise ValueError("Password must be at most 72 bytes long.")
-        return value
 
 class UserRead(BaseModel):
     id: int
