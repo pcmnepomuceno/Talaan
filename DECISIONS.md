@@ -733,3 +733,11 @@
 - **Name limit 75,** from the official manifest docs. The brief said 45, which no doc states. Description is 132.
 - **Numeric versions only**: 1 to 4 dot-separated integers, each 0 to 65535, with no leading zero on a non-zero part and not all zeros (Chrome's manifest rule, so "0" and "0.0.0.0" are rejected). A suffixed version is rejected with a hint to use `version_name`.
 - **Rejected.** A hand-written zip writer (more code to get wrong) and archiver or jszip (a new dependency).
+
+---
+
+# Decision: Feedback link to a Google Form
+- **Date:** 2026-11-26
+- **Decision:** a "Send feedback" link on Account to a Google Form, kept in one constant. It is not in the popup, which stays small.
+- **Privacy:** the privacy page lists Google Forms as a processor and says: "The feedback form is a Google Form. I don't ask for personal details in it, and it collects no email address automatically. Whatever you type in the box is stored by Google and seen by me. Add a contact only if you want a reply, and never put passwords or other secrets in it."
+- **Rejected:** a mailto link (it is unreliable and exposes the email address) and a built-in form (it needs a backend and storage).
