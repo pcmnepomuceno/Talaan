@@ -2,6 +2,9 @@
 //
 //   NODE_PATH=<dir containing playwright> PW_CHROMIUM=<matching chrome> E2E_API_PORT=8100 E2E_WEB_PORT=3100 node scripts/e2e-reset.cjs
 //
+// E2E_NEXT=start (before `node`) runs the same checks, the /reset headers included, against a production
+// build (`next build` + `next start`) instead of `next dev`.
+//
 // scripts/local-env.cjs does the setup and the teardown (*_test database only). The reset link is
 // never printed: everything this script writes goes through redact(), Playwright errors included
 // (they echo URLs, fragment and all). Screenshots mask the link. Exit code 1 on any FAIL.
