@@ -13,6 +13,8 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { deleteAccount, getMe, logout, type User } from "@/lib/auth";
 import { ApiError, errorMessage } from "@/lib/http";
 
+const FEEDBACK_URL = "https://forms.gle/3hZLT139qzu4rYpw9";
+
 const sheet = "overflow-hidden rounded-sm border border-border-subtle bg-surface-card divide-y divide-border-subtle";
 
 export function AccountScreen() {
@@ -105,8 +107,11 @@ export function AccountScreen() {
         </section>
 
         {/* -ml-2 cancels TextAction's padding so the label lines up with the column. */}
-        <div className="mt-8 -ml-2">
+        <div className="mt-8 -ml-2 flex flex-wrap gap-2">
           <TextAction href="/privacy">Privacy</TextAction>
+          <TextAction href={FEEDBACK_URL} external>
+            Send feedback
+          </TextAction>
         </div>
 
         <section aria-labelledby="danger" className="mt-8 flex flex-col items-start gap-3 border-t border-border-subtle pt-6">

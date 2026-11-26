@@ -16,6 +16,7 @@
   --color-focus-ring: light-dark(#1F3A6E, #A9C0F5);
   --color-error-text: light-dark(#B91C1C, #FCA5A5);
   --color-error-bg: light-dark(#FBE6E4, #3B1214);
+  --spacing: 0.25rem;
 }
 
 * { box-sizing: border-box; }
@@ -37,6 +38,8 @@ p { margin: 0 0 12px; }
 h1 { margin: 0 0 12px; font-size: 18px; line-height: 26px; font-weight: 600; }
 .muted { color: var(--color-text-muted); font-size: 14px; line-height: 20px; }
 #status { color: var(--color-text-secondary); font-size: 14px; line-height: 20px; min-height: 20px; }
+/* Empty, it takes no room. It stays rendered: it is an aria-live region. */
+#status:empty { min-height: 0; margin: 0; }
 
 section:not([hidden]), form:not([hidden]) { animation: fade 100ms linear; }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
@@ -44,7 +47,7 @@ section:not([hidden]), form:not([hidden]) { animation: fade 100ms linear; }
   section:not([hidden]), form:not([hidden]) { animation: none; }
 }
 
-.field { margin: 0 0 16px; padding: 0; border: 0; min-width: 0; }
+.field { margin: 0 0 calc(var(--spacing) * 2); padding: 0; border: 0; min-width: 0; }
 label, legend { display: block; padding: 0; margin: 0 0 4px; font-size: 14px; line-height: 20px; font-weight: 600; }
 
 input[type="text"], select {
@@ -122,8 +125,8 @@ button:disabled {
 }
 #openLink { text-decoration: none; }
 .muted a { color: var(--color-primary); }
-#disclosure { margin: 8px 0 0; padding-top: 12px; border-top: 1px solid var(--color-border-subtle); overflow-wrap: anywhere; }
+#disclosure { margin: 0 0 calc(var(--spacing) * 3); padding-bottom: calc(var(--spacing) * 3); border-bottom: 1px solid var(--color-border-subtle); overflow-wrap: anywhere; }
 /* The negative margin keeps the 44px tap target from stretching the 20px line. */
-#disclosure a { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; margin-block: -12px; }
+#disclosure a { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; margin-block: calc(var(--spacing) * -3); }
 
 :focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }

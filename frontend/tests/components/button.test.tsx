@@ -79,3 +79,18 @@ it("TextAction button: same node and focus while disabled, and a click does noth
   await userEvent.click(before);
   expect(onClick).toHaveBeenCalledOnce();
 });
+
+it("TextAction external: ignores disabled, stays enabled-looking and keeps no aria-disabled", () => {
+  render(<TextAction href="https://example.com" external disabled>Go</TextAction>);
+  const link = screen.getByRole("link");
+  expect(link.className).toContain("text-primary");
+  expect(link.className).not.toContain("text-text-muted");
+  expect(link.getAttribute("aria-disabled")).toBeNull();
+});
+
+it("TextAction external: the name says it opens in a new tab", () => {
+  render(<TextAction href="https://example.com" external>Go</TextAction>);
+  const link = screen.getByRole("link", { name: /Go/ });
+  expect(link.textContent).toContain("(opens in a new tab)");
+  expect(link.querySelector("span.sr-only")?.textContent).toBe(" (opens in a new tab)");
+});

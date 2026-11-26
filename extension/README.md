@@ -37,7 +37,7 @@ The `key` in `manifest.json` is the public key. It is committed because it fixes
 
 ## Privacy
 
-- Disclosure shown in the popup: "Reads this page's link, title and job details when you open Talaan, and sends the link to your Talaan account to check for duplicates. Nothing is saved until you press Save." Privacy policy: https://talaan-phi.vercel.app/privacy
+- Disclosure shown at the top of the popup, in every state: "Reads this page's link, title and job details when you open Talaan, and sends the link to your Talaan account to check for duplicates. Nothing is saved until you press Save." Privacy policy: https://talaan-phi.vercel.app/privacy
 - It reads only the active tab, after a click.
 - It sends nothing until you press Save, except the sign-in check and the duplicate check above.
 - No analytics.

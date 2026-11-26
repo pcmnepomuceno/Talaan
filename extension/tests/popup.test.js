@@ -107,6 +107,7 @@ describe("privacy disclosure", () => {
   const expectDisclosure = () => {
     const el = $("#disclosure");
     expect(el).not.toBeNull();
+    expect(document.querySelector("main").firstElementChild).toBe(el);
     expect(el.textContent.trim()).toBe(`${TEXT} Privacy`);
     for (let node = el; node; node = node.parentElement) expect(node.hidden).toBe(false);
     const a = el.querySelector("a");
@@ -126,6 +127,7 @@ describe("privacy disclosure", () => {
     ["retry", "retry", { "GET /api/v1/me": res(503, null) }],
     ["signed out", "signedOut", { "GET /api/v1/me": res(401, {}) }],
     ["the ready form", "form", {}],
+    ["the duplicate note", "dup", { "POST /api/v1/applications/lookup": res(200, { match: { id: 5, job_name: "Backend Engineer", company: "Kape Digital" } }) }],
   ])("is visible in %s", async (_name, view, routes) => {
     await mount({ routes });
     expect(shown(view)).toBe(true);

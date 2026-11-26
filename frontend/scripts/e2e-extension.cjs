@@ -145,6 +145,18 @@ withEnv(async ({ base, createInvite }) => {
       check(`${state}: disclosure link href, target and rel`, (await a.getAttribute("href")) === "https://talaan-phi.vercel.app/privacy" && (await a.getAttribute("target")) === "_blank" && (await a.getAttribute("rel")) === "noopener noreferrer", await a.getAttribute("href"));
       const box = await a.boundingBox();
       check(`${state}: disclosure link is at least 44x44`, box.width >= 44 && box.height >= 44, `${box.width}x${box.height}`);
+      check(`${state}: disclosure is main's first element`, await popup.evaluate(() => document.querySelector("main").firstElementChild.id === "disclosure"));
+      await popup.evaluate(() => window.scrollTo(0, 0));
+      const own = await el.boundingBox();
+      check(`${state}: disclosure sits within 0..600px at the top`, own.y >= 0 && own.y + own.height <= 600, `${own.y}..${own.y + own.height}`);
+    };
+    // Chrome caps a real popup at 600px high.
+    const at600 = async (name, measure) => {
+      await popup.setViewportSize({ width: 360, height: 600 });
+      await popup.evaluate(() => window.scrollTo(0, 0));
+      await measure();
+      await shoot(name);
+      await popup.setViewportSize({ width: 360, height: 700 });
     };
     await disclosureCheck("form");
     await popup.locator("#company").waitFor();
@@ -154,6 +166,16 @@ withEnv(async ({ base, createInvite }) => {
     check("prefill: no work mode checked", (await popup.locator('input[name="mode_of_work"]:checked').count()) === 0);
     check("prefill: status select is 'saved'", (await popup.locator("#status-select").inputValue()) === "saved");
     await shoot("prefilled-form");
+    await at600("form-600", async () => {
+      const b = await popup.getByRole("button", { name: "Save", exact: true }).boundingBox();
+      const bottom = b.y + b.height;
+      check("prefilled form: Save bottom <= 590 px at 360x600", bottom <= 590, `${bottom} px`);
+      const status = await popup.evaluate(() => {
+        const n = document.getElementById("status");
+        return { text: n.textContent, height: n.getBoundingClientRect().height, display: getComputedStyle(n).display };
+      });
+      check("prefilled form: empty #status is 0 px high and still rendered", status.text === "" && status.height === 0 && status.display !== "none", JSON.stringify(status));
+    });
 
     // 3. Remote, double-click Save, saved view, exactly one POST
     await popup.getByRole("radio", { name: "Remote" }).check({ force: true });
@@ -181,7 +203,15 @@ withEnv(async ({ base, createInvite }) => {
     const dl = dup.getByRole("link");
     check("duplicate link href is <base>/applications/<id>", (await dl.getAttribute("href")) === `${base}/applications/${id}`, await dl.getAttribute("href"));
     check("duplicate link target=_blank", (await dl.getAttribute("target")) === "_blank");
+    await disclosureCheck("duplicate note");
     await shoot("duplicate-note");
+    // tallest state: the duplicate note plus the work mode error
+    await popup.getByRole("button", { name: "Save", exact: true }).click();
+    await popup.locator("#mode_of_work-error").waitFor({ state: "visible" });
+    await at600("tallest", async () => {
+      const h = await popup.evaluate(() => document.documentElement.scrollHeight);
+      console.log(`INFO  tallest state: scrollHeight ${h} px; scrollbar ${h > 600 ? "yes" : "no"}`);
+    });
     await popup.getByRole("radio", { name: "Remote" }).check({ force: true });
     await popup.getByRole("button", { name: "Save", exact: true }).click();
     await popup.getByRole("heading", { name: "Saved" }).waitFor({ timeout: 15000 });
@@ -207,6 +237,61 @@ withEnv(async ({ base, createInvite }) => {
     await fixture.goto(fx("/job"));
     await popup.reload();
     await form.waitFor({ state: "visible", timeout: 15000 });
+
+    // Report only: does the page move when "Starting up..." (a request pending 3000 ms) comes and goes?
+    // The request is held in the browser; the Save is answered with a fake 422, so nothing is created.
+    const top = (sel) => popup.evaluate((s) => document.querySelector(s).getBoundingClientRect().top + window.scrollY, sel);
+    const statusIs = (text) => popup.waitForFunction((t) => document.getElementById("status").textContent === t, text, { timeout: 15000 });
+    let release;
+    const hold = async (url, answer) => {
+      let r;
+      const held = new Promise((res) => (r = res));
+      release = r;
+      await popup.route(url, async (route) => {
+        await held;
+        // A route already handled (the popup left the page) is not a failure.
+        await answer(route).catch(() => {});
+      });
+    };
+    try {
+      // /job is already saved: let the duplicate note land first, it moves the fields below it.
+      await popup.locator("#dup").waitFor({ state: "visible", timeout: 15000 });
+      await popup.getByRole("radio", { name: "Remote" }).check({ force: true });
+      await hold("**/api/v1/applications", (route) => route.fulfill({ status: 422, contentType: "application/json", body: JSON.stringify({ detail: [{ loc: ["body", "company"], msg: "held by the e2e" }] }) }));
+      const before = await top('label[for="company"]');
+      await popup.getByRole("button", { name: "Save", exact: true }).click();
+      await statusIs("Starting up...");
+      const during = await top('label[for="company"]');
+      release();
+      await popup.locator("#company-error").waitFor({ state: "visible" });
+      await statusIs("");
+      const after = await top('label[for="company"]');
+      console.log(`INFO  pending Save on the form, Company label top: ${before} px before, ${during} px with "Starting up...", ${after} px after; jumps ${before !== during || during !== after ? "yes" : "no"}`);
+      await popup.unroute("**/api/v1/applications");
+
+      await hold("**/api/v1/me", (route) => route.continue());
+      await popup.reload();
+      await popup.locator("#loadingText").waitFor();
+      const loadingBefore = await top("#loadingText");
+      await statusIs("Starting up...");
+      const loadingDuring = await top("#loadingText");
+      release();
+      await form.waitFor({ state: "visible", timeout: 15000 });
+      console.log(`INFO  loading state (form hidden), #loadingText top: ${loadingBefore} px before, ${loadingDuring} px with "Starting up..."; jumps ${loadingBefore !== loadingDuring ? "yes" : "no"}`);
+    } catch (e) {
+      console.log(`INFO  report-only jump check skipped: ${e.message.split("\n")[0]}`);
+    } finally {
+      release?.();
+      await popup.unroute("**/api/v1/applications").catch(() => {});
+      await popup.unroute("**/api/v1/me").catch(() => {});
+      try {
+        await popup.reload();
+        await form.waitFor({ state: "visible", timeout: 15000 });
+      } catch (e) {
+        console.log(`INFO  popup reload after the jump check failed: ${e.message.split("\n")[0]}`);
+      }
+    }
+    await popup.locator("#dup").waitFor({ state: "visible", timeout: 15000 });
     await label("Company").fill("Typed Co");
     await popup.getByRole("radio", { name: "Remote" }).check({ force: true });
     const saved = await ctx.cookies();
@@ -225,6 +310,7 @@ withEnv(async ({ base, createInvite }) => {
     await popup.locator("#signedOut").waitFor({ state: "visible", timeout: 15000 });
     check("signed out: 'Open Talaan to sign in' visible", await popup.getByRole("button", { name: "Open Talaan to sign in" }).isVisible());
     check("signed out: no password input", (await popup.locator("input[type=password]").count()) === 0);
+    await disclosureCheck("signed out");
     await shoot("signed-out");
 
     check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
