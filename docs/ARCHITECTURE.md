@@ -19,6 +19,7 @@ tests/             mirrors app/
 ```mermaid
 erDiagram
     USERS ||--o{ SESSIONS : has
+    USERS ||--o{ PASSWORD_RESET_TOKENS : has
     USERS ||--o{ JOB_APPLICATIONS : owns
     JOB_APPLICATIONS ||--o{ INTERVIEWS : has
     USERS { int id PK string email UK string password_hash string account_name }
@@ -30,7 +31,7 @@ Columns are abridged; the full schema is in the Schema section below.
 
 ## Schema
 
-Relationships: Users 1—N Job Applications 1—N Interviews; Users 1—N Sessions.
+Relationships: Users 1—N Job Applications 1—N Interviews; Users 1—N Sessions; Users 1—N PasswordResetTokens.
 FKs live on the "many" side only (query `created_by`, never store lists on Users).
 
 **Users** (matches model): id, email (UNIQUE), password_hash, account_name
@@ -41,6 +42,10 @@ HttpOnly cookie value; raw token never stored), user_id → Users.id, created_at
 
 **InviteCodes** (matches model): id, code_hash (UNIQUE, SHA-256 hex of the normalized 12-char code; plaintext never stored),
 note?, created_at, expires_at, used_at?, used_by_user_id? → Users.id (`ON DELETE SET NULL`, indexed `ix_invite_codes_used_by_user_id`)
+
+**PasswordResetTokens** (matches model): id, user_id → Users.id (`ON DELETE CASCADE`, indexed), token_hash (UNIQUE, SHA-256 hex;
+the raw token is never stored), created_at, expires_at, used_at?, created_by? → Users.id (the admin; `ON DELETE SET NULL`,
+indexed; NULL for CLI links)
 
 **Job Applications** (matches model)
 id, company, job_name, contact_website?, contact_email?, status (ENUM),

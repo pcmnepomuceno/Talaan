@@ -40,6 +40,8 @@ Next.js app in `frontend/`, built from `docs/DESIGN.md`. Each milestone is merge
 
 - A1 (done, 2026-11-21): admin page for invites at `/admin`. List invites; create one with a show-once code and a copy button; revoke an unused invite. Access is gated by `ADMIN_EMAILS`, no migration. Creating needs a password re-check, is rate limited and capped at 50 unused invites. It reversed the 2026-11-03 "no admin endpoint" rule (DECISIONS.md 2026-11-21, docs/AUTH.md).
 
+- A2 (built on branch feature/admin-password-reset, 2026-11-26, not yet merged): admin-generated password reset links. A "Reset a password" section on `/admin`, the public `/reset` page, `python -m app.admin create-reset-link EMAIL`, one migration (`password_reset_tokens`). Run the migration against Neon before merging (docs/DEPLOY.md). No email is sent (DECISIONS.md 2026-11-26, docs/AUTH.md).
+
 Friend trial checklist:
 - Invite 3 to 5 people, one code each. Create invites at `/admin` (note = the friend's name, 14 days); the CLI still works: `python -m app.admin create-invite --note "<name>" --expires-in 14d`.
 - Ask for feedback after a week.
@@ -63,6 +65,7 @@ Talaan must be usable on desktop and mobile. The later Vercel frontend is respon
 
 ## Backlog
 
+- Login versus password reset race (2026-11-26, A2): a login with the old password that has passed its password check but not yet inserted its session when a reset commits keeps that session. Close it in login, right before the session insert, with `SELECT password_hash FROM users WHERE id = :id FOR SHARE`, refusing if the hash differs from the one just verified (the lock waits for a reset's `FOR UPDATE`).
 - A1 follow-ups (2026-11-21): no user management (list, disable or delete accounts), no audit log of who created or revoked an invite, and an unpaginated invite list (add paging if it grows). Email verification is the way to close the `ADMIN_EMAILS` limit (an address with no account yet can be claimed by anyone holding a valid invite; docs/AUTH.md).
 - NUL bytes (\x00) in free text give a 500 (found 2026-11-21): application `company`/`job_name` (`Name`, app/applications/schemas.py:20), `remarks` (`Remarks`, app/applications/schemas.py:24, also used by interviews), interview `interviewer` (app/interviews/schemas.py:20) and signup `account_name` (app/users/schemas.py:22, no constraints at all). Login `password` is not affected: measured 401 for both an existing and an unknown email. Postgres text cannot hold NUL; reject it in the schema like the invite note (422).
 - Drop the redundant `created_by` index on `job_applications` (2026-11-22), in its own migration: the composite `(created_by, job_url_key)` index covers every query on `created_by` alone.

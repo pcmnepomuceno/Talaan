@@ -43,6 +43,20 @@ The code prints once. Options: `--note TEXT` (who the code is for) and `--expire
 
 An admin (an account listed in `ADMIN_EMAILS`) can also create, list and revoke invites on the `/admin` page, reached from Account, with no terminal and no database string. The code is shown once, and the page caps unused invites at 50; the CLI has no cap.
 
+### Password reset links: migrate before merging (A2)
+
+The `password_reset_tokens` table must exist on Neon **before** the A2 PR merges: the new code and the daily purge both query it. From the repo root with the venv active, paste Neon's direct string when prompted:
+
+```bash
+read -rsp 'Neon direct URL: ' NEON_URL; echo
+NEON_URL="postgresql+psycopg2://${NEON_URL#*://}"
+DATABASE_URL="$NEON_URL" python -m alembic upgrade head
+DATABASE_URL="$NEON_URL" python -m alembic check
+unset NEON_URL
+```
+
+A reset link for an admin account (the page refuses those) comes from the CLI, with the same `read -rsp` lines: `DATABASE_URL="$NEON_URL" python -m app.admin create-reset-link EMAIL`. It prints `/reset#<token>` once; put the frontend's origin in front of it.
+
 ## 1. Secrets and env vars
 
 Generate once: `openssl rand -hex 32` (the proxy secret). Never commit real values.
@@ -59,6 +73,7 @@ Generate once: `openssl rand -hex 32` (the proxy secret). Never commit real valu
 | Render | `BCRYPT_ROUNDS` | `12` (production refuses lower) |
 | Render | `ADMIN_EMAILS` | comma-separated emails of admins (for example `admin@example.ph`), set in the Render dashboard only (never in a committed file). Unset or empty = the admin page is off (the app still starts). It must name an account that already exists: emails are not verified, so an address with no account could be claimed by anyone holding a valid invite. Remove the address before deleting that account. Accepted until email verification exists. |
 | Render | `ADMIN_INVITE_USER_LIMIT`, `ADMIN_INVITE_IP_LIMIT` and their `*_WINDOW_SECONDS` | defaults 10 attempts per user and per IP per 3600 seconds (`POST /admin/invites`); window at most 604800 |
+| Render | `ADMIN_RESET_USER_LIMIT`, `ADMIN_RESET_IP_LIMIT`, `RESET_PASSWORD_IP_LIMIT` and their `*_WINDOW_SECONDS` | optional; defaults 10 per 3600 seconds (reset link creation per admin and per IP; password reset per IP); window at most 604800 |
 | Render | `LOGIN_*`, `SIGNUP_*`, `ACCOUNT_DELETE_*` | defaults from `.env.example` unless tuning; each `*_WINDOW_SECONDS` at most 604800 (7 days, the purge cutoff) |
 | Vercel | `BACKEND_URL` | `https://<service>.onrender.com`, no trailing slash. Read per request by `src/proxy.ts`. |
 | Vercel | `PROXY_SECRET` | same value as on Render |

@@ -18,6 +18,8 @@ Contract first. Applications (milestone 3) and interviews (milestone 4) CRUD are
 | GET | `/admin/invites` | admin only; every invite, newest first, not paginated; see Admin invites |
 | POST | `/admin/invites` | admin only; body `{note?, expires_in_days, password}`; 201 with the code, shown once |
 | DELETE | `/admin/invites/{id}` | admin only; 204; an unused invite only |
+| POST | `/admin/password-resets` | admin only; body `{email, admin_password}`; 201 with a reset token, shown once; see Password reset |
+| POST | `/auth/reset-password` | no session; body `{token, new_password}`; 204; see Password reset |
 | GET | `/applications` | paginated; `?status=`, or `?follow_up=true&days=` |
 | POST | `/applications` | 201 |
 | POST | `/applications/quick` | 201; quick-add |
@@ -34,11 +36,11 @@ Contract first. Applications (milestone 3) and interviews (milestone 4) CRUD are
 `/health` and `/ping` are unauthenticated and unversioned so pingers and Render checks survive version bumps (DECISIONS.md, 2026-10-20).
 
 ## Status codes
-200 OK, 201 Created, 204 No Content (delete, logout), 401 not logged in or bad credentials, 404 not found **or not yours** (and every `/admin/invites` route for a logged-in non-admin), 409 duplicate email, or on `/admin/invites` a used invite that cannot be revoked and the 50-unused cap, 422 validation, 429 rate limited, 403 wrong password on `/account/delete` or `POST /admin/invites`, or a blocked cross-site request, 400 invalid invite code on `/signup`, 503 `/health` when the database is unreachable, or `/login`, `/signup`, `/account/delete` and `POST /admin/invites` when the rate limiter cannot reach it (fail closed).
+200 OK, 201 Created, 204 No Content (delete, logout), 401 not logged in or bad credentials, 404 not found **or not yours** (and every `/admin/invites` and `/admin/password-resets` route for a logged-in non-admin), 409 duplicate email, or on `/admin/invites` a used invite that cannot be revoked and the 50-unused cap, 422 validation, 429 rate limited, 403 wrong password on `/account/delete` or `POST /admin/invites`, or a blocked cross-site request, 400 invalid invite code on `/signup`, invalid reset link on `/auth/reset-password` or a refused reset target, 503 `/health` when the database is unreachable, or `/login`, `/signup`, `/account/delete` and `POST /admin/invites` when the rate limiter cannot reach it (fail closed).
 
 ## Errors
 FastAPI default: `{"detail": "message"}`. Validation errors (422) use FastAPI's `detail` list. Clients branch on status code, not on message text.
-Every 422 error has `"input": null`: the submitted value is never returned in `input`. `msg` and `ctx` come from the validator and can quote part of the value (an `EmailStr` error names the invalid characters in both). A NUL or a lone surrogate in a stored text field is a 422 (rejected, never stripped). The login, account-delete and invite-create passwords are only checked, never stored, and are capped at 1024 characters: a lone surrogate there is a 422 and NUL is accepted. A surrogate left in `loc` or `msg` is written as a `\udxxx` escape.
+Every 422 error has `"input": null`: the submitted value is never returned in `input`. `msg` and `ctx` come from the validator and can quote part of the value (an `EmailStr` error names the invalid characters in both). A NUL or a lone surrogate in a stored text field is a 422 (rejected, never stripped). The login, account-delete, invite-create and reset-link-create passwords are only checked, never stored, and are capped at 1024 characters: a lone surrogate there is a 422 and NUL is accepted. A surrogate left in `loc` or `msg` is written as a `\udxxx` escape.
 
 ## Cookie
 Name `session_token`, or `__Host-session_token` when `COOKIE_SECURE` is true (the default). Attributes: `HttpOnly`, `SameSite=Lax`, `Path=/`, `Max-Age=2592000` (30 days), no `Domain`, and `Secure` only when `COOKIE_SECURE` is true. Never `SameSite=None`. Logout and account deletion send the same name and attributes with `Max-Age=0`. A plain-http client (curl, Safari on `http://localhost`) does not send a Secure cookie back: set `COOKIE_SECURE=false` in local `.env`.
@@ -75,15 +77,37 @@ Body (unknown fields are 422):
 ### `DELETE /admin/invites/{id}`
 `204` when an unused invite was deleted. `409 {"detail": "This invite has been used and cannot be revoked."}` for a used one (it stays as the record of who joined). `404 {"detail": "Invite not found."}` when it does not exist, for example an invite already revoked.
 
+## Password reset
+No email is sent: an admin creates a link and passes it on. The API returns the token only; the web page builds `<origin>/reset#<token>`. Rules and reasons: docs/AUTH.md.
+
+### `POST /admin/password-resets`
+Admin gate as for invites. Body (unknown fields are 422): `email` (trimmed, lowercased) and `admin_password` (the caller's own, at most 1024 characters).
+
+`201 {"token", "expires_at"}`, expiring 24 hours after creation. The token is in this response only (stored as a SHA-256 hash). Creating a link voids the account's earlier unused ones. Errors, in the order they are checked:
+- `404 {"detail": "Not Found"}` not an admin, `401` no session.
+- `429` rate limited (10 attempts per admin and 10 per IP per hour, `ADMIN_RESET_USER_*`, `ADMIN_RESET_IP_*`, every attempt counted). `503` when the limiter cannot reach the database.
+- `403 {"detail": "Incorrect password."}`.
+- `404 {"detail": "No account with that email."}`.
+- `400 {"detail": "You can't reset your own password here."}`.
+- `400 {"detail": "Admin accounts are reset with the CLI."}`.
+- `422` validation.
+
+### `POST /auth/reset-password`
+No session needed. Body: `token` and `new_password` (the signup password rules). `204` on success: the password is changed, every session of the account ends (log in again) and its failed-login count is cleared.
+- `429` rate limited (10 attempts per IP per hour, `RESET_PASSWORD_IP_*`, successes and failures counted; a 422 is not counted). `503` when the limiter cannot reach the database.
+- `422` a missing field or a `new_password` that breaks the rules. The body never holds the token or password.
+- `400 {"detail": "Invalid or expired reset link."}` for every bad token: unknown, expired, used, replaced by a newer one, non-ASCII or over 64 characters, or its account deleted.
+- `403` blocked cross-site request.
+
 ## Signup
 `POST /signup` body: `{"email", "password", "account_name", "invite_code"}`. `invite_code` is required (missing is 422). Codes look like `TLN-XXXX-XXXX-XXXX`; case, dashes, spaces and a pasted line ending are ignored. Admins create codes on the `/admin` page (the Admin invites endpoints) or with `python -m app.admin create-invite`. A code works once and expires (default 14 days).
 
 Unknown, expired, already used, malformed and over-length codes all return the same `400 {"detail": "Invalid or expired invite code."}`. The code is checked before the email, so `400 {"detail": "Email already exists."}` is only seen with a valid code. Any failed signup (duplicate email, 422, 429) leaves the code unused. Failed attempts count against the signup per-IP limit.
 
 ## Rate limits
-`POST /login`: 10 attempts per IP and 5 failed attempts per email, per 15 minutes (a successful login removes only its own attempt from the email count; earlier failures stay counted). `POST /signup`: 5 attempts per IP per hour. Over a limit: `429 {"detail": "Too many attempts. Try again later."}` with a `Retry-After` header in seconds. The body is the same for every limit. Blocked attempts are not counted. Defaults come from env (`LOGIN_IP_LIMIT`, `LOGIN_EMAIL_LIMIT`, `SIGNUP_IP_LIMIT` and the `*_WINDOW_SECONDS` pair for each). `POST /admin/invites` allows 10 attempts per user and 10 per IP per hour (`ADMIN_INVITE_USER_*`, `ADMIN_INVITE_IP_*`), every attempt counted, successful ones too.
+`POST /login`: 10 attempts per IP and 5 failed attempts per email, per 15 minutes (a successful login removes only its own attempt from the email count; earlier failures stay counted). `POST /signup`: 5 attempts per IP per hour. Over a limit: `429 {"detail": "Too many attempts. Try again later."}` with a `Retry-After` header in seconds. The body is the same for every limit. Blocked attempts are not counted. Defaults come from env (`LOGIN_IP_LIMIT`, `LOGIN_EMAIL_LIMIT`, `SIGNUP_IP_LIMIT` and the `*_WINDOW_SECONDS` pair for each). `POST /admin/invites` allows 10 attempts per user and 10 per IP per hour (`ADMIN_INVITE_USER_*`, `ADMIN_INVITE_IP_*`), every attempt counted, successful ones too. `POST /admin/password-resets` (10 per user and 10 per IP per hour) and `POST /auth/reset-password` (10 per IP per hour) count the same way (see Password reset).
 
-The client IP is, in order: the `X-Talaan-Client-IP` header, but only when `PROXY_SECRET` is configured and the request carries exactly that value in `X-Talaan-Proxy-Secret` (constant-time compare; the Next proxy sends both, see DECISIONS.md 2026-11-09); else, with `TRUST_PROXY=true` (only behind a proxy you control), the right-most `X-Forwarded-For` value; else the socket peer. A wrong or missing secret, or an unusable IP value, silently falls back to the next source (never an error). With `ENVIRONMENT=production` the API serves no `/docs`, `/redoc` or `/openapi.json`. Among authenticated endpoints only `/account/delete` and `POST /admin/invites` are rate limited. `/login` returns the same 401 for an unknown email and a wrong password, including passwords over 72 bytes.
+The client IP is, in order: the `X-Talaan-Client-IP` header, but only when `PROXY_SECRET` is configured and the request carries exactly that value in `X-Talaan-Proxy-Secret` (constant-time compare; the Next proxy sends both, see DECISIONS.md 2026-11-09); else, with `TRUST_PROXY=true` (only behind a proxy you control), the right-most `X-Forwarded-For` value; else the socket peer. A wrong or missing secret, or an unusable IP value, silently falls back to the next source (never an error). With `ENVIRONMENT=production` the API serves no `/docs`, `/redoc` or `/openapi.json`. Among authenticated endpoints only `/account/delete`, `POST /admin/invites` and `POST /admin/password-resets` are rate limited. `/login` returns the same 401 for an unknown email and a wrong password, including passwords over 72 bytes.
 
 Limits are exact under concurrency (one advisory lock per key; DECISIONS.md). To check by hand, send 20 parallel logins for a fresh email. The result must be exactly 5x 401 and 15x 429:
 

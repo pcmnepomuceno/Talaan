@@ -25,7 +25,7 @@ Live at https://talaan-phi.vercel.app. Sign-up is invite-only and there is no de
 
 ## Getting started
 
-Signing up needs an invite code. Ask Prince, who owns this repository, for one. Each code works once and expires, after 14 days by default. The first page load can take up to a minute while the free server wakes up. There is no password reset yet, so keep your password somewhere safe. You can delete your account and all its data from Account.
+Signing up needs an invite code. Ask Prince, who owns this repository, for one. Each code works once and expires, after 14 days by default. The first page load can take up to a minute while the free server wakes up. Talaan sends no email. If you forget your password, ask the person who invited you for a reset link. You can delete your account and all its data from Account.
 
 ## What Talaan stores
 
@@ -112,7 +112,7 @@ Limitations today:
 - Sign-up is invite-only and there is no demo account.
 - The free-tier API sleeps when idle, so the first request can take about 20 seconds.
 - Philippine time and Philippine pesos only; there is no time zone or currency setting.
-- No email verification and no password reset.
+- No email verification and no self-service password reset: Talaan sends no email, so a forgotten password needs a reset link that an admin creates and passes on by hand.
 - Rate limits cover login, sign-up and account deletion; other authenticated routes are not rate limited (listed in the roadmap backlog).
 - Only the current status is stored, with no status history.
 - It is not installable as a PWA yet; nothing for that is built.
