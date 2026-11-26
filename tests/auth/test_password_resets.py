@@ -344,6 +344,42 @@ def test_cross_site_reset_is_blocked(client, db, friend):
     assert db.query(PasswordResetToken).one().used_at is None
 
 
+# --- rules re-checked when the link is used ---
+
+def test_a_link_for_an_account_made_admin_since_is_refused(admin, db, friend, monkeypatch):
+    token = link(admin)
+    monkeypatch.setattr(config, "ADMIN_EMAILS", frozenset({USER_EMAIL, FRIEND}))
+    r = reset(admin, token)
+    assert r.status_code == 400 and r.json() == INVALID
+    assert db.query(PasswordResetToken).one().used_at is None
+    assert login(admin, OLD).status_code == 200 and login(admin, NEW).status_code == 401
+
+
+def test_a_link_whose_creator_is_no_longer_an_admin_is_refused(admin, db, friend, monkeypatch):
+    token = link(admin)
+    monkeypatch.setattr(config, "ADMIN_EMAILS", frozenset())
+    r = reset(admin, token)
+    assert r.status_code == 400 and r.json() == INVALID
+    assert db.query(PasswordResetToken).one().used_at is None
+    assert login(admin, NEW).status_code == 401
+
+
+def test_a_link_dies_with_the_admin_account_that_made_it(admin, db, user, friend):
+    token = link(admin)
+    db.query(User).filter(User.id == user.id).delete(synchronize_session=False)
+    db.commit()
+    assert db.query(PasswordResetToken).count() == 0  # CASCADE, not a link that looks like the CLI's
+    r = reset(admin, token)
+    assert r.status_code == 400 and r.json() == INVALID
+    assert login(admin, NEW).status_code == 401
+
+
+def test_a_cli_link_works_for_an_admin_account(client, db, friend, monkeypatch):
+    monkeypatch.setattr(config, "ADMIN_EMAILS", frozenset({FRIEND}))
+    assert reset(client, make_token(db, friend.id)).status_code == 204  # created_by is NULL
+    assert login(client, NEW).status_code == 200
+
+
 # --- real concurrency: committed rows, own connections, cleaned up in `finally` ---
 
 @pytest.fixture

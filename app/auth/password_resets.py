@@ -75,16 +75,19 @@ def create(db: Session, user_id: int, created_by: int | None) -> tuple[str, date
     return token, now + LIFETIME
 
 
-def consume(db: Session, token_hash: str) -> int | None:
-    """Atomically mark the token used and return its user id; None if it is missing, used or
-    expired. Under a race one UPDATE wins and the other then matches nothing. The caller commits."""
-    return db.execute(
+def consume(db: Session, token_hash: str) -> tuple[int, int | None] | None:
+    """Atomically mark the token used and return (user_id, created_by); None if it is missing,
+    used or expired. Under a race one UPDATE wins and the other then matches nothing. The caller
+    commits."""
+    row = db.execute(
         text(
             "UPDATE password_reset_tokens SET used_at = :now "
-            "WHERE token_hash = :h AND used_at IS NULL AND expires_at > :now RETURNING user_id"
+            "WHERE token_hash = :h AND used_at IS NULL AND expires_at > :now "
+            "RETURNING user_id, created_by"
         ),
         {"now": utcnow(), "h": token_hash},
-    ).scalar()
+    ).first()
+    return None if row is None else (row.user_id, row.created_by)
 
 
 @admin_router.post("", status_code=201, response_model=PasswordResetCreated)
@@ -147,14 +150,21 @@ def reset_password(body: PasswordReset, request: Request, db: Session = Depends(
         ),
         {"h": token_hash},
     )
-    user_id = consume(db, token_hash)
-    if user_id is None:
+    consumed = consume(db, token_hash)
+    if consumed is None:
         db.rollback()
         raise invalid()
-    email = db.execute(
-        text("UPDATE users SET password_hash = :p WHERE id = :id RETURNING email"),
-        {"p": password_hash, "id": user_id},
-    ).scalar_one()
+    user_id, created_by = consumed
+    # The rules the link was made under, checked again now: an admin-made link only works while
+    # its creator exists and is still an admin and the target is still not one. CLI links
+    # (created_by NULL) work for any account. The link stays unused when refused.
+    target_email = db.execute(text("SELECT email FROM users WHERE id = :id"), {"id": user_id}).scalar_one()
+    if created_by is not None:
+        creator_email = db.execute(text("SELECT email FROM users WHERE id = :id"), {"id": created_by}).scalar()
+        if creator_email is None or not config.is_admin(creator_email) or config.is_admin(target_email):
+            db.rollback()
+            raise invalid()
+    db.execute(text("UPDATE users SET password_hash = :p WHERE id = :id"), {"p": password_hash, "id": user_id})
     db.query(SessionModel).filter(SessionModel.user_id == user_id).delete(synchronize_session=False)
     db.commit()
 
@@ -162,7 +172,7 @@ def reset_password(body: PasswordReset, request: Request, db: Session = Depends(
     # lock held: a login in flight holds its limiter row while it waits for the user row. The
     # password is already changed, so a failure here is only logged (no email, no key).
     try:
-        db.query(RateLimitEvent).filter(RateLimitEvent.key == rate_limit.email_key(email)).delete(
+        db.query(RateLimitEvent).filter(RateLimitEvent.key == rate_limit.email_key(target_email)).delete(
             synchronize_session=False
         )
         db.commit()

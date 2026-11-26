@@ -1,5 +1,5 @@
-"""The password_reset_tokens table: present after migrations, CASCADE with its account, SET NULL
-when the admin who made the link is deleted."""
+"""The password_reset_tokens table: present after migrations; its rows go (CASCADE) with their
+account and with the admin who made them, so a deleted admin's links cannot pass for CLI links."""
 
 from datetime import datetime, timedelta, timezone
 
@@ -46,9 +46,8 @@ def test_deleting_the_account_removes_its_tokens(db, users):
     assert db.query(models.PasswordResetToken).count() == 0
 
 
-def test_deleting_the_creator_keeps_the_token_and_nulls_created_by(db, users):
+def test_deleting_the_creator_removes_the_token(db, users):
     target, admin = users
     _token(db, target.id, admin.id)
     _delete(db, admin)
-    row = db.query(models.PasswordResetToken).one()
-    assert row.created_by is None and row.user_id == target.id
+    assert db.query(models.PasswordResetToken).count() == 0

@@ -51,7 +51,8 @@ class InviteCode(Base):
 
 class PasswordResetToken(Base):
     """Single-use password reset link. Only the SHA-256 of the token is stored. Rows go with the
-    account (CASCADE); `created_by` is the admin, SET NULL when that account is deleted."""
+    account (CASCADE), and with the admin who made them (`created_by`, CASCADE): a deleted admin's
+    links must not turn into NULL, which is how a CLI link looks."""
 
     __tablename__ = "password_reset_tokens"
     __table_args__ = (
@@ -70,7 +71,7 @@ class PasswordResetToken(Base):
     used_at = Column(DateTime(timezone=True), nullable=True)
     created_by = Column(
         Integer,
-        ForeignKey("users.id", name="fk_password_reset_tokens_created_by", ondelete="SET NULL"),
+        ForeignKey("users.id", name="fk_password_reset_tokens_created_by", ondelete="CASCADE"),
         nullable=True,
     )
 
