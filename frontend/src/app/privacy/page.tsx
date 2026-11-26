@@ -119,7 +119,9 @@ export default function PrivacyPage() {
           <p>
             The feedback form is a Google Form. I don&apos;t ask for personal details in it, and it collects no email
             address automatically. Whatever you type in the box is stored by Google and seen by me. Add a contact only
-            if you want a reply, and never put passwords or other secrets in it.
+            if you want a reply, and never put passwords or other secrets in it. Responses stay in Google Forms until I
+            delete them. The form is anonymous, so I can&apos;t tell which response is yours; if you want something
+            removed, email me what you wrote and roughly when.
           </p>
           <p>
             As the operator I have access to the database and can see what is stored. I only look at it to run or fix

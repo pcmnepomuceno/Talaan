@@ -32,7 +32,7 @@ describe("privacy page", () => {
     render(<PrivacyPage />);
     expect(
       screen.getByText(
-        "The feedback form is a Google Form. I don't ask for personal details in it, and it collects no email address automatically. Whatever you type in the box is stored by Google and seen by me. Add a contact only if you want a reply, and never put passwords or other secrets in it.",
+        "The feedback form is a Google Form. I don't ask for personal details in it, and it collects no email address automatically. Whatever you type in the box is stored by Google and seen by me. Add a contact only if you want a reply, and never put passwords or other secrets in it. Responses stay in Google Forms until I delete them. The form is anonymous, so I can't tell which response is yours; if you want something removed, email me what you wrote and roughly when.",
       ),
     ).toBeTruthy();
     expect(screen.getAllByRole("listitem").map((li) => li.textContent)).toContain(
