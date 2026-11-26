@@ -1,5 +1,6 @@
 import hashlib
 import re
+import unicodedata
 from datetime import timedelta
 
 import pytest
@@ -7,6 +8,8 @@ import pytest
 from app import admin
 from app.auth import invites
 from app.auth.models import InviteCode
+from app.users.models import User
+from app.users.schemas import UserLogin
 from tests.conftest import create_invite
 
 CODE_RE = r"TLN-[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}"
@@ -370,7 +373,7 @@ def test_create_reset_link_prints_the_path_once_and_stores_only_the_hash(db, use
     assert times_shown == 1
     assert (row.user_id, row.created_by, row.used_at) == (user.id, None, None)
     assert row.expires_at - row.created_at == timedelta(hours=24)
-    header = out.splitlines()[0] == f"Reset link for Test User expires {row.expires_at.isoformat()}"
+    header = out.splitlines()[0] == f"Reset link for 'Test User' expires {row.expires_at.isoformat()}"
     assert header
     labelled = out.splitlines()[1].startswith("Path (shown once, not stored): /reset#")
     assert labelled
@@ -380,4 +383,33 @@ def test_create_reset_link_unknown_email_exits_1(db, capsys):
     code, out, err = run_reset_cli(db, capsys, "nobody@example.com")
     assert code == 1 and not out
     assert "no account" in err
+    assert db.query(PasswordResetToken).count() == 0
+
+
+def test_create_reset_link_prints_an_account_name_with_escape_codes_escaped(db, user, capsys):
+    user.account_name = "Evil\x1b[2J\x1b]0;pwn\x07"
+    db.commit()
+    code, out, _ = run_reset_cli(db, capsys, user.email)
+    assert code == 0
+    assert "\x1b" not in out and "\x07" not in out  # the raw control bytes
+    assert "'Evil\\x1b[2J\\x1b]0;pwn\\x07'" in out  # their escaped text
+
+
+def test_create_reset_link_finds_an_internationalized_email_in_any_unicode_form(db, capsys):
+    stored = UserLogin(email="josé@exämple.ph", password="x").email  # what signup would store
+    assert unicodedata.is_normalized("NFC", stored)
+    db.add(User(email=stored, password_hash="x", account_name="José"))
+    db.commit()
+    decomposed_upper = unicodedata.normalize("NFD", "  JOSÉ@EXÄMPLE.PH ")
+    assert decomposed_upper != stored.upper()
+    code, _, err = run_reset_cli(db, capsys, decomposed_upper)
+    assert code == 0 and not err
+    assert db.query(PasswordResetToken).count() == 1
+
+
+@pytest.mark.parametrize("email", ["not-an-email", "", "   ", "a@b@c"])
+def test_create_reset_link_rejects_an_invalid_email(db, capsys, email):
+    code, out, err = run_reset_cli(db, capsys, email)
+    assert code == 1 and not out
+    assert err.strip() == "invalid email"
     assert db.query(PasswordResetToken).count() == 0

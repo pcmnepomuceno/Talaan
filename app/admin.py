@@ -13,6 +13,7 @@ import re
 import sys
 from datetime import timedelta
 
+from pydantic import TypeAdapter, ValidationError
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -20,6 +21,7 @@ from app import config
 from app.auth import invites, password_resets, rate_limit
 from app.auth.models import InviteCode
 from app.users.models import User  # registers `users` for the invite FK
+from app.users.schemas import NormalizedEmail
 
 BATCH_SIZE = 1000  # rows per DELETE; tests patch it
 DEFAULT_EXPIRES_IN = "14d"
@@ -121,16 +123,19 @@ def run(db: Session, argv: list[str]) -> int:
         return 0
 
     if args.command == "create-reset-link":
-        target = (
-            db.query(User.id, User.account_name).filter(User.email == args.email.strip().lower()).first()
-        )
+        try:
+            email = TypeAdapter(NormalizedEmail).validate_python(args.email)
+        except ValidationError:
+            print("invalid email", file=sys.stderr)  # nothing echoed: the input could be anything
+            return 1
+        target = db.query(User.id, User.account_name).filter(User.email == email).first()
         created = password_resets.create(db, target.id, None) if target else None
         if created is None:
             print("no account with that email", file=sys.stderr)
             return 1
         db.commit()
         token, expires_at = created
-        print(f"Reset link for {target.account_name} expires {expires_at.isoformat()}")
+        print(f"Reset link for {target.account_name!r} expires {expires_at.isoformat()}")
         print(f"Path (shown once, not stored): /reset#{token}")
         return 0
 

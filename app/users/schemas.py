@@ -8,11 +8,11 @@ from typing import Annotated
 from pydantic import (
     AfterValidator,
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     EmailStr,
     Field,
     computed_field,
-    field_validator,
 )
 
 from app import config, text
@@ -37,20 +37,23 @@ def check_password_rules(value: str) -> str:
     return value
 
 
+def _strip_lower(value):
+    return str(value).strip().lower() if value is not None else value
+
+
+# Stripped and lowercased, then EmailStr normalizes the rest (Unicode NFC). Every place that looks
+# an account up by email (signup, login, admin reset, the CLI) uses this one type.
+NormalizedEmail = Annotated[EmailStr, BeforeValidator(_strip_lower)]
+
+
 class UserCreate(BaseModel):
-    email: EmailStr
+    email: NormalizedEmail
     password: Annotated[text.Text, AfterValidator(check_password_rules)]
     account_name: text.Text
     # Required. No max_length here on purpose: pydantic would answer an over-length code with
     # a 422, which differs from the generic 400 every other bad code gets. The route bounds it.
     invite_code: str
 
-    @field_validator("email", mode="before")
-    @classmethod
-    def normalize_email(cls, value: str) -> str:
-        if value is None:
-            return value
-        return str(value).strip().lower()
 
 class UserRead(BaseModel):
     id: int
@@ -65,7 +68,7 @@ class UserRead(BaseModel):
         return config.is_admin(self.email)
 
 class UserLogin(BaseModel):
-    email: EmailStr
+    email: NormalizedEmail
     # Verify-only, like AccountDelete: a lone surrogate is a 422, NUL is accepted, and any
     # other wrong value up to the cap is a 401. The cap stops a huge body being scanned,
     # encoded and rate-limit-counted per attempt; it runs before the character check, so an
@@ -73,13 +76,6 @@ class UserLogin(BaseModel):
     password: Annotated[
         str, Field(max_length=1024), AfterValidator(text.check_encodable)
     ]
-
-    @field_validator("email", mode="before")
-    @classmethod
-    def normalize_email(cls, value: str) -> str:
-        if value is None:
-            return value
-        return str(value).strip().lower()
 
 
 class AccountDelete(BaseModel):

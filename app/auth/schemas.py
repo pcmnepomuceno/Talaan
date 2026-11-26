@@ -8,13 +8,12 @@ from pydantic import (
     AfterValidator,
     BaseModel,
     ConfigDict,
-    EmailStr,
     Field,
     field_validator,
 )
 
 from app import text
-from app.users.schemas import check_password_rules
+from app.users.schemas import NormalizedEmail, check_password_rules
 
 
 class InviteItem(BaseModel):
@@ -61,15 +60,9 @@ class InviteCreated(BaseModel):
 class PasswordResetCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    email: EmailStr
+    email: NormalizedEmail
     # Same rule as AccountDelete: verify-only.
     admin_password: Annotated[str, Field(max_length=1024), AfterValidator(text.check_encodable)]
-
-    @field_validator("email", mode="before")
-    @classmethod
-    def normalize_email(cls, value):
-        return value.strip().lower() if isinstance(value, str) else value
-
 
 class PasswordResetCreated(BaseModel):
     """The one place a plaintext reset token leaves the server."""
