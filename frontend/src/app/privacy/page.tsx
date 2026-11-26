@@ -36,7 +36,7 @@ export default function PrivacyPage() {
         className="mx-auto max-w-[640px] break-words px-4 pt-6 pb-12 text-body text-text-secondary outline-none"
       >
         <h1 className="text-page-title text-text-primary">Privacy</h1>
-        <p className="mt-2">Last updated 25 November 2026</p>
+        <p className="mt-2">Last updated 26 November 2026</p>
 
         <Section title="Who runs Talaan and how to reach me">
           <p>
@@ -114,7 +114,13 @@ export default function PrivacyPage() {
             <li>Render runs my server, in Singapore.</li>
             <li>Neon hosts my database, in Singapore.</li>
             <li>GitHub Actions runs the scheduled cleanup against the database.</li>
+            <li>Google Forms hosts the feedback form linked from Account.</li>
           </List>
+          <p>
+            The feedback form is a Google Form. I don&apos;t ask for personal details in it, and it collects no email
+            address automatically. Whatever you type in the box is stored by Google and seen by me. Add a contact only
+            if you want a reply, and never put passwords or other secrets in it.
+          </p>
           <p>
             As the operator I have access to the database and can see what is stored. I only look at it to run or fix
             the service.

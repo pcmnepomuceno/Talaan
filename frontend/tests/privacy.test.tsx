@@ -15,7 +15,7 @@ describe("privacy page", () => {
       "mailto:pcmnepomuceno@gmail.com",
     );
     expect(document.body.textContent).toContain("Prince Czedrick Nepomuceno");
-    expect(screen.getByText("Last updated 25 November 2026")).toBeTruthy();
+    expect(screen.getByText("Last updated 26 November 2026")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Back to Talaan" }).getAttribute("href")).toBe("/");
   });
 
@@ -26,6 +26,18 @@ describe("privacy page", () => {
         "As the operator I have access to the database and can see what is stored. I only look at it to run or fix the service.",
       ),
     ).toBeTruthy();
+  });
+
+  it("names Google Forms and says what the feedback form collects", () => {
+    render(<PrivacyPage />);
+    expect(
+      screen.getByText(
+        "The feedback form is a Google Form. I don't ask for personal details in it, and it collects no email address automatically. Whatever you type in the box is stored by Google and seen by me. Add a contact only if you want a reply, and never put passwords or other secrets in it.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getAllByRole("listitem").map((li) => li.textContent)).toContain(
+      "Google Forms hosts the feedback form linked from Account.",
+    );
   });
 
   it("repeats the popup disclosure and says how the extension signs in", () => {
