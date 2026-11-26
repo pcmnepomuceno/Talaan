@@ -76,6 +76,13 @@ describe("popup.css layout", () => {
     expect(body("\\.field")).toMatch(/margin:\s*0 0 calc\(var\(--spacing\) \* 2\);/);
   });
 
+  it("takes #disclosure's spacing from var(--spacing)", () => {
+    expect(body("#disclosure")).toMatch(/margin:\s*0 0 calc\(var\(--spacing\) \* 3\);/);
+    expect(body("#disclosure")).toMatch(/padding-bottom:\s*calc\(var\(--spacing\) \* 3\);/);
+    expect(body("#disclosure")).not.toMatch(/12px/);
+    expect(body("#disclosure a")).toMatch(/margin-block:\s*calc\(var\(--spacing\) \* -3\);/);
+  });
+
   it("collapses the empty status line", () => {
     expect(body("#status:empty")).toMatch(/min-height:\s*0;/);
     expect(body("#status:empty")).toMatch(/margin:\s*0;/);
@@ -106,6 +113,12 @@ describe("popup.html", () => {
   // :empty only matches with no children and no whitespace.
   it("keeps the status element completely empty", () => {
     expect(popupHtml).toMatch(/<p id="status"[^>]*><\/p>/);
+  });
+
+  it("keeps #status a live region, never hidden", () => {
+    const tag = popupHtml.match(/<p id="status"[^>]*>/)?.[0] ?? "";
+    expect(tag).toContain('aria-live="polite"');
+    expect(tag).not.toMatch(/\shidden(\s|=|>)/);
   });
 
   it("has no password input", () => {
