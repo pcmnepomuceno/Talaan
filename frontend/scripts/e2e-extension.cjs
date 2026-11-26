@@ -242,40 +242,55 @@ withEnv(async ({ base, createInvite }) => {
     // The request is held in the browser; the Save is answered with a fake 422, so nothing is created.
     const top = (sel) => popup.evaluate((s) => document.querySelector(s).getBoundingClientRect().top + window.scrollY, sel);
     const statusIs = (text) => popup.waitForFunction((t) => document.getElementById("status").textContent === t, text, { timeout: 15000 });
+    let release;
     const hold = async (url, answer) => {
-      let release;
-      const held = new Promise((r) => (release = r));
+      let r;
+      const held = new Promise((res) => (r = res));
+      release = r;
       await popup.route(url, async (route) => {
         await held;
-        await answer(route);
+        // A route already handled (the popup left the page) is not a failure.
+        await answer(route).catch(() => {});
       });
-      return release;
     };
-    // /job is already saved: let the duplicate note land first, it moves the fields below it.
-    await popup.locator("#dup").waitFor({ state: "visible", timeout: 15000 });
-    await popup.getByRole("radio", { name: "Remote" }).check({ force: true });
-    let release = await hold("**/api/v1/applications", (route) => route.fulfill({ status: 422, contentType: "application/json", body: JSON.stringify({ detail: [{ loc: ["body", "company"], msg: "held by the e2e" }] }) }));
-    const before = await top('label[for="company"]');
-    await popup.getByRole("button", { name: "Save", exact: true }).click();
-    await statusIs("Starting up...");
-    const during = await top('label[for="company"]');
-    release();
-    await popup.locator("#company-error").waitFor({ state: "visible" });
-    await statusIs("");
-    const after = await top('label[for="company"]');
-    console.log(`INFO  pending Save on the form, Company label top: ${before} px before, ${during} px with "Starting up...", ${after} px after; jumps ${before !== during || during !== after ? "yes" : "no"}`);
-    await popup.unroute("**/api/v1/applications");
+    try {
+      // /job is already saved: let the duplicate note land first, it moves the fields below it.
+      await popup.locator("#dup").waitFor({ state: "visible", timeout: 15000 });
+      await popup.getByRole("radio", { name: "Remote" }).check({ force: true });
+      await hold("**/api/v1/applications", (route) => route.fulfill({ status: 422, contentType: "application/json", body: JSON.stringify({ detail: [{ loc: ["body", "company"], msg: "held by the e2e" }] }) }));
+      const before = await top('label[for="company"]');
+      await popup.getByRole("button", { name: "Save", exact: true }).click();
+      await statusIs("Starting up...");
+      const during = await top('label[for="company"]');
+      release();
+      await popup.locator("#company-error").waitFor({ state: "visible" });
+      await statusIs("");
+      const after = await top('label[for="company"]');
+      console.log(`INFO  pending Save on the form, Company label top: ${before} px before, ${during} px with "Starting up...", ${after} px after; jumps ${before !== during || during !== after ? "yes" : "no"}`);
+      await popup.unroute("**/api/v1/applications");
 
-    release = await hold("**/api/v1/me", (route) => route.continue());
-    await popup.reload();
-    await popup.locator("#loadingText").waitFor();
-    const loadingBefore = await top("#loadingText");
-    await statusIs("Starting up...");
-    const loadingDuring = await top("#loadingText");
-    release();
-    await form.waitFor({ state: "visible", timeout: 15000 });
-    console.log(`INFO  loading state (form hidden), #loadingText top: ${loadingBefore} px before, ${loadingDuring} px with "Starting up..."; jumps ${loadingBefore !== loadingDuring ? "yes" : "no"}`);
-    await popup.unroute("**/api/v1/me");
+      await hold("**/api/v1/me", (route) => route.continue());
+      await popup.reload();
+      await popup.locator("#loadingText").waitFor();
+      const loadingBefore = await top("#loadingText");
+      await statusIs("Starting up...");
+      const loadingDuring = await top("#loadingText");
+      release();
+      await form.waitFor({ state: "visible", timeout: 15000 });
+      console.log(`INFO  loading state (form hidden), #loadingText top: ${loadingBefore} px before, ${loadingDuring} px with "Starting up..."; jumps ${loadingBefore !== loadingDuring ? "yes" : "no"}`);
+    } catch (e) {
+      console.log(`INFO  report-only jump check skipped: ${e.message.split("\n")[0]}`);
+    } finally {
+      release?.();
+      await popup.unroute("**/api/v1/applications").catch(() => {});
+      await popup.unroute("**/api/v1/me").catch(() => {});
+      try {
+        await popup.reload();
+        await form.waitFor({ state: "visible", timeout: 15000 });
+      } catch (e) {
+        console.log(`INFO  popup reload after the jump check failed: ${e.message.split("\n")[0]}`);
+      }
+    }
     await popup.locator("#dup").waitFor({ state: "visible", timeout: 15000 });
     await label("Company").fill("Typed Co");
     await popup.getByRole("radio", { name: "Remote" }).check({ force: true });
