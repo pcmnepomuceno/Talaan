@@ -173,4 +173,4 @@ function chromiumOptions() {
   return process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {};
 }
 
-module.exports = { withEnv, chromiumOptions, REPO, FRONTEND };
+module.exports = { withEnv, chromiumOptions, waitFor, REPO, FRONTEND };

@@ -9,7 +9,7 @@ process.env.E2E_ADMIN_EMAILS = "admin-reset-e2e@example.ph";
 const fs = require("node:fs");
 const path = require("node:path");
 const { chromium } = require("playwright");
-const { chromiumOptions, withEnv, FRONTEND } = require("./local-env.cjs");
+const { chromiumOptions, withEnv, waitFor, FRONTEND } = require("./local-env.cjs");
 
 const OUT = path.join(FRONTEND, ".screenshots/a2");
 const DEAD = "This reset link is invalid or has expired. Ask for a new one.";
@@ -35,8 +35,10 @@ withEnv(async ({ base, apiBase, createInvite }) => {
     fetch(`${apiBase}/api/v1${p}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   for (const [email, name] of [[adminEmail, "E2E Admin"], [friendEmail, "E2E Friend"]]) {
     const invite_code = createInvite("a2 e2e");
-    // createInvite blocks the event loop: yield so fetch drops a keep-alive socket the API has closed meanwhile.
-    await new Promise((done) => setTimeout(done, 100));
+    // createInvite blocks the event loop, so fetch may still hold a keep-alive socket the API has closed.
+    // Poll /ping first (10 s timeout, clear error): a request that fails on a stale socket is caught and
+    // retried, unlike the signup POST. The cause of the earlier failure is unconfirmed.
+    await waitFor(`${apiBase}/ping`, "API", 10000);
     const r = await api("/signup", { email, password, account_name: name, invite_code });
     if (!r.ok) throw new Error(`signup failed ${r.status}`);
   }

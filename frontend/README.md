@@ -15,7 +15,7 @@ npm run lint && npm run typecheck && npm test && npm run build
 
 ## Routes
 
-`/` redirects to `/applications`. `/login` (log in and create account; `?expired=1`, `?deleted=1`, `?next=`), `/applications` (`?status=` filter, 50 rows per page with Load more), `/applications/[id]`, `/applications/new`, `/applications/[id]/edit` (one shared form), `/account` (real user, theme, log out, delete account). From 1280 the list and detail show side by side. Interviews are added, edited and deleted from the detail: `/applications/[id]/interviews/new` and `.../[interviewId]/edit` (times are Philippine time only). `/design` is the component gallery.
+`/` redirects to `/applications`. `/login` (log in and create account; `?expired=1`, `?deleted=1`, `?next=`), `/applications` (`?status=` filter, 50 rows per page with Load more), `/applications/[id]`, `/applications/new`, `/applications/[id]/edit` (one shared form), `/account` (real user, theme, log out, delete account), `/reset` (public; sets a new password from a reset link; served with `Cache-Control: no-store` and `Referrer-Policy: no-referrer`). From 1280 the list and detail show side by side. Interviews are added, edited and deleted from the detail: `/applications/[id]/interviews/new` and `.../[interviewId]/edit` (times are Philippine time only). `/design` is the component gallery.
 
 ## Applications and the API
 
@@ -29,7 +29,7 @@ npm run lint && npm run typecheck && npm test && npm run build
 The browser only calls `/api/...` on the Next origin; `src/proxy.ts` forwards it to `BACKEND_URL` (see `.env.example`; default `http://localhost:8000`, set it in Vercel at deploy, it is read per request; `next.config.ts` has no `rewrites()`). The session cookie is HttpOnly and first-party, so there is no CORS and nothing auth-related is stored in `localStorage`.
 
 - `src/lib/http.ts`: `request()`, `ApiError`, `errorMessage()`, `safeNext()`. A 401 goes to `/login?expired=1&next=...` unless `redirectOn401: false`.
-- `src/lib/auth.ts`: `login`, `signup`, `logout`, `getMe`, `deleteAccount`.
+- `src/lib/auth.ts`: `login`, `signup`, `logout`, `getMe`, `deleteAccount`, `resetPassword`.
 - `src/proxy.ts`: private paths need a `session_token` or `__Host-session_token` cookie (presence only), else `/login?next=...`. Never redirects `/login` or `/api`. It also forwards `/api/*` to `BACKEND_URL` via `NextResponse.rewrite`; when `PROXY_SECRET` is set (and `BACKEND_URL` is https or loopback, and `VERCEL=1` or `TRUST_X_REAL_IP=true`) it adds `X-Talaan-Proxy-Secret` and, if `x-real-ip` is present, `X-Talaan-Client-IP`; it always deletes client-sent copies of both.
 - Local API: `COOKIE_SECURE=false` in the API's `.env` (plain http), `ALLOWED_ORIGINS` default `http://localhost:3000`, and raised `LOGIN_*`/`SIGNUP_*` limits (all browsers share one IP behind the proxy). Invite: `python -m app.admin create-invite` in the repo root.
 - `scripts/e2e-auth.cjs` and `scripts/screens-auth.cjs` (not in CI, no dependency): use `scripts/local-env.cjs` like the rest: no manual server setup, `E2E_API_PORT=8100` keeps the API off :8000, `E2E_WEB_PORT=3100` keeps `next dev` off :3000, Playwright via `NODE_PATH`; the file headers list the steps.

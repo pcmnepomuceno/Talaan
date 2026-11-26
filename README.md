@@ -29,7 +29,7 @@ Signing up needs an invite code. Ask Prince, who owns this repository, for one. 
 
 ## What Talaan stores
 
-Talaan stores the applications and interviews you enter (including a job posting link, if you save one), your account name and email, and a bcrypt hash of your password (never the password itself). While you are logged in it also keeps a hashed session token. Rate limiting keeps short-lived records: those keyed by IP address stay for about a week, and those keyed by a hash of your email are deleted with your account. It does not store CV files. Deleting your account removes the account, its applications, interviews and sessions. The invite code you used stays marked as used and keeps its note; it is only unlinked from your account.
+Talaan stores the applications and interviews you enter (including a job posting link, if you save one), your account name and email, and a bcrypt hash of your password (never the password itself). While you are logged in it also keeps a hashed session token. Rate limiting keeps short-lived records: those keyed by IP address stay for about a week, and those keyed by a hash of your email are deleted with your account. When an admin creates a password reset link for an account, it keeps a hash of the link's token, which account it is for, which admin created it (none for a link made with the command line), and when it was created, expires and was used. A link is valid for 24 hours and works once; a cleanup scheduled to run daily deletes used or expired links created more than 7 days ago. It does not store CV files. Deleting your account removes the account, its applications, interviews, sessions and password reset links. The invite code you used stays marked as used and keeps its note; it is only unlinked from your account.
 
 ## Why it exists
 
@@ -47,7 +47,7 @@ One decision worth knowing (details in [DECISIONS.md](DECISIONS.md)): the browse
 - An `.ics` file for each upcoming interview, built in the browser, with a short guide to importing it.
 - Light and dark theme that follows the system, with an override on the account screen.
 - Phone, tablet and desktop layouts, with the list and detail side by side from 1280px.
-- Rate limits on login, sign-up and account deletion.
+- Rate limits on login, sign-up, account deletion, reset link creation and password reset attempts.
 - A Chrome extension (unpacked install, desktop) that saves the job posting you are viewing: see [extension/README.md](extension/README.md).
 
 ## Tech stack
@@ -113,7 +113,7 @@ Limitations today:
 - The free-tier API sleeps when idle, so the first request can take about 20 seconds.
 - Philippine time and Philippine pesos only; there is no time zone or currency setting.
 - No email verification and no self-service password reset: Talaan sends no email, so a forgotten password needs a reset link that an admin creates and passes on by hand.
-- Rate limits cover login, sign-up and account deletion; other authenticated routes are not rate limited (listed in the roadmap backlog).
+- Rate limits cover login, sign-up, account deletion, reset link creation and password reset attempts; other authenticated routes are not rate limited (listed in the roadmap backlog).
 - Only the current status is stored, with no status history.
 - It is not installable as a PWA yet; nothing for that is built.
 - The follow-up view lists applications at Applied whose last activity (the apply date or the latest past interview, in Philippine days) is 7 or more days ago and that have no interview ahead. The 7 days cannot be changed in the app (the API takes `days`, 1 to 90). There are no reminders, notifications or emails, and no way to mark a row as followed up.
