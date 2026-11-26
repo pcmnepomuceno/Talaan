@@ -133,9 +133,9 @@ export default function PrivacyPage() {
             the service.
           </p>
           <p>
-            I can create a password reset link for your account if you ask, but I cannot see your password. Using a
-            reset link changes the password and signs the account out of every device, so you would notice. An unused
-            link has no effect on your account.
+            I can create a password reset link for any non-admin account. I only do this when the account&apos;s owner
+            asks me to. Using a link signs the account out of every device, so the owner would notice. I cannot see
+            your password. An unused link has no effect on your account.
           </p>
           <p>
             My server keeps a standard access log (request method, path, status and connecting address) and logs
