@@ -7,6 +7,9 @@ because the previous one may already be applied.
 Under f3a9c6d41b85 a deleted admin's links became created_by NULL and would pass as CLI links, which
 skip the admin rechecks. That revision cannot tell them apart from real CLI links, so upgrade drops
 every unused NULL link. CLI links are rare, short-lived and can be re-issued. Used rows are kept.
+The DELETE only matters on a database where f3a9c6d41b85 ran without this revision. No such
+database has reached Neon (neither revision is deployed). A link removed this way can simply
+be re-issued.
 Downgrade does not restore the deleted rows; the schema still round-trips.
 
 Revision ID: a7c2e9d05b14
