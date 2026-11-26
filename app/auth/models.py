@@ -49,6 +49,32 @@ class InviteCode(Base):
     )
 
 
+class PasswordResetToken(Base):
+    """Single-use password reset link. Only the SHA-256 of the token is stored. Rows go with the
+    account (CASCADE); `created_by` is the admin, SET NULL when that account is deleted."""
+
+    __tablename__ = "password_reset_tokens"
+    __table_args__ = (
+        Index("ix_password_reset_tokens_user_id", "user_id"),
+        Index("ix_password_reset_tokens_created_by", "created_by"),
+    )
+    id = Column(Integer, primary_key=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", name="fk_password_reset_tokens_user_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    token_hash = Column(String, unique=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+    created_by = Column(
+        Integer,
+        ForeignKey("users.id", name="fk_password_reset_tokens_created_by", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+
 class RateLimitEvent(Base):
     """One attempt for a limiter key (e.g. `login:ip:1.2.3.4`). Emails appear only as SHA-256."""
 
