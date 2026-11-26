@@ -32,7 +32,8 @@ export function Button({ variant = "primary", className = "", ...props }: Props)
 
 // The one 44px text action (Edit, Delete). `href` renders a link, `onClick` a button. `disabled` keeps
 // the same element (aria-disabled, click ignored): swapping elements during a background refresh would
-// remount the node and drop keyboard focus. `bar` inherits the app bar's colour.
+// remount the node and drop keyboard focus. `bar` inherits the app bar's colour. `external` (with `href`)
+// is a plain link to another site that opens in a new tab.
 type Tone = "bar" | "primary" | "danger";
 const tones: Record<Tone, { on: string; off: string }> = {
   bar: { on: "", off: "text-bar-text/60" },
@@ -43,6 +44,7 @@ const action = "inline-flex min-h-11 min-w-11 items-center justify-center rounde
 
 export function TextAction({
   href,
+  external = false,
   onClick,
   disabled = false,
   tone = "primary",
@@ -50,6 +52,7 @@ export function TextAction({
   children,
 }: {
   href?: string;
+  external?: boolean;
   onClick?: () => void;
   disabled?: boolean;
   tone?: Tone;
@@ -58,6 +61,13 @@ export function TextAction({
 }) {
   const cls = `${action} ${disabled ? tones[tone].off : tones[tone].on}`;
   const off = disabled || undefined;
+  // `disabled` is ignored when `external` is set.
+  if (href && external)
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" aria-label={ariaLabel} className={cls}>
+        {children}
+      </a>
+    );
   return href ? (
     // Next's Link skips navigation when the click's default is prevented.
     <Link href={href} aria-disabled={off} onClick={(e) => disabled && e.preventDefault()} aria-label={ariaLabel} className={cls}>

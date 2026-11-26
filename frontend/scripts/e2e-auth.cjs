@@ -82,6 +82,12 @@ withEnv(async ({ base, createInvite }) => {
     await page.getByText(email).waitFor();
     check("account shows name and email", await page.getByText("E2E Tester").isVisible());
     await shoot(page, "account");
+    // Not clicked: that would go out to Google.
+    const feedback = page.getByRole("link", { name: "Send feedback" });
+    const attrs = await Promise.all(["href", "target", "rel"].map((n) => feedback.getAttribute(n)));
+    check("Account Send feedback href, target and rel", attrs.join("|") === "https://forms.gle/3hZLT139qzu4rYpw9|_blank|noopener noreferrer", attrs.join("|"));
+    const box = await feedback.boundingBox();
+    check("Account Send feedback is at least 44x44", box.width >= 44 && box.height >= 44, `${box.width}x${box.height}`);
     await page.getByRole("link", { name: "Privacy" }).click();
     await page.waitForURL(/\/privacy$/);
     check("signed in: Account Privacy link reaches /privacy", await page.getByRole("heading", { level: 1, name: "Privacy" }).isVisible());
