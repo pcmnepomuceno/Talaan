@@ -4,6 +4,11 @@ A deleted admin's links must die with the account. With SET NULL they became cre
 which is how a CLI link looks, and a CLI link may reset an admin account. Kept as its own revision
 because the previous one may already be applied.
 
+Under f3a9c6d41b85 a deleted admin's links became created_by NULL and would pass as CLI links, which
+skip the admin rechecks. That revision cannot tell them apart from real CLI links, so upgrade drops
+every unused NULL link. CLI links are rare, short-lived and can be re-issued. Used rows are kept.
+Downgrade does not restore the deleted rows; the schema still round-trips.
+
 Revision ID: a7c2e9d05b14
 Revises: f3a9c6d41b85
 Create Date: 2026-11-26 14:00:00.000000
@@ -30,6 +35,7 @@ def _recreate(ondelete: str) -> None:
 
 
 def upgrade() -> None:
+    op.execute("DELETE FROM password_reset_tokens WHERE created_by IS NULL AND used_at IS NULL")
     _recreate("CASCADE")
 
 
