@@ -63,6 +63,32 @@ describe("popup.css tokens", () => {
   });
 });
 
+describe("popup.css layout", () => {
+  const spacing = (css) => css.match(/--spacing\s*:\s*([^;]+);/)?.[1].trim();
+  const body = (selector) => popupCss.match(new RegExp(`^${selector}\\s*\\{([^}]*)\\}`, "m"))?.[1] ?? "";
+
+  it("copies --spacing from frontend tokens.css", () => {
+    expect(spacing(popupCss)).toBeDefined();
+    expect(spacing(popupCss)).toBe(spacing(tokensCss));
+  });
+
+  it("takes the field margin from var(--spacing)", () => {
+    expect(body("\\.field")).toMatch(/margin:\s*0 0 calc\(var\(--spacing\) \* 2\);/);
+  });
+
+  it("collapses the empty status line", () => {
+    expect(body("#status:empty")).toMatch(/min-height:\s*0;/);
+    expect(body("#status:empty")).toMatch(/margin:\s*0;/);
+  });
+
+  // #status is an aria-live region: hiding it would drop announcements.
+  it("never hides the status line", () => {
+    const rules = [...popupCss.matchAll(/#status(?![-\w])[^{}]*\{([^}]*)\}/g)];
+    expect(rules.length).toBeGreaterThan(0);
+    for (const [, decls] of rules) expect(decls).not.toMatch(/display:\s*none|visibility:\s*hidden/);
+  });
+});
+
 describe("popup.html", () => {
   it("has no inline script, inline style or inline handler", () => {
     expect(popupHtml).not.toMatch(/<script(?![^>]*\bsrc=)/i);
@@ -75,6 +101,11 @@ describe("popup.html", () => {
     expect(popupHtml.match(/<script\b/gi)).toHaveLength(1);
     expect(popupHtml).toContain('<script type="module" src="popup.js"></script>');
     expect(popupHtml).toContain('<link rel="stylesheet" href="popup.css">');
+  });
+
+  // :empty only matches with no children and no whitespace.
+  it("keeps the status element completely empty", () => {
+    expect(popupHtml).toMatch(/<p id="status"[^>]*><\/p>/);
   });
 
   it("has no password input", () => {
