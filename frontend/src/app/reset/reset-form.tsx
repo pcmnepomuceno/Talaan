@@ -11,6 +11,8 @@ import { resetPassword } from "@/lib/auth";
 import { ApiError, errorMessage } from "@/lib/http";
 
 const DEAD = "This reset link is invalid or has expired. Ask for a new one.";
+// No fragment at all (a reload after it was stripped, or a bare /reset): the link may still work.
+const OPEN_AGAIN = "Open your reset link again to set a new password. If it no longer works, ask for a new one.";
 type Errors = { password?: string; confirm?: string };
 
 export function ResetForm() {
@@ -93,7 +95,7 @@ export function ResetForm() {
         <h1 className="text-page-title text-text-primary">Reset password</h1>
         {token === "" || rejected ? (
           <>
-            <Banner title={DEAD} />
+            <Banner title={rejected ? DEAD : OPEN_AGAIN} />
             <p className="text-center">
               <TextAction href="/login">Back to log in</TextAction>
             </p>

@@ -13,6 +13,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => router }));
 const TOKEN = "fake-reset-token";
 const PATH = "/api/v1/auth/reset-password";
 const DEAD = "This reset link is invalid or has expired. Ask for a new one.";
+const OPEN_AGAIN = "Open your reset link again to set a new password. If it no longer works, ask for a new one.";
 const json = (status: number, body?: unknown, headers?: Record<string, string>) =>
   new Response(body === undefined ? null : JSON.stringify(body), { status, headers });
 
@@ -88,11 +89,33 @@ describe("reset form", () => {
     expect(sentToken()).toBe(true);
   });
 
-  it("without a token shows the generic error and no form", () => {
+  it("without a token asks to open the link again, not that the link is dead", () => {
     window.history.replaceState(null, "", "/reset");
     render(<ResetForm />);
-    expect(screen.getByRole("alert").textContent).toContain(DEAD);
+    expect(screen.getByRole("alert").textContent).toContain(OPEN_AGAIN);
+    expect(page().includes(DEAD)).toBe(false);
     expect(screen.queryByLabelText("New password")).toBeNull();
+    expect(screen.getByRole("link", { name: "Back to log in" })).toBeTruthy();
+  });
+
+  it("with a token (StrictMode) shows the form and neither message", () => {
+    render(
+      <StrictMode>
+        <ResetForm />
+      </StrictMode>,
+    );
+    expect(screen.getByLabelText("New password")).toBeTruthy();
+    expect(page().includes(OPEN_AGAIN)).toBe(false);
+    expect(page().includes(DEAD)).toBe(false);
+  });
+
+  it("a reload after the fragment was stripped asks to open the link again", () => {
+    const first = render(<ResetForm />);
+    expect(window.location.hash).toBe("");
+    first.unmount();
+    render(<ResetForm />); // the URL is /reset now, as after a reload
+    expect(screen.getByRole("alert").textContent).toContain(OPEN_AGAIN);
+    expect(page().includes(DEAD)).toBe(false);
   });
 
   it("empty fields and a mismatch are inline errors and nothing is sent", async () => {
@@ -129,6 +152,7 @@ describe("reset form", () => {
     render(<ResetForm />);
     await submit();
     expect((await screen.findByRole("alert")).textContent).toContain(DEAD);
+    expect(page().includes(OPEN_AGAIN)).toBe(false);
     expect(screen.queryByLabelText("New password")).toBeNull();
     expect(page().includes(TOKEN)).toBe(false);
     expect(router.replace).not.toHaveBeenCalled();
