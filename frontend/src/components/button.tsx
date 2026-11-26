@@ -61,11 +61,12 @@ export function TextAction({
 }) {
   const cls = `${action} ${disabled ? tones[tone].off : tones[tone].on}`;
   const off = disabled || undefined;
-  // `disabled` is ignored when `external` is set.
+  // `disabled` is ignored (an external link always works and looks enabled).
   if (href && external)
     return (
-      <a href={href} target="_blank" rel="noopener noreferrer" aria-label={ariaLabel} className={cls}>
+      <a href={href} target="_blank" rel="noopener noreferrer" aria-label={ariaLabel} className={`${action} ${tones[tone].on}`}>
         {children}
+        <span className="sr-only"> (opens in a new tab)</span>
       </a>
     );
   return href ? (

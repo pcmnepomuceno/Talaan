@@ -83,7 +83,7 @@ withEnv(async ({ base, createInvite }) => {
     check("account shows name and email", await page.getByText("E2E Tester").isVisible());
     await shoot(page, "account");
     // Not clicked: that would go out to Google.
-    const feedback = page.getByRole("link", { name: "Send feedback" });
+    const feedback = page.getByRole("link", { name: /Send feedback/ });
     // Count first: getAttribute and boundingBox on a missing link would time out and throw.
     const found = (await feedback.count()) === 1;
     const attrs = found ? await Promise.all(["href", "target", "rel"].map((n) => feedback.getAttribute(n))) : [];

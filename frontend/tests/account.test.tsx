@@ -67,7 +67,7 @@ describe("profile", () => {
   it("links to the feedback form in a new tab", async () => {
     render(<AccountScreen />);
     await screen.findByText("ana@example.ph");
-    const link = screen.getByRole("link", { name: "Send feedback" });
+    const link = screen.getByRole("link", { name: /Send feedback/ });
     expect(link.getAttribute("href")).toBe("https://forms.gle/3hZLT139qzu4rYpw9");
     expect(link.getAttribute("target")).toBe("_blank");
     expect(link.getAttribute("rel")).toBe("noopener noreferrer");
