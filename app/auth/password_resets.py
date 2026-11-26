@@ -4,14 +4,18 @@ An admin (or the CLI) creates a single-use, 24-hour token and passes the link on
 SHA-256 of the token is stored. Never log a token: it leaves the server once, in the create
 response (or the one CLI print).
 
-Lock order, shared with account delete: the user row first, then its token rows.
+Lock order, shared with account delete: the user row first, then its token rows. A reset never
+waits on a limiter row while it holds the user row (login holds a limiter row, then wants the
+user row), so the login lockout is cleared after the commit, best effort.
 """
 
+import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app import config
@@ -23,6 +27,8 @@ from app.auth.schemas import PasswordReset, PasswordResetCreate, PasswordResetCr
 from app.auth.security import hash_password, hash_session_token, verify_password
 from app.database import get_db
 from app.users.models import User
+
+logger = logging.getLogger(__name__)
 
 LIFETIME = timedelta(hours=24)
 # token_urlsafe(32) is 43 characters. Longer input is rejected before hashing.
@@ -150,9 +156,20 @@ def reset_password(body: PasswordReset, request: Request, db: Session = Depends(
         {"p": password_hash, "id": user_id},
     ).scalar_one()
     db.query(SessionModel).filter(SessionModel.user_id == user_id).delete(synchronize_session=False)
-    # A friend locked out by failed logins can log in right away.
-    db.query(RateLimitEvent).filter(RateLimitEvent.key == rate_limit.email_key(email)).delete(
-        synchronize_session=False
-    )
     db.commit()
+
+    # A friend locked out by failed logins can log in right away. Separate transaction, no user row
+    # lock held: a login in flight holds its limiter row while it waits for the user row. The
+    # password is already changed, so a failure here is only logged (no email, no key).
+    try:
+        db.query(RateLimitEvent).filter(RateLimitEvent.key == rate_limit.email_key(email)).delete(
+            synchronize_session=False
+        )
+        db.commit()
+    except SQLAlchemyError:
+        try:
+            db.rollback()
+        except SQLAlchemyError:
+            pass  # dead connection: the password is changed, the answer is still 204
+        logger.warning("Password reset: could not clear the login lockout; it ends with its window.")
     return Response(status_code=204)

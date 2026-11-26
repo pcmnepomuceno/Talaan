@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 
 from app import config
 from app.auth import password_resets, rate_limit
@@ -447,3 +448,149 @@ def test_reset_takes_the_user_lock_before_the_token_so_a_create_cannot_deadlock(
     finally:
         holder.rollback()
         holder.close()
+
+
+# --- reset vs login ---
+
+@pytest.fixture
+def committed_friend(monkeypatch):
+    """A committed account with a real password hash, for races between reset and login."""
+    for name in ("LOGIN_IP_LIMIT", "LOGIN_EMAIL_LIMIT", "RESET_PASSWORD_IP_LIMIT"):
+        monkeypatch.setattr(config, name, 10_000)
+    setup = SessionLocal()
+    u = User(email=f"race-{uuid.uuid4().hex[:8]}@example.com", password_hash=hash_password(OLD),
+             account_name="Race")
+    setup.add(u)
+    setup.commit()
+    user_id, email = u.id, u.email
+    setup.close()
+    yield user_id, email
+    purge(
+        ("DELETE FROM users WHERE id = :id", {"id": user_id}),
+        ("DELETE FROM rate_limit_events WHERE key IN ('reset-password:ip:unknown', 'login:ip:unknown', :k)",
+         {"k": rate_limit.email_key(email)}),
+    )
+
+
+def committed_sessions_and_lockout(user_id, email) -> tuple[int, int]:
+    db = SessionLocal()
+    try:
+        return (db.query(SessionModel).filter(SessionModel.user_id == user_id).count(),
+                db.query(RateLimitEvent).filter_by(key=rate_limit.email_key(email)).count())
+    finally:
+        db.close()
+
+
+def run_request(results, errors, name, send):
+    """Run one request in its own client; record the status, or the first line of what it raised."""
+    try:
+        with TestClient(app) as c:
+            results[name] = send(c).status_code
+    except Exception as e:  # noqa: BLE001 - a thread would swallow it; asserted by the caller
+        errors.append(f"{name}: {type(e).__name__}: {str(e).splitlines()[0]}")
+
+
+def test_reset_racing_a_successful_login_does_not_deadlock(committed_friend, monkeypatch):
+    """The reset holds the user row; login then deletes its limiter row and goes on to need the user
+    row. The reset must not wait for that limiter row, or each waits for the other. Forced, not
+    left to timing."""
+    user_id, email = committed_friend
+    token = committed_token(user_id)
+    reset_has_user_row, limiter_row_deleted = threading.Event(), threading.Event()
+    real_delete, real_consume = rate_limit.delete_event, password_resets.consume
+
+    errors = []
+
+    def delete_event(*a, **kw):
+        if not reset_has_user_row.wait(10):
+            errors.append("sync: the reset never took the user row")
+        real_delete(*a, **kw)
+        limiter_row_deleted.set()
+
+    def consume(db, token_hash):  # called with the user row already locked
+        reset_has_user_row.set()
+        if not limiter_row_deleted.wait(10):
+            errors.append("sync: login never deleted its limiter row")
+        return real_consume(db, token_hash)
+
+    monkeypatch.setattr(rate_limit, "delete_event", delete_event)
+    monkeypatch.setattr(password_resets, "consume", consume)
+    results = {}
+    join_all([
+        spawn(run_request, results, errors, "login", lambda c: c.post(
+            "/api/v1/login", json={"email": email, "password": OLD})),
+        spawn(run_request, results, errors, "reset", lambda c: reset(c, token)),
+    ], timeout=60)
+    assert not errors, errors
+    assert results == {"reset": 204, "login": 401}
+    assert committed_sessions_and_lockout(user_id, email) == (0, 0)
+    with TestClient(app) as c:
+        assert c.post("/api/v1/login", json={"email": email, "password": NEW}).status_code == 200
+
+
+def race_once(user_id, email, old, new):
+    """Login with the old password and reset to the new one, started together."""
+    token = committed_token(user_id)
+    start = threading.Barrier(2)
+    results, errors = {}, []
+
+    def login_request(c):
+        start.wait(timeout=10)
+        return c.post("/api/v1/login", json={"email": email, "password": old})
+
+    def reset_request(c):
+        start.wait(timeout=10)
+        return reset(c, token, new_password=new)
+
+    join_all([
+        spawn(run_request, results, errors, "login", login_request),
+        spawn(run_request, results, errors, "reset", reset_request),
+    ], timeout=60)
+    return results, errors
+
+
+def test_reset_and_login_race_repeatedly(committed_friend):
+    user_id, email = committed_friend
+    current = OLD
+    for i in range(25):
+        new = NEW if current == OLD else OLD
+        results, errors = race_once(user_id, email, current, new)
+        assert not errors, (i, errors)
+        assert results["reset"] == 204 and results["login"] in (200, 401), (i, results)
+        assert committed_sessions_and_lockout(user_id, email)[0] == 0, (i, results)
+        current = new
+
+
+def test_a_failed_lockout_clear_after_the_commit_is_still_a_204(client, db, friend, monkeypatch, caplog):
+    def broken(_email):
+        raise OperationalError("DELETE", {}, Exception("connection lost"))
+
+    add_sessions(db, friend.id, 2, "ana")
+    monkeypatch.setattr(rate_limit, "email_key", broken)
+    monkeypatch.setattr(password_resets.logger, "disabled", False)  # alembic's fileConfig disabled it
+    with caplog.at_level(logging.WARNING, logger="app.auth.password_resets"):
+        r = reset(client, make_token(db, friend.id))
+    assert r.status_code == 204
+    assert session_count(db, friend.id) == 0
+    warned = "lockout" in caplog.text and FRIEND not in caplog.text
+    monkeypatch.undo()
+    db.expire_all()
+    assert login(client, NEW).status_code == 200
+    assert warned
+
+
+def test_a_dead_connection_during_the_lockout_clear_is_still_a_204(client, db, friend, monkeypatch):
+    """The rollback after a failed clear fails too (the connection is gone): still a 204."""
+    def broken(_email):
+        raise OperationalError("DELETE", {}, Exception("connection lost"))
+
+    def dead_rollback():
+        raise OperationalError("ROLLBACK", {}, Exception("connection lost"))
+
+    token = make_token(db, friend.id)
+    monkeypatch.setattr(rate_limit, "email_key", broken)
+    monkeypatch.setattr(db, "rollback", dead_rollback)
+    assert reset(client, token).status_code == 204
+    monkeypatch.undo()
+    db.expire_all()
+    assert login(client, NEW).status_code == 200

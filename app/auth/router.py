@@ -17,6 +17,7 @@ app/schemas/session.py for the pieces these will need.
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -125,15 +126,25 @@ def login(
 
     # Only this attempt's email row: other failures (another client's guesses) stay counted,
     # and the IP row stays. Committed together with the session below.
+    user_id, verified_hash = user.id, user.password_hash
     with rate_limit.fail_closed(db):
         rate_limit.delete_event(db, event_ids[em_key])
+        # A reset may have changed the password since the verify above. FOR SHARE waits for one in
+        # flight (it holds the row), and under READ COMMITTED then reads the new hash. Without this
+        # a login that verified the old password could still get a session after the reset.
+        current_hash = db.execute(
+            text("SELECT password_hash FROM users WHERE id = :id FOR SHARE"), {"id": user_id}
+        ).scalar()
+    if current_hash != verified_hash:
+        db.rollback()
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
 
     # Generate a session token
     session_token = generate_session_token()
 
     # Create a new session
     session = SessionModel(
-        user_id=user.id,
+        user_id=user_id,
         token_hash=hash_session_token(session_token),
         created_at=datetime.now(timezone.utc),
         expires_at=datetime.now(timezone.utc) + SESSION_LIFETIME
@@ -142,9 +153,9 @@ def login(
     try:
         db.commit()
     except IntegrityError as e:
-        # Only a foreign key violation (23503) means the account was deleted between the
-        # password check and this insert (the FK insert waited for the delete to commit).
-        # No session row exists; same 401. Any other integrity error is a real bug: re-raise.
+        # Only a foreign key violation (23503) means the account was deleted before this insert.
+        # The FOR SHARE recheck above should prevent that (it holds the row until this commit), so
+        # this branch is defensive only. No session row exists; same 401. Any other integrity error is a real bug: re-raise.
         db.rollback()
         if getattr(e.orig, "pgcode", None) != FOREIGN_KEY_VIOLATION:
             raise
