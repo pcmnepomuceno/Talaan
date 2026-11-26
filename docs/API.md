@@ -89,6 +89,7 @@ Admin gate as for invites. Body (unknown fields are 422): `email` (trimmed, lowe
 - `429` rate limited (10 attempts per admin and 10 per IP per hour, `ADMIN_RESET_USER_*`, `ADMIN_RESET_IP_*`, every attempt counted). `503` when the limiter cannot reach the database.
 - `403 {"detail": "Incorrect password."}`.
 - `404 {"detail": "No account with that email."}`.
+- `404 {"detail": "Not Found"}` when the caller's own account was deleted during the request.
 - `400 {"detail": "You can't reset your own password here."}`.
 - `400 {"detail": "Admin accounts are reset with the CLI."}`.
 

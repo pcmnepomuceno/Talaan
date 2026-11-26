@@ -746,5 +746,5 @@ def test_the_admins_own_delete_then_create_answers_404_not_a_500(admin_target, m
     join_all([deleting, spawn(run_request, results, errors, "create", send_create)], timeout=60)
     assert not errors, errors
     assert results == {"create": 404, "delete": 204}
-    assert details["create"] == password_resets.NO_ACCOUNT
+    assert details["create"] == "Not Found"
     assert committed_token_count(target_id) == 0
