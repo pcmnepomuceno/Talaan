@@ -84,10 +84,12 @@ withEnv(async ({ base, createInvite }) => {
     await shoot(page, "account");
     // Not clicked: that would go out to Google.
     const feedback = page.getByRole("link", { name: "Send feedback" });
-    const attrs = await Promise.all(["href", "target", "rel"].map((n) => feedback.getAttribute(n)));
+    // Count first: getAttribute and boundingBox on a missing link would time out and throw.
+    const found = (await feedback.count()) === 1;
+    const attrs = found ? await Promise.all(["href", "target", "rel"].map((n) => feedback.getAttribute(n))) : [];
     check("Account Send feedback href, target and rel", attrs.join("|") === "https://forms.gle/3hZLT139qzu4rYpw9|_blank|noopener noreferrer", attrs.join("|"));
-    const box = await feedback.boundingBox();
-    check("Account Send feedback is at least 44x44", box.width >= 44 && box.height >= 44, `${box.width}x${box.height}`);
+    const box = found ? await feedback.boundingBox() : null;
+    check("Account Send feedback is at least 44x44", !!box && box.width >= 44 && box.height >= 44, box ? `${box.width}x${box.height}` : "link not found");
     await page.getByRole("link", { name: "Privacy" }).click();
     await page.waitForURL(/\/privacy$/);
     check("signed in: Account Privacy link reaches /privacy", await page.getByRole("heading", { level: 1, name: "Privacy" }).isVisible());
