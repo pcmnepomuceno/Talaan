@@ -15,7 +15,7 @@ describe("privacy page", () => {
       "mailto:pcmnepomuceno@gmail.com",
     );
     expect(document.body.textContent).toContain("Prince Czedrick Nepomuceno");
-    expect(screen.getByText("Last updated 26 November 2026")).toBeTruthy();
+    expect(screen.getByText("Last updated 27 November 2026")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Back to Talaan" }).getAttribute("href")).toBe("/");
   });
 
@@ -60,7 +60,7 @@ describe("privacy page", () => {
         "I can create a password reset link for any account. I only do this when the account's owner asks me to. Using a link changes the password and signs the account out of every device. I cannot see your password. An unused link has no effect on your account.",
       ),
     ).toBeTruthy();
-    expect(screen.getByText("Last updated 26 November 2026")).toBeTruthy();
+    expect(screen.getByText("Last updated 27 November 2026")).toBeTruthy();
   });
 
   it("repeats the popup disclosure and says how the extension signs in", () => {

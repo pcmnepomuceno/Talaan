@@ -36,7 +36,7 @@ export default function PrivacyPage() {
         className="mx-auto max-w-[640px] break-words px-4 pt-6 pb-12 text-body text-text-secondary outline-none"
       >
         <h1 className="text-page-title text-text-primary">Privacy</h1>
-        <p className="mt-2">Last updated 26 November 2026</p>
+        <p className="mt-2">Last updated 27 November 2026</p>
 
         <Section title="Who runs Talaan and how to reach me">
           <p>
