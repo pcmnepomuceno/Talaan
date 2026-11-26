@@ -13,8 +13,8 @@ import { LoadError } from "@/components/load-error";
 import { StatusStamp } from "@/components/status-stamp";
 import { useToast } from "@/components/toast";
 import { WakingUp } from "@/components/waking-up";
-import { type CreatedInvite, type Invite, createInvite, listInvites, revokeInvite } from "@/lib/admin";
-import { formatDate } from "@/lib/format";
+import { type CreatedInvite, type Invite, createInvite, createPasswordReset, listInvites, revokeInvite } from "@/lib/admin";
+import { formatDate, formatDateTimePHT } from "@/lib/format";
 import { ApiError, errorMessage } from "@/lib/http";
 
 const NOTE_MAX = 200;
@@ -24,6 +24,8 @@ const DEFAULT_DAYS = "14";
 const ANNOUNCEMENT = "Code created. It is shown once, below the form.";
 const COPY_FAILED = "Couldn't copy the code. Select it and copy it yourself.";
 const wrap = "[overflow-wrap:anywhere]";
+const LINK_ANNOUNCEMENT = "Reset link created. It is shown once, below the form.";
+const LINK_COPY_FAILED = "Couldn't copy the link. Select it and copy it yourself.";
 
 type Field = "note" | "expires" | "password";
 const inviteName = (i: Invite) => (i.note ? i.note : `invite ${i.id}`);
@@ -304,6 +306,8 @@ export function AdminScreen() {
           </section>
         )}
 
+        <ResetPassword onGone={() => setGone(true)} />
+
         <section aria-labelledby="invites" className="mt-8 flex flex-col gap-4">
           <h2 ref={invitesHeading} id="invites" tabIndex={-1} className="text-section-title text-text-primary outline-none">
             Invites
@@ -330,6 +334,143 @@ export function AdminScreen() {
         busy={revokeBusy}
       />
     </>
+  );
+}
+
+type ResetField = "email" | "password";
+
+function ResetPassword({ onGone }: { onGone: () => void }) {
+  const toast = useToast();
+  // The link holds the token: component state only, like the invite code.
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [errors, setErrors] = useState<Partial<Record<ResetField, string>>>({});
+  const [banner, setBanner] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const [made, setMade] = useState<{ link: string; expires_at: string } | null>(null);
+  const [focusReq, setFocusReq] = useState<{ n: number; field: ResetField } | null>(null);
+  const submitting = useRef(false);
+  const emailInput = useRef<HTMLInputElement>(null);
+  const passwordInput = useRef<HTMLInputElement>(null);
+  const copyButton = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (focusReq) (focusReq.field === "email" ? emailInput : passwordInput).current?.focus();
+  }, [focusReq]);
+  useEffect(() => {
+    if (made) copyButton.current?.focus();
+  }, [made]);
+
+  function fail(next: Partial<Record<ResetField, string>>, message: string | null = null) {
+    setErrors(next);
+    setBanner(message);
+    setFocusReq((r) => ({ n: (r?.n ?? 0) + 1, field: next.email ? "email" : "password" }));
+  }
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (submitting.current) return;
+    const address = email.trim();
+    const missing: Partial<Record<ResetField, string>> = {};
+    if (!address) missing.email = "Enter their email.";
+    if (!password) missing.password = "Enter your password.";
+    if (missing.email || missing.password) return fail(missing);
+
+    submitting.current = true;
+    setPending(true);
+    setMade(null);
+    setErrors({});
+    setBanner(null);
+    try {
+      const { token, expires_at } = await createPasswordReset({ email: address, admin_password: password });
+      setMade({ link: `${window.location.origin}/reset#${token}`, expires_at });
+      setEmail("");
+      setPassword("");
+    } catch (err) {
+      const e2 = err instanceof ApiError ? err : null;
+      // The admin gate's plain "Not Found": no longer an admin. Another 404 is the unknown email.
+      if (e2?.status === 404 && e2.detail === "Not Found") return onGone();
+      setPassword("");
+      if (e2?.status === 404 || e2?.status === 400) return fail({ email: e2.detail });
+      if (e2?.status === 403 && e2.detail === "Incorrect password.") return fail({ password: e2.detail });
+      const fields = e2?.status === 422 ? e2.fieldErrors : {};
+      if (fields.email || fields.admin_password) return fail({ email: fields.email, password: fields.admin_password });
+      fail({}, errorMessage(err) ?? "Something went wrong. Try again.");
+    } finally {
+      submitting.current = false;
+      setPending(false);
+    }
+  }
+
+  async function onCopy() {
+    if (!made) return;
+    try {
+      if (!navigator.clipboard) throw new Error("no clipboard");
+      await navigator.clipboard.writeText(made.link);
+      toast.success("Link copied.");
+    } catch {
+      toast.error(LINK_COPY_FAILED);
+    }
+  }
+
+  return (
+    <section aria-labelledby="reset" className="mt-8 flex flex-col gap-4">
+      <h2 id="reset" className="text-section-title text-text-primary">
+        Reset a password
+      </h2>
+      <p aria-live="polite" className="sr-only">
+        {made ? LINK_ANNOUNCEMENT : ""}
+      </p>
+      <form noValidate onSubmit={onSubmit} aria-busy={pending || undefined} className="flex flex-col gap-5">
+        {banner && <Banner title={banner} />}
+        <TextField
+          ref={emailInput}
+          label="Email"
+          name="email"
+          type="email"
+          autoComplete="off"
+          required
+          value={email}
+          error={errors.email}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            setErrors((x) => ({ ...x, email: undefined }));
+          }}
+        />
+        <PasswordField
+          ref={passwordInput}
+          label="Your password"
+          name="admin_password"
+          autoComplete="current-password"
+          required
+          value={password}
+          error={errors.password}
+          onChange={(e) => {
+            setPassword(e.target.value);
+            setErrors((x) => ({ ...x, password: undefined }));
+          }}
+        />
+        <Button type="submit" disabled={pending} className="w-full sm:w-auto sm:self-start">
+          {pending ? "Creating…" : "Create reset link"}
+        </Button>
+      </form>
+      {made && (
+        <>
+          <h3 className="text-body-medium text-text-primary">Reset link, shown once</h3>
+          <LedgerSheet>
+            <li className="flex flex-col items-start gap-3 p-4">
+              <p className={`max-w-full select-all text-body-medium text-text-primary ${wrap}`}>{made.link}</p>
+              <p className="text-caption tabular-nums text-text-muted">
+                {`Expires ${formatDateTimePHT(made.expires_at) ?? "date unavailable"}`}
+              </p>
+              <Button ref={copyButton} variant="secondary" onClick={onCopy}>
+                Copy link
+              </Button>
+            </li>
+          </LedgerSheet>
+        </>
+      )}
+    </section>
   );
 }
 

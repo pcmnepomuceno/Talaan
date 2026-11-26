@@ -36,7 +36,7 @@ withEnv(async ({ base, apiBase, createInvite }) => {
     const createCode = async (note, pw = password) => {
       await page.getByLabel("Note").fill(note);
       await page.getByLabel("Expires in").selectOption("7");
-      await page.getByLabel("Your password", { exact: true }).fill(pw);
+      await page.locator('section[aria-labelledby="create"]').getByLabel("Your password", { exact: true }).fill(pw);
       await page.getByRole("button", { name: "Create code" }).click();
     };
     const readCode = async () => {

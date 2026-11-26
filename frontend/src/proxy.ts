@@ -7,7 +7,7 @@ import { NextResponse, type NextRequest } from "next/server";
 // cookie here instead would loop (/login would bounce back to the app).
 // It never redirects away from /login for the same reason: the login page asks /me itself.
 const COOKIES = ["session_token", "__Host-session_token"];
-const PUBLIC = ["/login", "/design", "/privacy"];
+const PUBLIC = ["/login", "/design", "/privacy", "/reset"];
 
 // /api/* is forwarded to the backend HERE (not in next.config rewrites, which cannot add request
 // headers). The browser only talks to the Next origin, so the session cookie is first-party and no
@@ -73,7 +73,15 @@ function forwardToApi(request: NextRequest) {
 export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   if (pathname === "/api" || pathname.startsWith("/api/")) return forwardToApi(request);
-  if (PUBLIC.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return NextResponse.next();
+  if (PUBLIC.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+    const res = NextResponse.next();
+    if (pathname === "/reset") {
+      // The page handles a secret link: never cached, and no referrer from it.
+      res.headers.set("Cache-Control", "no-store");
+      res.headers.set("Referrer-Policy", "no-referrer");
+    }
+    return res;
+  }
   if (COOKIES.some((name) => request.cookies.has(name))) return NextResponse.next();
 
   const login = new URL("/login", request.url);

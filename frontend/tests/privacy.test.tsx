@@ -15,7 +15,7 @@ describe("privacy page", () => {
       "mailto:pcmnepomuceno@gmail.com",
     );
     expect(document.body.textContent).toContain("Prince Czedrick Nepomuceno");
-    expect(screen.getByText("Last updated 26 November 2026")).toBeTruthy();
+    expect(screen.getByText("Last updated 27 November 2026")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Back to Talaan" }).getAttribute("href")).toBe("/");
   });
 
@@ -38,6 +38,29 @@ describe("privacy page", () => {
     expect(screen.getAllByRole("listitem").map((li) => li.textContent)).toContain(
       "Google Forms hosts the feedback form linked from Account.",
     );
+  });
+
+  it("describes password reset links: what is stored, for how long, and what using one does", () => {
+    render(<PrivacyPage />);
+    const items = screen.getAllByRole("listitem").map((li) => li.textContent);
+    expect(items).toContain(
+      "Password reset links: a hash of the link's token, which account it is for and which admin made it, and when it was created, expires and was used.",
+    );
+    expect(items).toContain(
+      "Attempt limits: records of attempts to sign up, log in, delete an account, create an invite, create a password reset link or reset a password. A record has a time and one of these: the IP address in plain text (an IPv6 address is cut to its /64 network), a one-way hash of the email address, or the account number.",
+    );
+    expect(items).toContain(
+      "A cleanup scheduled to run daily deletes attempt limit records older than 7 days, expired sessions, and used or expired password reset links created more than 7 days ago.",
+    );
+    expect(items).toContain(
+      "To delete your account, go to Account and choose Delete account. This permanently removes your account, applications, interviews, sessions and password reset links, and the attempt limit records for your email address and your account deletion attempts.",
+    );
+    expect(
+      screen.getByText(
+        "I can create a password reset link for any account. I only do this when the account's owner asks me to. Using a link changes the password and signs the account out of every device. I cannot see your password. An unused link has no effect on your account.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText("Last updated 27 November 2026")).toBeTruthy();
   });
 
   it("repeats the popup disclosure and says how the extension signs in", () => {

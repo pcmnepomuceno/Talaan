@@ -9,5 +9,12 @@ const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v
 // searchParams (not useSearchParams) keeps the page free of a Suspense boundary at build time.
 export default async function Page({ searchParams }: { searchParams: Promise<Query> }) {
   const q = await searchParams;
-  return <LoginForm expired={first(q.expired) === "1"} deleted={first(q.deleted) === "1"} next={first(q.next)} />;
+  return (
+    <LoginForm
+      expired={first(q.expired) === "1"}
+      deleted={first(q.deleted) === "1"}
+      reset={first(q.reset) === "1"}
+      next={first(q.next)}
+    />
+  );
 }

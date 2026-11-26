@@ -124,6 +124,11 @@ describe("notices and the /me probe", () => {
     expect(screen.getByRole("status").textContent).toBe("Your account has been deleted.");
   });
 
+  it("after a password reset says to log in with the new password", () => {
+    render(<LoginForm reset />);
+    expect(screen.getByRole("status").textContent).toBe("Password changed. Log in with your new password.");
+  });
+
   it("an existing session skips the form: /me 200 replaces to next, else /applications", async () => {
     handlers[ME] = () => json(200, { id: 1, email: "a@example.ph", account_name: "Ana" });
     const { unmount } = render(<LoginForm next="/applications/3?status=saved" />);
@@ -272,22 +277,23 @@ describe("create account", () => {
     expect(screen.getByLabelText("Password").getAttribute("autocomplete")).toBe("new-password");
   });
 
-  const NO_RESET = "There is no password reset yet. Keep your password somewhere safe.";
+  const FORGOT =
+    "Talaan sends no email. If you forget your password, ask the person who invited you for a reset link.";
   const described = (el: HTMLElement) =>
     (el.getAttribute("aria-describedby") ?? "")
       .split(" ")
       .map((id) => document.getElementById(id)?.textContent ?? "");
 
-  it("warns there is no password reset, and the helper describes the password input", async () => {
+  it("says how to recover a forgotten password, and the helper describes the password input", async () => {
     await openSignup();
     const pw = screen.getByLabelText("Password");
-    expect(screen.getByText(NO_RESET)).toBeTruthy();
-    expect(described(pw)).toEqual([NO_RESET]);
+    expect(screen.getByText(FORGOT)).toBeTruthy();
+    expect(described(pw)).toEqual([FORGOT]);
   });
 
-  it("log in mode has no password reset line", () => {
+  it("log in mode has no forgotten-password line", () => {
     render(<LoginForm />);
-    expect(screen.queryByText(NO_RESET)).toBeNull();
+    expect(screen.queryByText(FORGOT)).toBeNull();
   });
 
   it("a password error keeps the helper and describes the input by both", async () => {
@@ -299,8 +305,8 @@ describe("create account", () => {
     await screen.findByText("Password must be at most 72 bytes long.");
     const pw = screen.getByLabelText("Password");
     expect(pw.getAttribute("aria-invalid")).toBe("true");
-    expect(described(pw)).toEqual([NO_RESET, "Password must be at most 72 bytes long."]);
-    expect(screen.getByText(NO_RESET)).toBeTruthy();
+    expect(described(pw)).toEqual([FORGOT, "Password must be at most 72 bytes long."]);
+    expect(screen.getByText(FORGOT)).toBeTruthy();
   });
 
   it("signs up, then logs in with the same credentials, then navigates", async () => {

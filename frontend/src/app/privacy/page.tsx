@@ -36,7 +36,7 @@ export default function PrivacyPage() {
         className="mx-auto max-w-[640px] break-words px-4 pt-6 pb-12 text-body text-text-secondary outline-none"
       >
         <h1 className="text-page-title text-text-primary">Privacy</h1>
-        <p className="mt-2">Last updated 26 November 2026</p>
+        <p className="mt-2">Last updated 27 November 2026</p>
 
         <Section title="Who runs Talaan and how to reach me">
           <p>
@@ -75,9 +75,14 @@ export default function PrivacyPage() {
               which account used it.
             </li>
             <li>
-              Attempt limits: records of attempts to sign up, log in, delete an account or create an invite. A record
-              has a time and one of these: the IP address in plain text (an IPv6 address is cut to its /64 network), a
-              one-way hash of the email address, or the account number.
+              Password reset links: a hash of the link&apos;s token, which account it is for and which admin made it,
+              and when it was created, expires and was used.
+            </li>
+            <li>
+              Attempt limits: records of attempts to sign up, log in, delete an account, create an invite, create a
+              password reset link or reset a password. A record has a time and one of these: the IP address in plain
+              text (an IPv6 address is cut to its /64 network), a one-way hash of the email address, or the account
+              number.
             </li>
           </List>
         </Section>
@@ -128,6 +133,11 @@ export default function PrivacyPage() {
             the service.
           </p>
           <p>
+            I can create a password reset link for any account. I only do this when the account&apos;s owner asks me
+            to. Using a link changes the password and signs the account out of every device. I cannot see your
+            password. An unused link has no effect on your account.
+          </p>
+          <p>
             My server keeps a standard access log (request method, path, status and connecting address) and logs
             warnings and errors. An error report can include values you submitted, such as your email or entries. Vercel
             and Render also keep their own request logs as part of their service, for as long as they decide.
@@ -162,8 +172,8 @@ export default function PrivacyPage() {
             </li>
             <li>
               To delete your account, go to Account and choose Delete account. This permanently removes your account,
-              applications, interviews and sessions, and the attempt limit records for your email address and your
-              account deletion attempts.
+              applications, interviews, sessions and password reset links, and the attempt limit records for your email
+              address and your account deletion attempts.
             </li>
             <li>
               What stays: the invite code record, still marked as used, with my note but no longer linked to your
@@ -171,7 +181,8 @@ export default function PrivacyPage() {
               Entries in server and host logs also remain until they are discarded.
             </li>
             <li>
-              A cleanup scheduled to run daily deletes attempt limit records older than 7 days and expired sessions.
+              A cleanup scheduled to run daily deletes attempt limit records older than 7 days, expired sessions, and
+              used or expired password reset links created more than 7 days ago.
             </li>
             <li>
               I make no backups of my own. My database host keeps restore history as part of its service,

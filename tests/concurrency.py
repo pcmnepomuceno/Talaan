@@ -34,6 +34,29 @@ def join_all(threads, timeout: float = 30) -> None:
         pytest.fail(f"{len(stuck)} thread(s) still running after {timeout}s (stuck on a lock?): {stuck}")
 
 
+def wait_for_lock_waiter(timeout: float = 5, done: threading.Event | None = None) -> None:
+    """Block until some backend of this database waits on a lock, so a test hands over control at
+    a real lock wait instead of after a sleep. Returns early when `done` is set (the other side
+    finished without waiting, which the test then asserts on its own). Raises AssertionError if
+    neither happens within `timeout`: a race test must never pass without reaching the wait."""
+    deadline = time.monotonic() + timeout
+    db = SessionLocal()
+    try:
+        while True:
+            waiting = db.execute(text(
+                "SELECT count(*) FROM pg_stat_activity "
+                "WHERE datname = current_database() AND wait_event_type = 'Lock'"
+            )).scalar()
+            db.rollback()  # end the read transaction; the next poll starts fresh
+            if waiting or (done is not None and done.is_set()):
+                return
+            if time.monotonic() >= deadline:
+                raise AssertionError(f"no lock waiter appeared within {timeout}s and `done` was not set")
+            time.sleep(0.02)
+    finally:
+        db.close()
+
+
 def purge(*statements: tuple[str, dict]) -> None:
     """Run cleanup statements on a fresh session, each in its own transaction, so one failure
     (a lock timeout, say) does not stop the others. Raises at the end if any failed."""

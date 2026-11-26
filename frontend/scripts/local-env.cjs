@@ -1,7 +1,8 @@
 // Shared by the local Playwright scripts (every e2e-, screens- and seed- script).
 // NOT part of package.json or CI. It starts, on free ports, everything a run needs and removes it again:
 //   - the API (uvicorn, COOKIE_SECURE=false, generous rate limits) on the *_test database only,
-//   - `next dev` with BACKEND_URL pointing at that API,
+//   - `next dev` with BACKEND_URL pointing at that API (E2E_NEXT=start: `next build`, then `next start`
+//     instead, to check what a production build serves; opt-in, the default stays `next dev`),
 // then on exit (success, failure, Ctrl-C) it stops what it started, truncates the test database and
 // prints proof that the dev database and any process it did not start were left alone.
 //
@@ -111,6 +112,7 @@ async function withEnv(fn) {
   const apiPort = await freePort(Number(process.env.E2E_API_PORT) || 8000);
   // E2E_WEB_PORT: start the search for the `next dev` port elsewhere to leave :3000 alone (default 3000).
   const webPort = await freePort(Number(process.env.E2E_WEB_PORT) || 3000);
+  const nextMode = process.env.E2E_NEXT === "start" ? "start" : "dev";
   const children = [];
   let cleaned = false;
 
@@ -123,7 +125,7 @@ async function withEnv(fn) {
     const left = truncateAll(db.test);
     const devAfter = counts(db.dev);
     console.log("\n--- cleanup ---");
-    console.log(`stopped: API :${apiPort}, next dev :${webPort} (${children.length} processes started by this run)`);
+    console.log(`stopped: API :${apiPort}, next ${nextMode} :${webPort} (${children.length} processes started by this run)`);
     console.log(`test database ${db.testName} truncated; (users, job_applications, rate_limit_events, sessions, invite_codes) now ${left}`);
     console.log(`dev database ${db.devName} not written to: (users, job_applications, rate_limit_events, sessions, invite_codes) before ${devBefore}, after ${devAfter}: ${devBefore === devAfter ? "unchanged" : "CHANGED"}`);
     const after8000 = listener(8000);
@@ -147,7 +149,11 @@ async function withEnv(fn) {
       env: { ...baseEnv, COOKIE_SECURE: "false", TRUST_PROXY: "false", ALLOWED_ORIGINS: base, LOGIN_IP_LIMIT: "1000", LOGIN_EMAIL_LIMIT: "1000", SIGNUP_IP_LIMIT: "1000", ADMIN_EMAILS: process.env.E2E_ADMIN_EMAILS || "", EXTENSION_ORIGINS: process.env.E2E_EXTENSION_ORIGINS || "" },
     });
     children.push(api);
-    const web = spawn("npx", ["next", "dev", "-p", String(webPort)], {
+    if (nextMode === "start") {
+      const build = fs.openSync(path.join(LOGS, "build.log"), "w");
+      execFileSync("npx", ["next", "build"], { cwd: FRONTEND, env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" }, stdio: ["ignore", build, build] });
+    }
+    const web = spawn("npx", ["next", nextMode, "-p", String(webPort)], {
       cwd: FRONTEND,
       detached: true,
       stdio: ["ignore", fs.openSync(path.join(LOGS, "web.log"), "w"), fs.openSync(path.join(LOGS, "web.log"), "a")],
@@ -155,7 +161,7 @@ async function withEnv(fn) {
     });
     children.push(web);
     await waitFor(`${apiBase}/ping`, "API");
-    await waitFor(`${base}/login`, "next dev");
+    await waitFor(`${base}/login`, `next ${nextMode}`);
 
     const createInvite = (note = "f5 local") => {
       const out = execFileSync(PYTHON, ["-m", "app.admin", "create-invite", "--note", note, "--expires-in", "1d"], { cwd: REPO, env: baseEnv, encoding: "utf8" });
@@ -173,4 +179,4 @@ function chromiumOptions() {
   return process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {};
 }
 
-module.exports = { withEnv, chromiumOptions, REPO, FRONTEND };
+module.exports = { withEnv, chromiumOptions, waitFor, REPO, FRONTEND };

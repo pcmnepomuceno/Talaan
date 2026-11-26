@@ -742,3 +742,26 @@
 - **Privacy:** the privacy page lists Google Forms as a processor and says: "The feedback form is a Google Form. I don't ask for personal details in it, and it collects no email address automatically. Whatever you type in the box is stored by Google and seen by me. Add a contact only if you want a reply, and never put passwords or other secrets in it. Responses stay in Google Forms until I delete them. The form is anonymous, so I can't tell which response is yours; if you want something removed, email me what you wrote and roughly when."
 - **Popup status line:** the popup's `#status` line collapses when empty. Reserving its space while a request is pending was rejected because the form would move down on every popup open. The known cost is a 32 px shift when a message appears (slow server wake-up, errors). The alternative if friends complain is to show messages next to Save.
 - **Rejected:** a mailto link (it is unreliable and exposes the email address) and a built-in form (it needs a backend and storage).
+
+---
+
+# Decision: Admin-generated password reset links
+- **Date:** 2026-11-26
+- **Decision:** the admin creates a single-use, 24-hour reset link at `/admin` (or with `python -m app.admin create-reset-link EMAIL`) and passes it on by hand. The friend opens `/reset#<token>` and sets a new password; every session of that account ends. Only the SHA-256 of the token is stored. No email is sent.
+- **Why:** Talaan sends no email and does not verify addresses, so there was no way to recover an account.
+- **Supersedes** the line "A reset flow is not planned for the trial" (2026-11-18, Licence and friend-trial prep); the sign-up helper now tells people to ask the person who invited them for a reset link.
+- **Link origin:** the API returns `{token, expires_at}` and the admin screen builds `<its own origin>/reset#<token>`. No SITE_URL setting. The token is in the fragment, so it never reaches a server or a log.
+- **Voiding is DELETE:** a new link deletes the account's unused tokens. Rejected: a `voided_at` column (one more state that nothing reads).
+- **One active link under concurrency:** `SELECT ... FOR UPDATE` on the user row before delete and insert. Rejected: a partial unique index, which turns the race into an error to handle.
+- **Single use under a race:** one atomic `UPDATE ... RETURNING`, as for invites.
+- **Lock order:** create and account delete lock the user row, then touch token rows, so reset locks the user row before consuming. Without it a reset and a create could deadlock (tested).
+- **Creator lock first:** an admin-made create runs `SELECT ... FOR KEY SHARE` on the creator's user row, then `FOR UPDATE` on the target, then touches token rows. Why: the admin deleting their own account locks their row `FOR UPDATE` and cascades to their tokens, so it could deadlock with a create (create holds the target and wants the admin row for the insert's foreign key) or the create could fail with a 500 `IntegrityError`; found in the PR #47 review. KEY SHARE is the lock the foreign key check takes anyway, only earlier, so whichever request reaches the admin row first finishes before the other starts; a create after the delete finds no admin and answers 404. Rejected: `FOR UPDATE` on the creator (also blocks the admin's own reads, stronger than needed); catching the error and retrying (hides a deadlock and leaves the 500 path for the other order).
+- **Admins:** the page refuses the caller's own account and other admins; only the CLI resets an admin. The email lookup comes after the password check, so it cannot probe emails without the admin password.
+- **Same password as before:** allowed.
+- **Limits:** their own `ADMIN_RESET_*` budget (so invites and resets do not eat each other's) and `RESET_PASSWORD_IP_*` for the public route. No per-token key: a 256-bit token cannot be guessed.
+- **`created_by`** is `ON DELETE CASCADE` (its own migration, after the table's first one), so deleting an admin account never fails and a deleted admin's links die with it. Rejected: SET NULL, because a link then looks like a CLI link, and a CLI link may reset an admin account.
+- **Re-check at consume:** an admin-made link (`created_by` set) works only while its creator exists and is still an admin and the target is not an admin; otherwise the generic 400 and the link stays unused. CLI links (`created_by` NULL) work for any account.
+- **Login re-checks the password hash:** after `delete_event`, `SELECT password_hash ... FOR SHARE` in the same transaction; a different hash is the usual 401. A login that verified the old password cannot keep a session past a reset.
+- **Limiter clear after the commit:** the reset deletes the `login:email:` rows in a separate best-effort transaction, so it never waits on a limiter row while it holds the user row (login holds a limiter row, then wants the user row: a deadlock, tested). A failure there logs one warning and the reset is still 204. Rejected: keeping it in the reset transaction and changing login's lock order (more risk in the hot path).
+- **Retention:** used and expired links are purged 7 days after creation; account deletion removes them.
+- **Not built:** email, a list of links in the UI, an audit log.

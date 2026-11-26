@@ -26,3 +26,9 @@ export const createInvite = (input: CreateInviteInput) =>
   request<CreatedInvite>("/api/v1/admin/invites", { method: "POST", body: input });
 
 export const revokeInvite = (id: number) => request(`/api/v1/admin/invites/${id}`, { method: "DELETE" });
+
+// Like the invite code, the reset token is only ever in this response: component state and nowhere else.
+export type CreatedPasswordReset = { token: string; expires_at: string };
+
+export const createPasswordReset = (input: { email: string; admin_password: string }) =>
+  request<CreatedPasswordReset>("/api/v1/admin/password-resets", { method: "POST", body: input });

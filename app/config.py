@@ -177,6 +177,15 @@ ADMIN_INVITE_USER_WINDOW_SECONDS = _int("ADMIN_INVITE_USER_WINDOW_SECONDS", 3600
 ADMIN_INVITE_IP_LIMIT = _int("ADMIN_INVITE_IP_LIMIT", 10, minimum=1)
 ADMIN_INVITE_IP_WINDOW_SECONDS = _int("ADMIN_INVITE_IP_WINDOW_SECONDS", 3600, minimum=1, maximum=MAX_WINDOW_SECONDS)
 
+# Password reset links: creation (POST /admin/password-resets, its own budget so it does not eat the
+# invite one) and use (POST /auth/reset-password). Every attempt counts, successful ones too.
+ADMIN_RESET_USER_LIMIT = _int("ADMIN_RESET_USER_LIMIT", 10, minimum=1)
+ADMIN_RESET_USER_WINDOW_SECONDS = _int("ADMIN_RESET_USER_WINDOW_SECONDS", 3600, minimum=1, maximum=MAX_WINDOW_SECONDS)
+ADMIN_RESET_IP_LIMIT = _int("ADMIN_RESET_IP_LIMIT", 10, minimum=1)
+ADMIN_RESET_IP_WINDOW_SECONDS = _int("ADMIN_RESET_IP_WINDOW_SECONDS", 3600, minimum=1, maximum=MAX_WINDOW_SECONDS)
+RESET_PASSWORD_IP_LIMIT = _int("RESET_PASSWORD_IP_LIMIT", 10, minimum=1)
+RESET_PASSWORD_IP_WINDOW_SECONDS = _int("RESET_PASSWORD_IP_WINDOW_SECONDS", 3600, minimum=1, maximum=MAX_WINDOW_SECONDS)
+
 
 # Emails (comma-separated, case-insensitive) allowed to manage invites over HTTP. Parsed once at
 # import. Unset or blank = nobody is an admin. Not part of production_problems(): off is valid.

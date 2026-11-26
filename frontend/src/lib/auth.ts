@@ -31,3 +31,7 @@ export const deleteAccount = async (password: string) => {
   await request("/api/v1/account/delete", { method: "POST", body: { password } });
   resetCaches();
 };
+
+// Public, no session involved. The token goes in the body, never in a URL. 400 = dead link.
+export const resetPassword = (token: string, new_password: string) =>
+  request("/api/v1/auth/reset-password", { method: "POST", body: { token, new_password }, redirectOn401: false });

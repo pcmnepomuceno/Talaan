@@ -37,10 +37,12 @@ const SIGNUP_FIELDS = ["invite_code", "account_name", "email", "password"];
 export function LoginForm({
   expired = false,
   deleted = false,
+  reset = false,
   next,
 }: {
   expired?: boolean;
   deleted?: boolean;
+  reset?: boolean;
   next?: string;
 }) {
   const router = useRouter();
@@ -48,7 +50,13 @@ export function LoginForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(
-    deleted ? "Your account has been deleted." : expired ? "Your session expired. Log in again." : null,
+    deleted
+      ? "Your account has been deleted."
+      : reset
+        ? "Password changed. Log in with your new password."
+        : expired
+          ? "Your session expired. Log in again."
+          : null,
   );
   const [busy, setBusy] = useState(false);
   // The request itself (busy also stays on while the page navigates after a success).
@@ -251,7 +259,7 @@ export function LoginForm({
             autoComplete={mode === "login" ? "current-password" : "new-password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            helper={mode === "signup" ? "There is no password reset yet. Keep your password somewhere safe." : undefined}
+            helper={mode === "signup" ? "Talaan sends no email. If you forget your password, ask the person who invited you for a reset link." : undefined}
             error={err("password")}
           />
           {mode === "signup" && <p className="text-body text-text-secondary">Access is by invitation for now.</p>}
