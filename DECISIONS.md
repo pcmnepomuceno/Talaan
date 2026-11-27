@@ -765,3 +765,11 @@
 - **Limiter clear after the commit:** the reset deletes the `login:email:` rows in a separate best-effort transaction, so it never waits on a limiter row while it holds the user row (login holds a limiter row, then wants the user row: a deadlock, tested). A failure there logs one warning and the reset is still 204. Rejected: keeping it in the reset transaction and changing login's lock order (more risk in the hot path).
 - **Retention:** used and expired links are purged 7 days after creation; account deletion removes them.
 - **Not built:** email, a list of links in the UI, an audit log.
+---
+
+# Decision: Chrome Web Store listing is live
+- **Date:** 2026-11-27
+- **Decision:** the extension is approved and live on the Chrome Web Store as Unlisted, with ID `icpdblljdbhfckncojpohbnfdkblgill`.
+- **Two origins:** the Store build has its own ID, so `EXTENSION_ORIGINS` lists both: `chrome-extension://fjlnbbkeadlpibmnbpfhlgeingifocni` (the pinned ID, for unpacked and friends builds) and `chrome-extension://icpdblljdbhfckncojpohbnfdkblgill` (the Store build).
+- **Account link:** Account links to the listing with a clean URL, without query params.
+- **Supersedes** any older statement that the Store ID still has to be added.
