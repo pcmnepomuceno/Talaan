@@ -39,7 +39,7 @@ class Secret(str):
 
 
 def make_request(db, status="pending", code_valid_for=timedelta(days=14), used=False, created_at=None,
-                 token=None, contact="ana@example.ph", note="From the meetup", revealed=False):
+                 token=None, contact="ana@example.ph", note="From the meetup", revealed=False, code_cleared=False):
     """A request row straight in the DB. An approved one gets a real invite and its plaintext code,
     unless `revealed`. Returns (row, status token, code or None)."""
     token = Secret(token or secrets.token_urlsafe(32))
@@ -57,59 +57,13 @@ def make_request(db, status="pending", code_valid_for=timedelta(days=14), used=F
         db.add(invite)
         db.flush()
         row.invite_id, row.decided_at = invite.id, now
-        row.code_plain = None if revealed else display
+        row.code_plain = None if revealed or code_cleared else display
         row.revealed_at = now if revealed else None
     elif status == "rejected":
         row.decided_at = now
     db.add(row)
     db.commit()
     return row, token, code
-
-
-# --- the reveal statement itself, on PostgreSQL ---
-
-def run_reveal(db, token):
-    now = datetime.now(timezone.utc)
-    row = db.execute(
-        text(invite_requests.REVEAL), {"h": hashlib.sha256(token.encode()).hexdigest(), "now": now}
-    ).first()
-    db.commit()
-    return None if row is None else Secret(row.code_plain)
-
-
-def test_reveal_statement_returns_the_old_code_once_and_clears_it(db):
-    row, token, code = make_request(db, "approved")
-    first = run_reveal(db, token)
-    got_the_code = first == code
-    assert got_the_code
-    db.refresh(row)
-    cleared = row.code_plain is None
-    assert cleared and row.revealed_at is not None
-    again = run_reveal(db, token)
-    assert again is None
-
-
-@pytest.mark.parametrize("kwargs", [
-    {"status": "pending"},
-    {"status": "rejected"},
-    {"status": "approved", "used": True},
-    {"status": "approved", "code_valid_for": timedelta(seconds=-1)},
-])
-def test_reveal_statement_matches_nothing_otherwise(db, kwargs):
-    row, token, _ = make_request(db, **kwargs)
-    before = row.code_plain
-    got = run_reveal(db, token)
-    assert got is None
-    db.refresh(row)
-    unchanged = row.code_plain == before
-    assert unchanged and row.revealed_at is None
-
-
-def test_reveal_statement_matches_nothing_for_a_revoked_invite(db):
-    row, token, _ = make_request(db, "approved")
-    assert invites.revoke(db, row.invite_id) == "revoked"
-    got = run_reveal(db, token)
-    assert got is None
 
 
 # --- public: create ---
@@ -245,13 +199,15 @@ def test_pending_cap_closes_requests_and_counts_only_pending(client, db, monkeyp
 # --- public: status ---
 
 def test_pending_and_rejected(client, db):
-    _, pending, _ = make_request(db, "pending")
+    row, pending, _ = make_request(db, "pending")
     _, rejected, _ = make_request(db, "rejected")
     r = check_status(client, pending)
     assert (r.status_code, r.json()) == (200, {"state": "pending"})
     assert r.headers["cache-control"] == "no-store"
     r = check_status(client, rejected)
     assert (r.status_code, r.json()) == (200, {"state": "rejected"})
+    db.refresh(row)
+    assert row.revealed_at is None
 
 
 def test_approved_code_is_returned_once(client, db):
@@ -270,17 +226,26 @@ def test_approved_code_is_returned_once(client, db):
     ({"code_valid_for": timedelta(seconds=-1)}, "expired"),
     ({"used": True}, "shown"),
     ({"revealed": True}, "shown"),
+    ({"code_cleared": True}, "expired"),  # a live invite, but no code left and never revealed
 ])
 def test_approved_without_a_code_to_show(client, db, kwargs, state):
-    _, token, _ = make_request(db, "approved", **kwargs)
+    row, token, _ = make_request(db, "approved", **kwargs)
+    code_before, revealed_before = row.code_plain, row.revealed_at
     assert state_of(check_status(client, token)) == (200, state, False)
+    db.refresh(row)
+    unchanged = (row.code_plain, row.revealed_at) == (code_before, revealed_before)
+    assert unchanged
 
 
 @pytest.mark.parametrize("revealed,state", [(False, "expired"), (True, "shown")])
 def test_revoked_invite(client, db, revealed, state):
     row, token, _ = make_request(db, "approved", revealed=revealed)
     assert invites.revoke(db, row.invite_id) == "revoked"
+    code_before, revealed_before = row.code_plain, row.revealed_at
     assert state_of(check_status(client, token)) == (200, state, False)
+    db.refresh(row)
+    unchanged = (row.code_plain, row.revealed_at) == (code_before, revealed_before)
+    assert unchanged
 
 
 def test_every_bad_token_gets_the_identical_response(client, db, monkeypatch):

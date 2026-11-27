@@ -5,10 +5,11 @@ On approve the invite code is kept in `code_plain` until the requester sees it, 
 sent. Never log a status token or a code.
 
 Lock order: approve, reveal and delete each lock the request row first (approve and reveal with
-SELECT ... FOR UPDATE, delete with its own DELETE). Approve then takes the invite cap advisory lock
-and inserts the invite in the same transaction. A revoke (FK SET NULL) locks an invite row and then
-its request row; nothing locks an invite row while it holds a request row, so the two orders cannot
-form a cycle.
+their own SELECT ... FOR UPDATE on that table alone, delete with its own DELETE). A lock written as a
+statement of its own is taken whatever plan the database picks, so the order holds in every plan.
+Approve then takes the invite cap advisory lock and inserts the invite in the same transaction. A
+revoke (FK SET NULL) locks an invite row and then its request row; nothing locks an invite row while
+it holds a request row, so the two orders cannot form a cycle.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -41,19 +42,6 @@ INVITE_LIFETIME = timedelta(days=14)
 # token_urlsafe(32) is 43 characters. Longer input is rejected before hashing.
 MAX_INPUT_LEN = 64
 DECIDED = "This request has already been decided."
-
-# One atomic reveal. RETURNING OLD.x needs PostgreSQL 18, so the old value comes from a locked
-# subquery: a second caller waits on its FOR UPDATE, then reads code_plain NULL and matches nothing.
-# The join uses old.invite_id (the UPDATE target cannot be referenced in a JOIN ON); the invite row
-# is read, not locked.
-REVEAL = (
-    "UPDATE invite_requests r SET code_plain = NULL, revealed_at = :now "
-    "FROM (SELECT id, invite_id, code_plain FROM invite_requests WHERE status_token_hash = :h FOR UPDATE) old "
-    "JOIN invite_codes i ON i.id = old.invite_id "
-    "WHERE r.id = old.id AND r.status = 'approved' AND r.code_plain IS NOT NULL "
-    "AND i.used_at IS NULL AND i.expires_at > :now "
-    "RETURNING old.code_plain"
-)
 
 router = APIRouter(prefix="/invite-requests", tags=["invite requests"])
 admin_router = APIRouter(
@@ -111,29 +99,33 @@ def request_status(
     )
     if len(body.token) > MAX_INPUT_LEN or not body.token.isascii():
         raise invalid()
-    token_hash = hash_session_token(body.token)
-    revealed = db.execute(text(REVEAL), {"h": token_hash, "now": utcnow()}).first()
-    if revealed is not None:
-        db.commit()
-        return InviteRequestState(state="approved", code=revealed.code_plain)
-
-    found = (
-        db.query(InviteRequest.status, InviteRequest.revealed_at, InviteCode.used_at, InviteCode.expires_at)
-        .outerjoin(InviteCode, InviteCode.id == InviteRequest.invite_id)
-        .filter(InviteRequest.status_token_hash == token_hash)
+    # One transaction. Lock the request row first, by itself: inside a join or a subquery the planner
+    # may never run the lock. A caller that waited here reads the row as the other side committed it.
+    row = (
+        db.query(InviteRequest)
+        .filter(InviteRequest.status_token_hash == hash_session_token(body.token))
+        .with_for_update()
+        .populate_existing()  # never a stale copy from the session's identity map
         .first()
     )
-    if found is None:
+    if row is None:
         raise invalid()
-    if found.status != InviteRequestStatus.approved:
-        return InviteRequestState(state=found.status.value)
-    if found.revealed_at is not None or found.used_at is not None:
+    if row.status != InviteRequestStatus.approved:
+        return InviteRequestState(state=row.status.value)
+    # A second statement, not a join: its snapshot is taken after the wait, so it sees the invite an
+    # approve has just committed. The invite row is read, not locked.
+    invite = (
+        db.query(InviteCode.used_at, InviteCode.expires_at).filter(InviteCode.id == row.invite_id).first()
+    )
+    if row.revealed_at is not None or (invite is not None and invite.used_at is not None):
         return InviteRequestState(state="shown")
-    if found.expires_at is not None and found.expires_at > utcnow():
-        # A live invite the reveal did not see: an approve committed while it waited for the row
-        # (its snapshot has no new invite). The next check reveals the code.
-        return InviteRequestState(state="pending")
-    return InviteRequestState(state="expired")
+    now = utcnow()
+    code = row.code_plain
+    if code is None or invite is None or invite.expires_at <= now:
+        return InviteRequestState(state="expired")
+    row.code_plain, row.revealed_at = None, now
+    db.commit()
+    return InviteRequestState(state="approved", code=code)
 
 
 @admin_router.get("", response_model=InviteRequestList)

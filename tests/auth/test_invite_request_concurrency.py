@@ -1,7 +1,6 @@
 """Invite request races on real connections: committed rows, cleaned up in `purge`.
 Secrets are wrapped and checks on them reduced to booleans, as in test_invite_requests.py."""
 
-import hashlib
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -10,7 +9,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from app import config
-from app.auth import invite_requests, invites
+from app.auth import invites
 from app.auth.models import InviteCode, InviteRequest
 from app.auth.models import Session as SessionModel
 from app.auth.security import hash_password, hash_session_token
@@ -87,43 +86,6 @@ def send(results, errors, name, admin_token, method, url, body=None):
         errors.append(type(e).__name__)  # the name only: a message could carry parameters
 
 
-def reveal(db, token):
-    return db.execute(
-        text(invite_requests.REVEAL),
-        {"h": hashlib.sha256(token.encode()).hexdigest(), "now": datetime.now(timezone.utc)},
-    ).first()
-
-
-def test_reveal_on_two_connections_the_second_waits_and_gets_nothing(committed):
-    _, token, code = committed_request("approved")
-    first, second = SessionLocal(), SessionLocal()
-    got, errors = [], []
-
-    def other():
-        try:
-            got.append(reveal(second, token) is None)
-            second.commit()
-        except Exception as e:  # noqa: BLE001
-            errors.append(type(e).__name__)
-
-    try:
-        row = reveal(first, token)
-        got_the_code = row is not None and row.code_plain == code
-        assert got_the_code
-        t = spawn(other)
-        wait_for_lock_waiter()
-        assert t.is_alive()
-        first.commit()
-        join_all([t], timeout=10)
-        assert not errors, errors
-        assert got == [True]
-    finally:
-        first.rollback()
-        first.close()
-        second.rollback()
-        second.close()
-
-
 def test_two_concurrent_status_calls_give_one_code_and_one_shown(committed):
     request_id, token, code = committed_request("approved")
     holder = SessionLocal()
@@ -145,25 +107,59 @@ def test_two_concurrent_status_calls_give_one_code_and_one_shown(committed):
         holder.close()
 
 
-def test_status_during_an_approve_never_says_expired(committed):
-    """The reveal waits on approve's row lock, but its snapshot cannot see the invite approve
-    inserted, so it matches nothing; the next read then sees an approved row with a code."""
+def test_status_during_an_approve_waits_and_returns_the_code_once(committed):
+    """The status call waits on approve's row lock, then reads the committed row and its invite."""
     request_id, token, _ = committed_request("pending")
+    holder = SessionLocal()
+    results, errors = {}, []
+    body = {"token": str(token)}
+    try:
+        holder.execute(LOCK_ROW, {"id": request_id})
+        invite, display = invites.create(holder, f"Request #{request_id}", timedelta(days=14), commit=False)
+        code = Secret(display)
+        holder.execute(
+            text("UPDATE invite_requests SET status = 'approved', invite_id = :i, code_plain = :c WHERE id = :id"),
+            {"i": invite.id, "c": code, "id": request_id},
+        )
+        t = spawn(send, results, errors, "status", None, "POST", STATUS, body)
+        wait_for_lock_waiter()
+        assert t.is_alive()
+        holder.commit()
+        join_all([t], timeout=15)
+        send(results, errors, "again", None, "POST", STATUS, body)
+        assert not errors, errors
+        assert state_of(results["status"]) == (200, "approved", True)
+        right_code = results["status"].json()["code"] == code
+        assert right_code
+        assert state_of(results["again"]) == (200, "shown", False)
+        cleared = holder.get(InviteRequest, request_id).code_plain is None
+        assert cleared
+    finally:
+        holder.rollback()
+        holder.close()
+
+
+@pytest.mark.parametrize("status", ["pending", "rejected", "approved"])
+def test_status_waits_for_the_request_row_lock_in_every_state(committed, status):
+    """A status call waits on the request row lock in each state, with analyzed tables. The ANALYZE
+    is there because the old single-statement reveal skipped its lock for pending and rejected rows
+    only once the planner had statistics. This checks the plans those statistics give, not every
+    possible plan."""
+    request_id, token, _ = committed_request(status)
+    with SessionLocal() as db:
+        db.execute(text("ANALYZE invite_requests, invite_codes"))
+        db.commit()
     holder = SessionLocal()
     results, errors = {}, []
     try:
         holder.execute(LOCK_ROW, {"id": request_id})
-        invite, display = invites.create(holder, f"Request #{request_id}", timedelta(days=14), commit=False)
-        holder.execute(
-            text("UPDATE invite_requests SET status = 'approved', invite_id = :i, code_plain = :c WHERE id = :id"),
-            {"i": invite.id, "c": display, "id": request_id},
-        )
         t = spawn(send, results, errors, "status", None, "POST", STATUS, {"token": str(token)})
         wait_for_lock_waiter()
-        holder.commit()
+        assert t.is_alive()
+        holder.rollback()
         join_all([t], timeout=15)
         assert not errors, errors
-        assert state_of(results["status"]) == (200, "pending", False)
+        assert state_of(results["status"]) == (200, status, status == "approved")
     finally:
         holder.rollback()
         holder.close()

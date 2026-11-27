@@ -778,12 +778,14 @@
 
 # Decision: An approved invite request keeps its code in plain text until it is shown
 - **Date:** 2026-11-27
-- **Decision:** approving a request creates a normal invite (14 days, note `Request #<id>`) and also stores the code in `invite_requests.code_plain`. The requester's status link returns it once and clears it in the same statement. The admin sees it once in the approve response as a backup.
+- **Decision:** approving a request creates a normal invite (14 days, note `Request #<id>`) and also stores the code in `invite_requests.code_plain`. The requester's status link returns it once and clears it in the same transaction. The admin sees it once in the approve response as a backup.
 - **Why:** Talaan sends no email, and the requester is not there when the admin approves, so the code has to wait somewhere.
 - **Bound:** the code is single use and expires. Daily purge clears `code_plain` once the invite is expired or revoked, and deletes requests 30 days after creation; a request still holding a live code is kept until that code is cleared.
 - **Rejected:** storing only the hash and having the admin paste the code to the requester by hand (contact is free text, so every approval would be manual work).
-- **Reveal statement:** `RETURNING` gives the new row, and `RETURNING OLD.x` only exists from PostgreSQL 18, so the old value comes from a subquery that locks the row (`FOR UPDATE`) and joins `invite_codes` on its own `invite_id` (the UPDATE target cannot be referenced in a `JOIN ON`). A second caller waits, then matches nothing.
-- **Approve during a status check:** the waiting statement's snapshot cannot see the invite the approve just inserted, so the next read finds an approved request with a live invite and answers `pending`, not `expired`; the next check reveals the code.
+- **Reveal transaction:** one transaction. It first locks the request row with its own `SELECT ... FOR UPDATE`, then reads the invite's `used_at` and `expires_at` with a second, unlocked `SELECT`, decides, and only for an approved request with a code and a live invite clears the code and commits, returning the value read under the lock. A second caller waits, then reads the cleared row.
+- **Why the lock is its own statement:** the lock order (request row first) then holds in every plan. A `FOR UPDATE` subquery inside a join is never executed if the plan reads another input first and finds it empty, and once the tables had been analyzed such a plan was chosen, so the row stayed unlocked.
+- **Why the invite is a second statement:** after waiting on an approve, a joined `SELECT` re-reads the request row but not the invite the approve inserted (an inner join returns nothing, a `LEFT JOIN` returns NULL invite columns, which would read as `expired`). The second statement takes a new `READ COMMITTED` snapshot, so a status check that overlaps an approve waits and then returns the code.
+- **Rejected:** a single `UPDATE` with `RETURNING OLD.code_plain`, which needs PostgreSQL 18.
 - **Invite note:** `Request #<id>`, not the contact, so the contact does not outlive the purge inside `invite_codes`.
 
 ---
