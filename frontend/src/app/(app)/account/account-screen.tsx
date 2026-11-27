@@ -14,6 +14,7 @@ import { deleteAccount, getMe, logout, type User } from "@/lib/auth";
 import { ApiError, errorMessage } from "@/lib/http";
 
 const FEEDBACK_URL = "https://forms.gle/3hZLT139qzu4rYpw9";
+const STORE_URL = "https://chromewebstore.google.com/detail/talaan/icpdblljdbhfckncojpohbnfdkblgill";
 
 const sheet = "overflow-hidden rounded-sm border border-border-subtle bg-surface-card divide-y divide-border-subtle";
 
@@ -105,6 +106,16 @@ export function AccountScreen() {
             {loggingOut ? "Logging out…" : "Log out"}
           </Button>
         </section>
+
+        <div className="mt-8 flex flex-col items-start gap-1">
+          <p className="text-body text-text-secondary">Save postings from LinkedIn and other job sites in one click.</p>
+          {/* -ml-2 cancels TextAction's padding so the label lines up with the column. */}
+          <div className="-ml-2">
+            <TextAction href={STORE_URL} external>
+              Get the Chrome extension
+            </TextAction>
+          </div>
+        </div>
 
         {/* -ml-2 cancels TextAction's padding so the label lines up with the column. */}
         <div className="mt-8 -ml-2 flex flex-wrap gap-2">
