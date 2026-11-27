@@ -46,6 +46,15 @@ describe("proxy", () => {
     expect(call("/privacy").headers.get("referrer-policy")).toBeNull();
   });
 
+  it("leaves /request public, never cached and sending no referrer", () => {
+    for (const res of [call("/request"), call("/request", "session_token=abc")]) {
+      expect(getRedirectUrl(res)).toBeNull();
+      expect(res.headers.get("x-middleware-next")).toBe("1");
+      expect(res.headers.get("cache-control")).toBe("no-store");
+      expect(res.headers.get("referrer-policy")).toBe("no-referrer");
+    }
+  });
+
   it("leaves /design public", () => {
     expect(redirect("/design")).toBeNull();
   });

@@ -32,3 +32,26 @@ export type CreatedPasswordReset = { token: string; expires_at: string };
 
 export const createPasswordReset = (input: { email: string; admin_password: string }) =>
   request<CreatedPasswordReset>("/api/v1/admin/password-resets", { method: "POST", body: input });
+
+// Invite requests (A3). Like createInvite, the approve response is the only place the admin sees the code.
+// Field names match the API (app/auth/schemas.py InviteRequestItem).
+export type InviteRequest = {
+  id: number;
+  contact: string;
+  note: string;
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+  decided_at: string | null;
+  revealed_at: string | null;
+};
+
+const REQUESTS = "/api/v1/admin/invite-requests";
+
+export const listInviteRequests = async () => (await request<{ items: InviteRequest[] }>(REQUESTS)).items;
+
+export const approveInviteRequest = (id: number, password: string) =>
+  request<{ id: number; code: string; expires_at: string }>(`${REQUESTS}/${id}/approve`, { method: "POST", body: { password } });
+
+export const rejectInviteRequest = (id: number) => request(`${REQUESTS}/${id}/reject`, { method: "POST" });
+
+export const deleteInviteRequest = (id: number) => request(`${REQUESTS}/${id}`, { method: "DELETE" });

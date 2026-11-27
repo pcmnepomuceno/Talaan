@@ -40,6 +40,7 @@ type Handler = () => Response | Promise<Response>;
 const LIST = "GET /api/v1/admin/invites";
 const CREATE = "POST /api/v1/admin/invites";
 const revokePath = (id: number) => `DELETE /api/v1/admin/invites/${id}`;
+const REQUESTS = "GET /api/v1/admin/invite-requests";
 const CODE = "TLN-TEST-AAAA-BBBB"; // fake; the real API never returns this value
 const CODE2 = "TLN-TEST-CCCC-DDDD";
 
@@ -68,7 +69,7 @@ const setClipboard = (value: unknown) => Object.defineProperty(navigator, "clipb
 beforeEach(() => {
   locationReplace.mockClear();
   vi.stubGlobal("location", { pathname: "/admin", search: "", replace: locationReplace });
-  handlers = { [LIST]: () => json(200, { items: [] }) };
+  handlers = { [LIST]: () => json(200, { items: [] }), [REQUESTS]: () => json(200, { items: [] }) };
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const h = handlers[`${init?.method ?? "GET"} ${String(input)}`];
     if (!h) throw new Error(`unexpected fetch ${init?.method ?? "GET"} ${String(input)}`);
@@ -88,7 +89,8 @@ const daysBox = () => screen.getByLabelText("Expires in") as HTMLSelectElement;
 const createButton = () => screen.getByRole("button", { name: /Create code|Creating/ }) as HTMLButtonElement;
 const polite = () => document.querySelector('p[aria-live="polite"].sr-only')!;
 const banner = () => document.querySelector("main [role=alert]");
-const dialog = () => document.querySelector("dialog")!;
+// The screen's own (revoke) dialog is the last one; the Requests section has its delete dialog before it.
+const dialog = () => [...document.querySelectorAll("dialog")].at(-1)!;
 
 const waitForBanner = () => waitFor(() => banner()!).then(() => banner()!);
 
@@ -524,7 +526,7 @@ describe("reset a password", () => {
   it("sits between Create invite and Invites, with its own form without native validation", async () => {
     await loaded();
     const headings = [...document.querySelectorAll("section[aria-labelledby] > h2")].map((h) => h.textContent);
-    expect(headings).toEqual(["Create invite", "Reset a password", "Invites"]);
+    expect(headings).toEqual(["Create invite", "Reset a password", "Invites", "Requests"]);
     expect(document.querySelector<HTMLFormElement>('section[aria-labelledby="reset"] form')!.noValidate).toBe(true);
   });
 
@@ -619,5 +621,140 @@ describe("reset a password", () => {
     await send("nope");
     expect(await reset().findByText("value is not a valid email address")).toBeTruthy();
     expect(email().getAttribute("aria-invalid")).toBe("true");
+  });
+});
+
+describe("requests", () => {
+  const approvePath = (id: number) => `POST /api/v1/admin/invite-requests/${id}/approve`;
+  const rejectPath = (id: number) => `POST /api/v1/admin/invite-requests/${id}/reject`;
+  const deletePath = (id: number) => `DELETE /api/v1/admin/invite-requests/${id}`;
+  const NOT_REVOKED = "Deleting an approved request does not revoke its invite. Revoke it under Invites.";
+  const ask = (over: Partial<Record<string, unknown>> = {}) => ({
+    id: 7,
+    contact: "ana@example.ph",
+    note: "From the meetup",
+    status: "pending",
+    created_at: "2026-11-26T18:00:00+00:00", // 02:00 on Nov 27 in Manila
+    decided_at: null,
+    revealed_at: null,
+    ...over,
+  });
+  const requests = () => section("requests");
+  const deleteDialog = () => document.querySelector<HTMLElement>('section[aria-labelledby="requests"] dialog')!;
+  const listed = (...items: unknown[]) => (handlers[REQUESTS] = () => json(200, { items }));
+  const approved = () => json(201, { id: 3, code: CODE, expires_at: "2026-12-11T10:00:00+00:00" });
+  async function open() {
+    await loaded();
+    await requests().findByText("ana@example.ph");
+  }
+  async function approve(password = "Secret1!") {
+    await userEvent.click(requests().getByRole("button", { name: "Approve request from ana@example.ph" }));
+    if (password) await userEvent.type(requests().getByLabelText("Your password"), password);
+    await userEvent.click(requests().getByRole("button", { name: "Approve request" }));
+  }
+
+  it("shows contact, note, time and status, and long or marked-up text as text", async () => {
+    listed(ask(), ask({ id: 8, contact: "<b>x</b>", note: "\u{1F600}".repeat(500), status: "approved" }));
+    await open();
+    expect(requests().getByText("From the meetup")).toBeTruthy();
+    expect(requests().getByText("Pending · Requested Nov 27, 2026, 2:00 AM PHT")).toBeTruthy();
+    expect(requests().getByText("<b>x</b>").className.includes("[overflow-wrap:anywhere]")).toBe(true);
+    expect(requests().queryByRole("button", { name: "Approve request from <b>x</b>" })).toBeNull();
+    expect(requests().queryByRole("button", { name: "Reject request from <b>x</b>" })).toBeNull();
+    expect(requests().getByRole("button", { name: "Delete request from <b>x</b>" })).toBeTruthy();
+  });
+
+  it("says when there are none", async () => {
+    await loaded();
+    expect(await requests().findByText("No requests.")).toBeTruthy();
+  });
+
+  it("approve asks for the password, shows the code once, copies it and refreshes the invites", async () => {
+    listed(ask());
+    handlers[approvePath(7)] = approved;
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    await open();
+    const before = calls(LIST).length;
+    listed(ask({ status: "approved" }));
+    await userEvent.click(requests().getByRole("button", { name: "Approve request from ana@example.ph" }));
+    expect(document.activeElement).toBe(requests().getByLabelText("Your password"));
+    expect(document.querySelector<HTMLFormElement>('section[aria-labelledby="requests"] form')!.noValidate).toBe(true);
+    await userEvent.click(requests().getByRole("button", { name: "Approve request" }));
+    expect(requests().getByText("Enter your password.")).toBeTruthy();
+    expect(calls(approvePath(7))).toHaveLength(0);
+    await userEvent.type(requests().getByLabelText("Your password"), "Secret1!");
+    await userEvent.click(requests().getByRole("button", { name: "Approve request" }));
+    await requests().findByText(CODE);
+    expect(JSON.parse(String(calls(approvePath(7))[0][1]?.body))).toEqual({ password: "Secret1!" });
+    await waitFor(() => expect(calls(LIST).length).toBe(before + 1));
+    await requests().findByText(/^Approved · /);
+    expect(requests().queryByLabelText("Your password")).toBeNull();
+    setClipboard({ writeText });
+    await userEvent.click(requests().getByRole("button", { name: "Copy code" }));
+    expect(await screen.findByText("Code copied.")).toBeTruthy();
+    expect(writeText).toHaveBeenCalledWith(CODE);
+  });
+
+  it("a wrong password is an error on the field and clears it", async () => {
+    listed(ask());
+    handlers[approvePath(7)] = () => json(403, { detail: "Incorrect password." });
+    await open();
+    await approve();
+    expect(await requests().findByText("Incorrect password.")).toBeTruthy();
+    const box = requests().getByLabelText("Your password") as HTMLInputElement;
+    expect([box.value, box.getAttribute("aria-invalid")]).toEqual(["", "true"]);
+  });
+
+  it("a 409 shows the API detail in a banner and reloads", async () => {
+    listed(ask());
+    handlers[approvePath(7)] = () => json(409, { detail: "This request has already been decided." });
+    await open();
+    const before = calls(REQUESTS).length;
+    await approve();
+    expect((await requests().findByRole("alert")).textContent).toContain("This request has already been decided.");
+    await waitFor(() => expect(calls(REQUESTS).length).toBe(before + 1));
+  });
+
+  it("the admin gate's 404 shows Page not found", async () => {
+    listed(ask());
+    handlers[approvePath(7)] = () => json(404, { detail: "Not Found" });
+    await open();
+    await approve();
+    expect(await screen.findByText("Page not found.")).toBeTruthy();
+  });
+
+  it("reject is one button", async () => {
+    listed(ask());
+    handlers[rejectPath(7)] = () => json(204);
+    await open();
+    listed(ask({ status: "rejected" }));
+    await userEvent.click(requests().getByRole("button", { name: "Reject request from ana@example.ph" }));
+    expect(await screen.findByText("Request rejected.")).toBeTruthy();
+    expect(calls(rejectPath(7))).toHaveLength(1);
+    expect(await requests().findByText(/^Rejected · /)).toBeTruthy();
+  });
+
+  it("delete confirms first and says the invite is not revoked", async () => {
+    listed(ask({ status: "approved" }));
+    handlers[deletePath(7)] = () => json(204);
+    await open();
+    await userEvent.click(requests().getByRole("button", { name: "Delete request from ana@example.ph" }));
+    expect(within(deleteDialog()).getByText(NOT_REVOKED)).toBeTruthy();
+    await userEvent.click(within(deleteDialog()).getByRole("button", { name: "Cancel" }));
+    expect(calls(deletePath(7))).toHaveLength(0);
+    listed();
+    await userEvent.click(requests().getByRole("button", { name: "Delete request from ana@example.ph" }));
+    await userEvent.click(within(deleteDialog()).getByRole("button", { name: "Delete request" }));
+    expect(await screen.findByText("Request deleted.")).toBeTruthy();
+    expect(await requests().findByText("No requests.")).toBeTruthy();
+  });
+
+  it("a failed load shows Retry", async () => {
+    handlers[REQUESTS] = () => json(503, { detail: "x" });
+    await loaded();
+    expect(await requests().findByText("Couldn't load the requests.")).toBeTruthy();
+    listed(ask());
+    await userEvent.click(requests().getByRole("button", { name: "Retry" }));
+    expect(await requests().findByText("ana@example.ph")).toBeTruthy();
   });
 });
