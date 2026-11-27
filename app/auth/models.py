@@ -5,10 +5,13 @@ Notes: `token_hash` is unique (SHA-256 hex of the token in the user's
 cookie; the raw token is never stored); `user_id` is a foreign key to Users.id (the FK lives here only).
 """
 
+import enum
+
 from sqlalchemy import (
     BigInteger,
     Column,
     DateTime,
+    Enum,
     ForeignKey,
     Index,
     Integer,
@@ -74,6 +77,38 @@ class PasswordResetToken(Base):
         ForeignKey("users.id", name="fk_password_reset_tokens_created_by", ondelete="CASCADE"),
         nullable=True,
     )
+
+
+class InviteRequestStatus(enum.Enum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+
+
+class InviteRequest(Base):
+    """A public request for an invite. Only the SHA-256 of the status-link token is stored.
+    `code_plain` holds the invite code from approval until it is shown once or purged
+    (DECISIONS.md, 2026-11-27). `invite_id` is SET NULL when the invite is revoked."""
+
+    __tablename__ = "invite_requests"
+    __table_args__ = (Index("ix_invite_requests_invite_id", "invite_id"),)
+    id = Column(Integer, primary_key=True)
+    contact = Column(Text, nullable=False)
+    note = Column(Text, nullable=False)
+    status = Column(
+        Enum(InviteRequestStatus, name="invite_request_status", values_callable=lambda e: [m.value for m in e]),
+        nullable=False,
+    )
+    status_token_hash = Column(String, unique=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    decided_at = Column(DateTime(timezone=True), nullable=True)
+    invite_id = Column(
+        Integer,
+        ForeignKey("invite_codes.id", name="fk_invite_requests_invite_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    code_plain = Column(Text, nullable=True)
+    revealed_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class RateLimitEvent(Base):
