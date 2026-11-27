@@ -187,6 +187,15 @@ RESET_PASSWORD_IP_LIMIT = _int("RESET_PASSWORD_IP_LIMIT", 10, minimum=1)
 RESET_PASSWORD_IP_WINDOW_SECONDS = _int("RESET_PASSWORD_IP_WINDOW_SECONDS", 3600, minimum=1, maximum=MAX_WINDOW_SECONDS)
 
 
+# Public invite requests (app/auth/invite_requests.py): creating one, and checking one, per IP.
+# At the pending cap, requests are closed for everyone until the admin decides or deletes some.
+INVITE_REQUEST_IP_LIMIT = _int("INVITE_REQUEST_IP_LIMIT", 5, minimum=1)
+INVITE_REQUEST_IP_WINDOW_SECONDS = _int("INVITE_REQUEST_IP_WINDOW_SECONDS", 3600, minimum=1, maximum=MAX_WINDOW_SECONDS)
+INVITE_REQUEST_STATUS_IP_LIMIT = _int("INVITE_REQUEST_STATUS_IP_LIMIT", 30, minimum=1)
+INVITE_REQUEST_STATUS_IP_WINDOW_SECONDS = _int("INVITE_REQUEST_STATUS_IP_WINDOW_SECONDS", 3600, minimum=1, maximum=MAX_WINDOW_SECONDS)
+INVITE_REQUEST_PENDING_CAP = _int("INVITE_REQUEST_PENDING_CAP", 50, minimum=1)
+
+
 # Emails (comma-separated, case-insensitive) allowed to manage invites over HTTP. Parsed once at
 # import. Unset or blank = nobody is an admin. Not part of production_problems(): off is valid.
 ADMIN_EMAILS = frozenset(e.strip().lower() for e in (os.getenv("ADMIN_EMAILS") or "").split(",") if e.strip())

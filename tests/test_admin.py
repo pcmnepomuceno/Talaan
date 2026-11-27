@@ -185,7 +185,12 @@ from sqlalchemy import text
 
 from app import config
 from app.auth import rate_limit
-from app.auth.models import PasswordResetToken, RateLimitEvent
+from app.auth.models import (
+    InviteRequest,
+    InviteRequestStatus,
+    PasswordResetToken,
+    RateLimitEvent,
+)
 from app.auth.models import Session as SessionModel
 
 NOW = datetime(2026, 11, 9, 12, 0, tzinfo=timezone.utc)
@@ -210,7 +215,7 @@ def event_ages(db):
 
 def test_purge_on_empty_tables(db, clock, capsys):
     assert admin.run(db, ["purge"]) == 0
-    assert capsys.readouterr().out.strip() == "Purged 0 rate_limit_events, 0 sessions, 0 password_reset_tokens"
+    assert capsys.readouterr().out.strip() == "Purged 0 rate_limit_events, 0 sessions, 0 password_reset_tokens, 0 invite_requests"
 
 
 def test_purge_removes_events_older_than_the_longest_window_only(db, clock, capsys):
@@ -314,7 +319,7 @@ def test_purge_runs_as_a_real_process():
             [sys.executable, "-m", "app.admin", "purge"], capture_output=True, text=True, env={**os.environ}, check=False,
         )
         assert out.returncode == 0, out.stderr
-        assert re.fullmatch(r"Purged \d+ rate_limit_events, \d+ sessions, \d+ password_reset_tokens", out.stdout.strip()), out.stdout
+        assert re.fullmatch(r"Purged \d+ rate_limit_events, \d+ sessions, \d+ password_reset_tokens, \d+ invite_requests", out.stdout.strip()), out.stdout
         assert cleanup.query(RateLimitEvent).filter_by(key="purge-proc-test").count() == 0
     finally:
         cleanup.rollback()
@@ -413,3 +418,40 @@ def test_create_reset_link_rejects_an_invalid_email(db, capsys, email):
     assert code == 1 and not out
     assert err.strip() == "invalid email"
     assert db.query(PasswordResetToken).count() == 0
+
+
+# --- purge: invite requests ---
+
+def add_request(db, name, age, status="pending", code=None, expires_in=None):
+    """`expires_in` (from NOW) makes an invite; `code` without it is a revoked one (no invite)."""
+    invite_id = None
+    if expires_in is not None:
+        invite = InviteCode(code_hash=f"hash-{name}", created_at=NOW - age, expires_at=NOW + expires_in)
+        db.add(invite)
+        db.flush()
+        invite_id = invite.id
+    db.add(InviteRequest(contact=name, note="n", status=InviteRequestStatus(status), status_token_hash=name,
+                         created_at=NOW - age, invite_id=invite_id, code_plain=code))
+    db.commit()
+
+
+def test_purge_clears_dead_codes_and_deletes_requests_older_than_thirty_days(db, clock, capsys):
+    month, second, day = timedelta(days=30), timedelta(seconds=1), timedelta(days=1)
+    add_request(db, "pending-old", month)
+    add_request(db, "pending-recent", month - second)
+    add_request(db, "rejected-old", month + second, status="rejected")
+    add_request(db, "revealed-old", month, status="approved", expires_in=day)  # no code: deleted
+    add_request(db, "expired-old", month, status="approved", code="c", expires_in=timedelta(0))
+    add_request(db, "revoked-old", month, status="approved", code="c")
+    add_request(db, "live-old", month * 2, status="approved", code="c", expires_in=second)  # kept
+    add_request(db, "expired-recent", day, status="approved", code="c", expires_in=-second)
+    add_request(db, "revoked-recent", day, status="approved", code="c")
+    add_request(db, "live-recent", day, status="approved", code="c", expires_in=day)
+    assert admin.run(db, ["purge"]) == 0
+    assert capsys.readouterr().out.strip().endswith("0 password_reset_tokens, 5 invite_requests")
+    left = {r.contact: r.code_plain is not None for r in db.query(InviteRequest)}
+    assert left == {
+        "pending-recent": False, "live-old": True,
+        "expired-recent": False, "revoked-recent": False, "live-recent": True,
+    }
+    assert db.query(InviteCode).filter(InviteCode.code_hash == "hash-expired-old").count() == 1
