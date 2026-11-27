@@ -16,6 +16,7 @@ import { WakingUp } from "@/components/waking-up";
 import { type CreatedInvite, type Invite, createInvite, createPasswordReset, listInvites, revokeInvite } from "@/lib/admin";
 import { formatDate, formatDateTimePHT } from "@/lib/format";
 import { ApiError, errorMessage } from "@/lib/http";
+import { RequestsSection } from "./requests-section";
 
 const NOTE_MAX = 200;
 const NOTE_TYPING_CAP = 400;
@@ -323,6 +324,8 @@ export function AdminScreen() {
             </LedgerSheet>
           )}
         </section>
+
+        <RequestsSection onApproved={refresh} onGone={() => setGone(true)} />
       </main>
       <DeleteConfirm
         open={revoking !== null}

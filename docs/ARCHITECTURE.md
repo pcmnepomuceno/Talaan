@@ -22,16 +22,19 @@ erDiagram
     USERS ||--o{ PASSWORD_RESET_TOKENS : has
     USERS ||--o{ JOB_APPLICATIONS : owns
     JOB_APPLICATIONS ||--o{ INTERVIEWS : has
+    INVITE_CODES |o--o{ INVITE_REQUESTS : fulfils
     USERS { int id PK string email UK string password_hash string account_name }
     SESSIONS { int id PK string token_hash UK int user_id FK timestamptz created_at timestamptz expires_at }
     JOB_APPLICATIONS { int id PK int created_by FK string company string job_name enum status enum mode_of_work int salary date date_applied }
     INTERVIEWS { int id PK int job_application_id FK timestamptz scheduled_at enum mode enum outcome }
+    INVITE_REQUESTS { int id PK text contact text note enum status string status_token_hash UK timestamptz created_at timestamptz decided_at int invite_id FK text code_plain timestamptz revealed_at }
 ```
 Columns are abridged; the full schema is in the Schema section below.
 
 ## Schema
 
-Relationships: Users 1—N Job Applications 1—N Interviews; Users 1—N Sessions; Users 1—N PasswordResetTokens.
+Relationships: Users 1—N Job Applications 1—N Interviews; Users 1—N Sessions; Users 1—N PasswordResetTokens;
+InviteCodes 1—N InviteRequests (nullable).
 FKs live on the "many" side only (query `created_by`, never store lists on Users).
 
 **Users** (matches model): id, email (UNIQUE), password_hash, account_name
@@ -46,6 +49,11 @@ note?, created_at, expires_at, used_at?, used_by_user_id? → Users.id (`ON DELE
 **PasswordResetTokens** (matches model): id, user_id → Users.id (`ON DELETE CASCADE`, indexed), token_hash (UNIQUE, SHA-256 hex;
 the raw token is never stored), created_at, expires_at, used_at?, created_by? → Users.id (the admin; `ON DELETE CASCADE`, so a
 deleted admin's links die with the account and cannot pass for CLI links; indexed; NULL for CLI links)
+
+**InviteRequests** (matches model): id, contact, note, status (ENUM `invite_request_status`: pending/approved/rejected),
+status_token_hash (UNIQUE, SHA-256 hex of the status-link token; the raw token is never stored), created_at, decided_at?,
+invite_id? → InviteCodes.id (`ON DELETE SET NULL`, indexed `ix_invite_requests_invite_id`), code_plain? (the invite code, only
+from approval until it is shown once or purged; DECISIONS.md 2026-11-27), revealed_at?. No IP column. Not linked to a user.
 
 **Job Applications** (matches model)
 id, company, job_name, contact_website?, contact_email?, status (ENUM),

@@ -94,3 +94,32 @@ def test_cascade_migration_drops_orphaned_null_creator_links():
         run_alembic(command.upgrade, "head")
         with engine.begin() as conn:
             conn.execute(text("DELETE FROM users WHERE email IN ('mig-admin@example.com', 'mig-target@example.com')"))
+
+
+def test_invite_requests_migration_round_trip():
+    print("migration test database:", engine.url.render_as_string(hide_password=True))
+    before = "a7c2e9d05b14"
+
+    def state():
+        with engine.connect() as conn:
+            enum = conn.execute(text("SELECT count(*) FROM pg_type WHERE typname = 'invite_request_status'")).scalar()
+        return inspect(engine).has_table("invite_requests"), enum
+
+    try:
+        assert state() == (True, 1)
+        run_alembic(command.downgrade, before)
+        assert state() == (False, 0)
+        run_alembic(command.upgrade, "head")
+        assert state() == (True, 1)
+        columns = {c["name"] for c in inspect(engine).get_columns("invite_requests")}
+        assert columns == {
+            "id", "contact", "note", "status", "status_token_hash", "created_at", "decided_at",
+            "invite_id", "code_plain", "revealed_at",
+        }
+        fks = inspect(engine).get_foreign_keys("invite_requests")
+        assert [(f["name"], f["referred_table"], f["options"].get("ondelete")) for f in fks] == [
+            ("fk_invite_requests_invite_id", "invite_codes", "SET NULL")
+        ]
+        assert "ix_invite_requests_invite_id" in {i["name"] for i in inspect(engine).get_indexes("invite_requests")}
+    finally:
+        run_alembic(command.upgrade, "head")

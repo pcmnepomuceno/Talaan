@@ -262,7 +262,14 @@ export function LoginForm({
             helper={mode === "signup" ? "Talaan sends no email. If you forget your password, ask the person who invited you for a reset link." : undefined}
             error={err("password")}
           />
-          {mode === "signup" && <p className="text-body text-text-secondary">Access is by invitation for now.</p>}
+          {mode === "signup" && (
+            <div className="flex flex-col items-start">
+              <p className="text-body text-text-secondary">Access is by invitation for now.</p>
+              <div className="-mx-2">
+                <TextAction href="/request">Don&apos;t have a code? Request one</TextAction>
+              </div>
+            </div>
+          )}
           <Button type="submit" className="w-full" disabled={busy}>
             {label}
           </Button>

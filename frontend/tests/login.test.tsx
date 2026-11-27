@@ -78,6 +78,8 @@ describe("shell", () => {
       "Password",
     ]);
     expect(screen.getByText("Access is by invitation for now.")).toBeTruthy();
+    const request = screen.getByRole("link", { name: "Don't have a code? Request one" });
+    expect(request.getAttribute("href")).toBe("/request");
   });
 
   it("log in autocomplete: email is the username, current password", () => {

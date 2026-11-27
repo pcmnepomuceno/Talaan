@@ -80,11 +80,23 @@ export default function PrivacyPage() {
             </li>
             <li>
               Attempt limits: records of attempts to sign up, log in, delete an account, create an invite, create a
-              password reset link or reset a password. A record has a time and one of these: the IP address in plain
-              text (an IPv6 address is cut to its /64 network), a one-way hash of the email address, or the account
-              number.
+              password reset link, reset a password, request an invite or check a request. A record has a time and one
+              of these: the IP address in plain text (an IPv6 address is cut to its /64 network), a one-way hash of the
+              email address, or the account number.
+            </li>
+            <li>
+              Invite requests: the contact details you typed (an email, a social handle or anything else), why you want
+              access, the status, a hash of your status link&apos;s token, when you asked, when it was decided and when
+              the code was shown, which invite was made, and the invite code itself, in plain text, until it is shown
+              to you. The cleanup removes the code if the invite expires or is revoked before then.
             </li>
           </List>
+          <p>
+            If you request an invite, I see your request on my admin page. Talaan sends no email, so you check the answer with your status link.
+          </p>
+          <p>
+            Apart from the rate-limit records already described on this page, nothing is stored about visitors who do not submit.
+          </p>
         </Section>
 
         <Section title="What the extension reads and when">
@@ -185,6 +197,11 @@ export default function PrivacyPage() {
               used or expired password reset links created more than 7 days ago.
             </li>
             <li>
+              The same cleanup deletes invite requests created more than 30 days ago. The one exception is a request
+              whose code is still waiting to be shown and whose invite has not expired; the cleanup keeps it until it
+              finds the invite expired or revoked.
+            </li>
+            <li>
               I make no backups of my own. My database host keeps restore history as part of its service,
               so deleted data can stay there until it ages out.
             </li>
@@ -202,7 +219,11 @@ export default function PrivacyPage() {
           <List>
             <li>The site is served over HTTPS.</li>
             <li>Passwords are stored as bcrypt hashes.</li>
-            <li>Session tokens and invite codes are stored only as hashes.</li>
+            <li>
+              Session tokens and invite codes are stored as hashes. The one exception is a code made for an invite
+              request, which is kept in plain text until it is shown to you, or until the cleanup removes it after it
+              expires or is revoked.
+            </li>
           </List>
         </Section>
 

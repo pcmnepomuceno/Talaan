@@ -26,6 +26,7 @@ from app.users.schemas import NormalizedEmail
 BATCH_SIZE = 1000  # rows per DELETE; tests patch it
 DEFAULT_EXPIRES_IN = "14d"
 RESET_TOKEN_RETENTION = timedelta(days=7)  # after creation, for used and expired links
+REQUEST_RETENTION = timedelta(days=30)  # invite requests, after creation
 MAX_HOURS = 365 * 24
 
 
@@ -52,7 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
     create.add_argument("--expires-in", type=parse_expires_in, default=parse_expires_in(DEFAULT_EXPIRES_IN),
                         metavar="Nd|Nh", help="lifetime, default 14d (1h to 365d)")
 
-    sub.add_parser("purge", help="delete old rate-limit events, expired sessions and old reset links")
+    sub.add_parser("purge", help="delete old rate-limit events, expired sessions, old reset links and invite requests")
 
     sub.add_parser("list-invites", help="list invites (never shows codes or hashes)")
 
@@ -87,8 +88,11 @@ def _delete_in_batches(db: Session, table: str, condition: str, params: dict) ->
             return total
 
 
-def purge(db: Session) -> tuple[int, int, int]:
-    """(events deleted, sessions deleted, reset tokens deleted). Reset tokens go when used or
+def purge(db: Session) -> tuple[int, int, int, int]:
+    """(events deleted, sessions deleted, reset tokens deleted, invite requests deleted). First,
+    invite requests lose their plaintext code once the invite is expired or revoked; then requests
+    created at least REQUEST_RETENTION ago go, unless they still hold a code (the invite is still
+    valid: a later run takes them). Reset tokens go when used or
     expired and created at least RESET_TOKEN_RETENTION ago. Events older than config.MAX_WINDOW_SECONDS (7 days) are
     outside every key's window (config refuses any longer window), so removing them cannot change
     any limiter count. The cutoff is that fixed ceiling, not the API's own *_WINDOW_SECONDS: this
@@ -98,13 +102,28 @@ def purge(db: Session) -> tuple[int, int, int]:
     ponytail: add an index on created_at / expires_at if purge gets slow."""
     now = rate_limit.utcnow()
     cutoff = now - timedelta(seconds=config.MAX_WINDOW_SECONDS)
+    # ponytail: unbatched. Only unexpired approvals hold a code, at most about 50 rows.
+    db.execute(
+        text(
+            "UPDATE invite_requests SET code_plain = NULL WHERE id IN "
+            "(SELECT r.id FROM invite_requests r LEFT JOIN invite_codes i ON i.id = r.invite_id "
+            "WHERE r.code_plain IS NOT NULL AND (i.id IS NULL OR i.expires_at <= :now) "
+            "FOR UPDATE OF r SKIP LOCKED)"
+        ),
+        {"now": now},
+    )
+    db.commit()
+    requests = _delete_in_batches(
+        db, "invite_requests", "created_at <= :cutoff AND code_plain IS NULL",
+        {"cutoff": now - REQUEST_RETENTION},
+    )
     events = _delete_in_batches(db, "rate_limit_events", "created_at <= :cutoff", {"cutoff": cutoff})
     sessions = _delete_in_batches(db, "sessions", "expires_at <= :now", {"now": now})
     resets = _delete_in_batches(
         db, "password_reset_tokens", "(used_at IS NOT NULL OR expires_at <= :now) AND created_at <= :cutoff",
         {"now": now, "cutoff": now - RESET_TOKEN_RETENTION},
     )
-    return events, sessions, resets
+    return events, sessions, resets, requests
 
 
 def run(db: Session, argv: list[str]) -> int:
@@ -118,8 +137,9 @@ def run(db: Session, argv: list[str]) -> int:
         return 0
 
     if args.command == "purge":
-        events, sessions, resets = purge(db)
-        print(f"Purged {events} rate_limit_events, {sessions} sessions, {resets} password_reset_tokens")
+        events, sessions, resets, requests = purge(db)
+        print(f"Purged {events} rate_limit_events, {sessions} sessions, {resets} password_reset_tokens, "
+              f"{requests} invite_requests")
         return 0
 
     if args.command == "create-reset-link":

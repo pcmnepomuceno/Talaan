@@ -11,7 +11,7 @@ Scope: `docs/ROADMAP.md`; read its **Current milestone** before a task. Referenc
 - Password hashing: `bcrypt` directly (`passlib` dropped: unmaintained, broken on bcrypt 5.x)
 - Docker: set `COOKIE_SECURE=false` in `.env` first (plain http), then `docker compose up -d` (db + api on :8000), then `docker compose run --rm api python -m alembic upgrade head` (never auto-run).
   The `api` service reads `.env` via `env_file` (`required: false`); its own `DATABASE_URL` wins. Inside Compose every host request comes from the bridge gateway IP, so all local clients share one rate-limit bucket: raise the `LOGIN_*`/`SIGNUP_*` limits in `.env` for local work.
-- Invites (admin CLI, uses `DATABASE_URL`): `python -m app.admin create-invite [--note TEXT] [--expires-in 14d]` (prints the code once), `list-invites`, `revoke-invite ID` (unused only), `create-reset-link EMAIL` (prints `/reset#<token>` once; any account), `purge` (old `rate_limit_events`, expired `sessions` and old used or expired `password_reset_tokens`, batched, `SKIP LOCKED`; daily via `.github/workflows/purge.yml`). In Docker: `docker compose run --rm api python -m app.admin ...`.
+- Invites (admin CLI, uses `DATABASE_URL`): `python -m app.admin create-invite [--note TEXT] [--expires-in 14d]` (prints the code once), `list-invites`, `revoke-invite ID` (unused only), `create-reset-link EMAIL` (prints `/reset#<token>` once; any account), `purge` (old `rate_limit_events`, expired `sessions`, old used or expired `password_reset_tokens`, and `invite_requests` (dead `code_plain` cleared, rows over 30 days deleted), batched, `SKIP LOCKED`; daily via `.github/workflows/purge.yml`). In Docker: `docker compose run --rm api python -m app.admin ...`.
 - Run: `cp .env.example .env` (then set `COOKIE_SECURE=false` in `.env` for plain http; the default true is for production), `docker compose up -d db`, `pip install -r requirements-dev.txt`,
   `alembic upgrade head`, `uvicorn app.main:app --reload --no-proxy-headers`
   (`--no-proxy-headers` keeps uvicorn from rewriting the client address from `X-Forwarded-For`;
@@ -28,7 +28,7 @@ Tables, columns and ENUMs: docs/ARCHITECTURE.md (Schema section). FKs live on th
 ## Security rules
 Auth decisions (sessions, cookies, invites, rate limits, origin check, account deletion): docs/AUTH.md. Rules that always apply:
 - Every application and interview route scopes to the caller through `get_current_user` (`created_by`; interviews via their parent application).
-- Never log or return a plaintext invite code (only the one-time CLI print and the `POST /admin/invites` response). Admin routes return 404 to non-admins (`ADMIN_EMAILS`, docs/AUTH.md). Never use `SameSite=None`.
+- Never log or return a plaintext invite code (only the one-time CLI print, the `POST /admin/invites` response, and the invite-request approve response and one-time reveal; DECISIONS.md 2026-11-27). Admin routes return 404 to non-admins (`ADMIN_EMAILS`, docs/AUTH.md). Never use `SameSite=None`.
 - The session cookie's name and attributes live only in `app/auth/cookies.py`. Tokens never go in the response body or in web storage.
 - `BCRYPT_ROUNDS` stays fixed after launch; never lower it outside tests.
 - Production refuses to start with insecure config (`production_problems()` in `app/config.py`).
@@ -68,7 +68,7 @@ Decision changes get a new dated entry in DECISIONS.md (append; never rewrite ol
 Domain packages (`app/`). Applications and interviews have CRUD. A middleware in `main.py` sets `Cache-Control: no-store` on every `/api/v1` response.
 
     app/main.py, config.py, database.py, health.py, security.py (Origin check)
-    app/auth/          router, schemas, models [Session, RateLimitEvent, InviteCode, PasswordResetToken], dependencies, security, cookies, rate_limit, invites, admin_invites, password_resets
+    app/auth/          router, schemas, models [Session, RateLimitEvent, InviteCode, PasswordResetToken, InviteRequest], dependencies, security, cookies, rate_limit, invites, admin_invites, password_resets, invite_requests
     app/admin.py       CLI: python -m app.admin {create-invite,list-invites,revoke-invite,create-reset-link,purge}
     app/users/         router (/me, /account/delete), schemas, models
     app/applications/  models, schemas, router, dependencies (service planned)

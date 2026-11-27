@@ -1,5 +1,6 @@
-"""Pydantic schemas for the admin invite and password reset endpoints. Responses never hold a
-hash or email, and a code or reset token appears only once, in its *Created model."""
+"""Pydantic schemas for the admin invite, password reset and invite request endpoints. Responses
+never hold a hash or an account email, and a code or token appears only once: in its *Created or
+*Approved model, or in the one reveal of InviteRequestState."""
 
 from datetime import datetime
 from typing import Annotated, Literal
@@ -75,3 +76,63 @@ class PasswordReset(BaseModel):
     # No constraints on purpose (like invite_code): the route answers every bad token alike.
     token: str = Field(repr=False)
     new_password: Annotated[text.Text, AfterValidator(check_password_rules)] = Field(repr=False)
+
+
+class InviteRequestCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    contact: str = Field(min_length=1, max_length=200)  # code points, after stripping
+    note: str = Field(min_length=1, max_length=1000)
+    # Honeypot. Never stored, and never validated: a 422 would tell a bot the field is special.
+    website: str = ""
+
+    @field_validator("contact", "note", mode="before")
+    @classmethod
+    def clean(cls, value):
+        if isinstance(value, str):
+            text.check(value)  # before the strip and the length limit
+            return value.strip()
+        return value
+
+
+class InviteRequestCreated(BaseModel):
+    """The one place a status token leaves the server."""
+
+    token: str = Field(repr=False)
+
+
+class InviteRequestStatusQuery(BaseModel):
+    # No constraints on purpose: the route answers every bad token alike.
+    token: str = Field(repr=False)
+
+
+class InviteRequestState(BaseModel):
+    state: Literal["pending", "rejected", "approved", "shown", "expired"]
+    code: str | None = Field(default=None, repr=False)  # only with "approved", once
+
+
+class InviteRequestItem(BaseModel):
+    id: int
+    contact: str
+    note: str
+    status: str  # pending | approved | rejected
+    created_at: datetime
+    decided_at: datetime | None
+    revealed_at: datetime | None
+
+
+class InviteRequestList(BaseModel):
+    items: list[InviteRequestItem]
+
+
+class InviteRequestApprove(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # Same rule as AccountDelete: verify-only.
+    password: Annotated[str, Field(max_length=1024), AfterValidator(text.check_encodable)]
+
+
+class InviteRequestApproved(BaseModel):
+    id: int  # the invite
+    code: str = Field(repr=False)
+    expires_at: datetime

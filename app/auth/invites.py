@@ -3,6 +3,9 @@
 A code is 12 Crockford base32 characters, shown as TLN-XXXX-XXXX-XXXX. Only the SHA-256
 of the normalized 12 characters is stored. Never log or return a plaintext code (the admin
 CLI and the admin-gated HTTP endpoint show it once at creation; both use create/revoke/status here).
+One exception to "only the hash": an approved invite request keeps its code in
+`invite_requests.code_plain` until the requester sees it once or purge clears it, and returns it on
+approve and on that reveal (app/auth/invite_requests.py; DECISIONS.md 2026-11-27).
 """
 
 import hashlib

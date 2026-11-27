@@ -106,7 +106,7 @@ def _migrated():
     run_alembic(command.upgrade, "head")
 
 
-_LEAK_TABLES = ("users", "sessions", "job_applications", "interviews", "invite_codes", "rate_limit_events")
+_LEAK_TABLES = ("users", "sessions", "job_applications", "interviews", "invite_codes", "invite_requests", "rate_limit_events")
 
 
 def _stray_rows() -> dict:
@@ -123,9 +123,9 @@ def _no_stray_rows(_migrated):
 
     To clear them (the test DB only, it holds nothing else):
         docker compose exec db psql -U talaan talaan_test -c \\
-          "TRUNCATE users, invite_codes, rate_limit_events RESTART IDENTITY CASCADE"
+          "TRUNCATE users, invite_codes, invite_requests, rate_limit_events RESTART IDENTITY CASCADE"
     """
-    fix = "clear with: TRUNCATE users, invite_codes, rate_limit_events RESTART IDENTITY CASCADE (see _no_stray_rows)"
+    fix = "clear with: TRUNCATE users, invite_codes, invite_requests, rate_limit_events RESTART IDENTITY CASCADE (see _no_stray_rows)"
     before = _stray_rows()
     if before:
         pytest.exit(f"Refusing to run: stray rows in the test database {before}; {fix}", 2)
