@@ -73,6 +73,19 @@ describe("profile", () => {
     expect(link.getAttribute("rel")).toBe("noopener noreferrer");
   });
 
+  it("links to the Chrome Web Store listing in a new tab", async () => {
+    render(<AccountScreen />);
+    await screen.findByText("ana@example.ph");
+    const link = screen.getByRole("link", { name: /Get the Chrome extension/ });
+    const href = link.getAttribute("href")!;
+    expect(href).toBe("https://chromewebstore.google.com/detail/talaan/icpdblljdbhfckncojpohbnfdkblgill");
+    expect(new URL(href).search).toBe("");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toContain("noopener");
+    expect(link.getAttribute("rel")).toContain("noreferrer");
+    expect(screen.getByText("Save postings from LinkedIn and other job sites in one click.")).toBeTruthy();
+  });
+
   it("shows the account name and email, and keeps the theme toggle", async () => {
     render(<AccountScreen />);
     expect(await screen.findByText("Ana Cruz")).toBeTruthy();

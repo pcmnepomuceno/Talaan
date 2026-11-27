@@ -48,7 +48,7 @@ One decision worth knowing (details in [DECISIONS.md](DECISIONS.md)): the browse
 - Light and dark theme that follows the system, with an override on the account screen.
 - Phone, tablet and desktop layouts, with the list and detail side by side from 1280px.
 - Rate limits on login, sign-up, account deletion, reset link creation and password reset attempts.
-- A Chrome extension (unpacked install, desktop) that saves the job posting you are viewing: see [extension/README.md](extension/README.md).
+- A Chrome extension (desktop) that saves the job posting you are viewing, on the [Chrome Web Store](https://chromewebstore.google.com/detail/talaan/icpdblljdbhfckncojpohbnfdkblgill) (Unlisted), with the unpacked install kept for development and friends builds: see [extension/README.md](extension/README.md).
 
 ## Tech stack
 
