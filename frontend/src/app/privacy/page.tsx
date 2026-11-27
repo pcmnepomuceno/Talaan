@@ -198,8 +198,8 @@ export default function PrivacyPage() {
             </li>
             <li>
               The same cleanup deletes invite requests created more than 30 days ago. The one exception is a request
-              whose code is still waiting to be shown and whose invite has not expired; it is kept until the invite
-              expires or is revoked.
+              whose code is still waiting to be shown and whose invite has not expired; the cleanup keeps it until it
+              finds the invite expired or revoked.
             </li>
             <li>
               I make no backups of my own. My database host keeps restore history as part of its service,
@@ -221,7 +221,8 @@ export default function PrivacyPage() {
             <li>Passwords are stored as bcrypt hashes.</li>
             <li>
               Session tokens and invite codes are stored as hashes. The one exception is a code made for an invite
-              request, which is kept in plain text until it is shown to you or it expires or is revoked.
+              request, which is kept in plain text until it is shown to you, or until the cleanup removes it after it
+              expires or is revoked.
             </li>
           </List>
         </Section>
