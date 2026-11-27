@@ -85,7 +85,10 @@ export default function PrivacyPage() {
               email address, or the account number.
             </li>
             <li>
-              Invite requests: how you asked to be reached, why you want access, the status, a hash of your status link&apos;s token, when you asked, when it was decided and when the code was shown, which invite was made, and the invite code until it is shown to you or the cleanup removes it after it expires or is revoked.
+              Invite requests: the contact details you typed (an email, a social handle or anything else), why you want
+              access, the status, a hash of your status link&apos;s token, when you asked, when it was decided and when
+              the code was shown, which invite was made, and the invite code itself, in plain text, until it is shown
+              to you. The cleanup removes the code if the invite expires or is revoked before then.
             </li>
           </List>
           <p>
@@ -194,7 +197,9 @@ export default function PrivacyPage() {
               used or expired password reset links created more than 7 days ago.
             </li>
             <li>
-              The same cleanup deletes invite requests created more than 30 days ago. A request whose code has not been shown and has not expired is kept until the code expires; if its invite is revoked, the next cleanup removes the code.
+              The same cleanup deletes invite requests created more than 30 days ago. The one exception is a request
+              whose code is still waiting to be shown and whose invite has not expired; it is kept until the invite
+              expires or is revoked.
             </li>
             <li>
               I make no backups of my own. My database host keeps restore history as part of its service,
@@ -214,7 +219,10 @@ export default function PrivacyPage() {
           <List>
             <li>The site is served over HTTPS.</li>
             <li>Passwords are stored as bcrypt hashes.</li>
-            <li>Session tokens and invite codes are stored only as hashes.</li>
+            <li>
+              Session tokens and invite codes are stored as hashes. The one exception is a code made for an invite
+              request, which is kept in plain text until it is shown to you or it expires or is revoked.
+            </li>
           </List>
         </Section>
 

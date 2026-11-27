@@ -67,13 +67,16 @@ describe("privacy page", () => {
     render(<PrivacyPage />);
     const items = screen.getAllByRole("listitem").map((li) => li.textContent);
     expect(items).toContain(
-      "Invite requests: how you asked to be reached, why you want access, the status, a hash of your status link's token, when you asked, when it was decided and when the code was shown, which invite was made, and the invite code until it is shown to you or the cleanup removes it after it expires or is revoked.",
+      "Invite requests: the contact details you typed (an email, a social handle or anything else), why you want access, the status, a hash of your status link's token, when you asked, when it was decided and when the code was shown, which invite was made, and the invite code itself, in plain text, until it is shown to you. The cleanup removes the code if the invite expires or is revoked before then.",
     );
     expect(items).toContain(
-      "The same cleanup deletes invite requests created more than 30 days ago. A request whose code has not been shown and has not expired is kept until the code expires; if its invite is revoked, the next cleanup removes the code.",
+      "The same cleanup deletes invite requests created more than 30 days ago. The one exception is a request whose code is still waiting to be shown and whose invite has not expired; it is kept until the invite expires or is revoked.",
     );
     expect(screen.getByText("If you request an invite, I see your request on my admin page. Talaan sends no email, so you check the answer with your status link.")).toBeTruthy();
     expect(screen.getByText("Apart from the rate-limit records already described on this page, nothing is stored about visitors who do not submit.")).toBeTruthy();
+    expect(items).toContain(
+      "Session tokens and invite codes are stored as hashes. The one exception is a code made for an invite request, which is kept in plain text until it is shown to you or it expires or is revoked.",
+    );
   });
 
   it("repeats the popup disclosure and says how the extension signs in", () => {
