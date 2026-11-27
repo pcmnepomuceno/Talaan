@@ -47,7 +47,7 @@ describe("privacy page", () => {
       "Password reset links: a hash of the link's token, which account it is for and which admin made it, and when it was created, expires and was used.",
     );
     expect(items).toContain(
-      "Attempt limits: records of attempts to sign up, log in, delete an account, create an invite, create a password reset link or reset a password. A record has a time and one of these: the IP address in plain text (an IPv6 address is cut to its /64 network), a one-way hash of the email address, or the account number.",
+      "Attempt limits: records of attempts to sign up, log in, delete an account, create an invite, create a password reset link, reset a password, request an invite or check a request. A record has a time and one of these: the IP address in plain text (an IPv6 address is cut to its /64 network), a one-way hash of the email address, or the account number.",
     );
     expect(items).toContain(
       "A cleanup scheduled to run daily deletes attempt limit records older than 7 days, expired sessions, and used or expired password reset links created more than 7 days ago.",
@@ -61,6 +61,19 @@ describe("privacy page", () => {
       ),
     ).toBeTruthy();
     expect(screen.getByText("Last updated 27 November 2026")).toBeTruthy();
+  });
+
+  it("describes invite requests: what is stored, who sees it, for how long, and that no email is sent", () => {
+    render(<PrivacyPage />);
+    const items = screen.getAllByRole("listitem").map((li) => li.textContent);
+    expect(items).toContain(
+      "Invite requests: how you asked to be reached, why you want access, the status, a hash of your status link's token, when you asked, when it was decided and when the code was shown, which invite was made, and the invite code until it is shown to you or the cleanup removes it after it expires or is revoked.",
+    );
+    expect(items).toContain(
+      "The same cleanup deletes invite requests created more than 30 days ago. A request whose code has not been shown and has not expired is kept until the code expires; if its invite is revoked, the next cleanup removes the code.",
+    );
+    expect(screen.getByText("If you request an invite, I see your request on my admin page. Talaan sends no email, so you check the answer with your status link.")).toBeTruthy();
+    expect(screen.getByText("Apart from the rate-limit records already described on this page, nothing is stored about visitors who do not submit.")).toBeTruthy();
   });
 
   it("repeats the popup disclosure and says how the extension signs in", () => {

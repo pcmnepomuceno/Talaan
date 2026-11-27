@@ -59,6 +59,22 @@ unset NEON_URL
 
 A reset link for an admin account (the page refuses those) comes from the CLI, with the same `read -rsp` lines: `DATABASE_URL="$NEON_URL" python -m app.admin create-reset-link EMAIL`. It prints `/reset#<token>` once; put the frontend's origin in front of it.
 
+### Invite requests: migrate before merging (A3)
+
+The `invite_requests` table must exist on Neon **before** the A3 PR merges: the new code and the daily purge both query it, and the purge runs that step first. From the repo root with the venv active, paste Neon's direct string when prompted:
+
+```bash
+read -rsp 'Neon direct URL: ' NEON_URL; echo
+NEON_URL="postgresql+psycopg2://${NEON_URL#*://}"
+DATABASE_URL="$NEON_URL" python -m alembic upgrade head
+DATABASE_URL="$NEON_URL" python -m alembic check
+unset NEON_URL
+```
+
+`alembic check` after it must report no new upgrade operations.
+
+`INVITE_REQUEST_PENDING_CAP` (Render, optional, default 50) is the number of undecided requests allowed. When it is reached, requests close for everyone until you decide or delete some at `/admin`. The per-IP limits are `INVITE_REQUEST_IP_*` (5 per hour) and `INVITE_REQUEST_STATUS_IP_*` (30 per hour).
+
 ## 1. Secrets and env vars
 
 Generate once: `openssl rand -hex 32` (the proxy secret). Never commit real values.

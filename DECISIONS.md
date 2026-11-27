@@ -773,3 +773,39 @@
 - **Two origins:** the Store build has its own ID, so `EXTENSION_ORIGINS` lists both: `chrome-extension://fjlnbbkeadlpibmnbpfhlgeingifocni` (the pinned ID, for unpacked and friends builds) and `chrome-extension://icpdblljdbhfckncojpohbnfdkblgill` (the Store build).
 - **Account link:** Account links to the listing with a clean URL, without query params.
 - **Supersedes** any older statement that the Store ID still has to be added.
+
+---
+
+# Decision: An approved invite request keeps its code in plain text until it is shown
+- **Date:** 2026-11-27
+- **Decision:** approving a request creates a normal invite (14 days, note `Request #<id>`) and also stores the code in `invite_requests.code_plain`. The requester's status link returns it once and clears it in the same statement. The admin sees it once in the approve response as a backup.
+- **Why:** Talaan sends no email, and the requester is not there when the admin approves, so the code has to wait somewhere.
+- **Bound:** the code is single use and expires. Daily purge clears `code_plain` once the invite is expired or revoked, and deletes requests 30 days after creation; a request still holding a live code is kept until that code is cleared.
+- **Rejected:** storing only the hash and having the admin paste the code to the requester by hand (contact is free text, so every approval would be manual work).
+- **Reveal statement:** `RETURNING` gives the new row, and `RETURNING OLD.x` only exists from PostgreSQL 18, so the old value comes from a subquery that locks the row (`FOR UPDATE`) and joins `invite_codes` on its own `invite_id` (the UPDATE target cannot be referenced in a `JOIN ON`). A second caller waits, then matches nothing.
+- **Approve during a status check:** the waiting statement's snapshot cannot see the invite the approve just inserted, so the next read finds an approved request with a live invite and answers `pending`, not `expired`; the next check reveals the code.
+- **Invite note:** `Request #<id>`, not the contact, so the contact does not outlive the purge inside `invite_codes`.
+
+---
+
+# Decision: A honeypot instead of a CAPTCHA on the request form
+- **Date:** 2026-11-27
+- **Decision:** a hidden `website` field. If it is filled, the API answers as usual and stores nothing. Rate limits per IP and the pending cap bound the rest.
+- **Why:** no third party and no new dependency.
+- **Accepted:** a password manager or autofill that fills the hidden field loses that person's request silently. A bot written for this form can skip the field.
+- **Rejected:** a CAPTCHA service.
+
+---
+
+# Decision: The requester's contact is free text
+- **Date:** 2026-11-27
+- **Decision:** `contact` is any text up to 200 characters. It is not validated as an email and nothing is sent to it.
+- **Why:** there is no email sending or verification, so an email format check would prove nothing; a phone number or a handle is just as useful.
+
+---
+
+# Decision: A cap on pending invite requests that closes the form for everyone
+- **Date:** 2026-11-27
+- **Decision:** at most `INVITE_REQUEST_PENDING_CAP` (50) pending requests; beyond it the form answers `409 Requests are closed right now.` Approve also shares the invite-create rate limit and the 50-unused-invite cap.
+- **Accepted:** anyone can fill the cap and close requests for everyone until the admin deletes them. Acceptable at this scale; invites can still be created by hand.
+- **Rejected:** no cap (the table could be filled without bound from many addresses).

@@ -31,7 +31,8 @@ Columns are abridged; the full schema is in the Schema section below.
 
 ## Schema
 
-Relationships: Users 1—N Job Applications 1—N Interviews; Users 1—N Sessions; Users 1—N PasswordResetTokens.
+Relationships: Users 1—N Job Applications 1—N Interviews; Users 1—N Sessions; Users 1—N PasswordResetTokens;
+InviteCodes 1—N InviteRequests (nullable).
 FKs live on the "many" side only (query `created_by`, never store lists on Users).
 
 **Users** (matches model): id, email (UNIQUE), password_hash, account_name
@@ -46,6 +47,11 @@ note?, created_at, expires_at, used_at?, used_by_user_id? → Users.id (`ON DELE
 **PasswordResetTokens** (matches model): id, user_id → Users.id (`ON DELETE CASCADE`, indexed), token_hash (UNIQUE, SHA-256 hex;
 the raw token is never stored), created_at, expires_at, used_at?, created_by? → Users.id (the admin; `ON DELETE CASCADE`, so a
 deleted admin's links die with the account and cannot pass for CLI links; indexed; NULL for CLI links)
+
+**InviteRequests** (matches model): id, contact, note, status (ENUM `invite_request_status`: pending/approved/rejected),
+status_token_hash (UNIQUE, SHA-256 hex of the status-link token; the raw token is never stored), created_at, decided_at?,
+invite_id? → InviteCodes.id (`ON DELETE SET NULL`, indexed `ix_invite_requests_invite_id`), code_plain? (the invite code, only
+from approval until it is shown once or purged; DECISIONS.md 2026-11-27), revealed_at?. No IP column. Not linked to a user.
 
 **Job Applications** (matches model)
 id, company, job_name, contact_website?, contact_email?, status (ENUM),

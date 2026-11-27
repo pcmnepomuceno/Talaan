@@ -80,11 +80,20 @@ export default function PrivacyPage() {
             </li>
             <li>
               Attempt limits: records of attempts to sign up, log in, delete an account, create an invite, create a
-              password reset link or reset a password. A record has a time and one of these: the IP address in plain
-              text (an IPv6 address is cut to its /64 network), a one-way hash of the email address, or the account
-              number.
+              password reset link, reset a password, request an invite or check a request. A record has a time and one
+              of these: the IP address in plain text (an IPv6 address is cut to its /64 network), a one-way hash of the
+              email address, or the account number.
+            </li>
+            <li>
+              Invite requests: how you asked to be reached, why you want access, the status, a hash of your status link&apos;s token, when you asked, when it was decided and when the code was shown, which invite was made, and the invite code until it is shown to you or the cleanup removes it after it expires or is revoked.
             </li>
           </List>
+          <p>
+            If you request an invite, I see your request on my admin page. Talaan sends no email, so you check the answer with your status link.
+          </p>
+          <p>
+            Apart from the rate-limit records already described on this page, nothing is stored about visitors who do not submit.
+          </p>
         </Section>
 
         <Section title="What the extension reads and when">
@@ -183,6 +192,9 @@ export default function PrivacyPage() {
             <li>
               A cleanup scheduled to run daily deletes attempt limit records older than 7 days, expired sessions, and
               used or expired password reset links created more than 7 days ago.
+            </li>
+            <li>
+              The same cleanup deletes invite requests created more than 30 days ago. A request whose code has not been shown and has not expired is kept until the code expires; if its invite is revoked, the next cleanup removes the code.
             </li>
             <li>
               I make no backups of my own. My database host keeps restore history as part of its service,
