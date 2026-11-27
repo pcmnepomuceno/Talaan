@@ -69,7 +69,7 @@ Generate once: `openssl rand -hex 32` (the proxy secret). Never commit real valu
 | Render | `ENVIRONMENT` | `production` (the app refuses to start on a dev-grade config) |
 | Render | `COOKIE_SECURE` | `true` (cookie becomes `__Host-session_token`) |
 | Render | `ALLOWED_ORIGINS` | `https://<project>.vercel.app` (exact origin, no path, https, not localhost) |
-| Render | `EXTENSION_ORIGINS` | empty until the E2b extension ships; then `chrome-extension://<32 letters a-p>`, comma-separated, exact match (no wildcard, no trailing slash) |
+| Render | `EXTENSION_ORIGINS` | `chrome-extension://fjlnbbkeadlpibmnbpfhlgeingifocni,chrome-extension://icpdblljdbhfckncojpohbnfdkblgill` (the pinned ID for unpacked and friends installs, then the Chrome Web Store ID), comma-separated, exact match (no wildcard, no trailing slash) |
 | Render | `PROXY_SECRET` | the generated secret (at least 32 characters) |
 | Render | `TRUST_PROXY` | `false` |
 | Render | `BCRYPT_ROUNDS` | `12` (production refuses lower) |

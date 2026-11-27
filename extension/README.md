@@ -25,13 +25,19 @@ There is nothing else: no background worker and no content scripts.
 
 The extension has no login form. If you are signed out it shows "Open Talaan to sign in". Sign in on the site, then click the toolbar icon again. The popup closes when the sign-in tab opens, and typed values are not kept.
 
+## Install from the Chrome Web Store
+
+https://chromewebstore.google.com/detail/talaan/icpdblljdbhfckncojpohbnfdkblgill (Store ID `icpdblljdbhfckncojpohbnfdkblgill`)
+
+The listing is Unlisted, so only people with the link can find it. The Store build has its own ID; the friends zip and the unpacked folder keep the pinned ID `fjlnbbkeadlpibmnbpfhlgeingifocni`.
+
 ## Install (unpacked, Chrome on desktop only)
 
 1. Open `chrome://extensions` and turn on Developer mode.
 2. Choose Load unpacked and select the `extension/` folder.
 3. Confirm the ID is `fjlnbbkeadlpibmnbpfhlgeingifocni`.
 
-The server must allow it with `EXTENSION_ORIGINS=chrome-extension://fjlnbbkeadlpibmnbpfhlgeingifocni` (docs/AUTH.md). Chrome 123 or newer is needed (the popup's colors use `light-dark()`).
+The server must allow both IDs with `EXTENSION_ORIGINS=chrome-extension://fjlnbbkeadlpibmnbpfhlgeingifocni,chrome-extension://icpdblljdbhfckncojpohbnfdkblgill` (docs/AUTH.md). Chrome 123 or newer is needed (the popup's colors use `light-dark()`).
 
 The `key` in `manifest.json` is the public key. It is committed because it fixes the ID. The matching private key was generated outside the repository and is never committed. `npm run package` and the Chrome Web Store upload do not use it; only Chrome's "Pack extension" (a `.crx` file) would. Never add a `*.pem` file.
 
@@ -103,7 +109,7 @@ It needs the system `zip` command. Both zips hold only `manifest.json`, `popup.h
 
 - `talaan-extension-store-<version>.zip` is for the Chrome Web Store upload. Its manifest has no `key`, because the Store assigns its own ID and may reject the field.
 - `talaan-extension-friends-<version>.zip` is for friends: unzip it, then use Load unpacked on the folder. It keeps `key`, so the ID stays `fjlnbbkeadlpibmnbpfhlgeingifocni`.
-- After the first Store upload, add the Store-assigned ID (`chrome-extension://<id>`) to `EXTENSION_ORIGINS` in Render, alongside the pinned one.
+- In Render, `EXTENSION_ORIGINS` holds the pinned ID and the Store ID: `EXTENSION_ORIGINS=chrome-extension://fjlnbbkeadlpibmnbpfhlgeingifocni,chrome-extension://icpdblljdbhfckncojpohbnfdkblgill`.
 - Bump `"version"` before every Store upload. It must be 1 to 4 dot-separated integers, each 0 to 65535, with no leading zeros and not all zero; put a label such as "beta" in `version_name`.
 
 The build checks the manifest first: `manifest_version` is 3, the version follows Chrome's rules (above), `name` is at most 75 characters and `description` at most 132, there is a 128 icon, every icon and popup file exists, is not a hidden file or `~` backup, and is among the shipped files, `permissions` and `host_permissions` are exactly the ones listed above, and `key` is present. If a check fails, the script prints one line saying which (for example `description must be at most 132 characters`), exits 1 and writes no zip. Zips from an earlier run are left as they were. If copying into `dist/` fails partway (a full disk, for example), it can hold one new zip and one old one; rerun the script.
