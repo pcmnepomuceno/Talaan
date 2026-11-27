@@ -22,10 +22,12 @@ erDiagram
     USERS ||--o{ PASSWORD_RESET_TOKENS : has
     USERS ||--o{ JOB_APPLICATIONS : owns
     JOB_APPLICATIONS ||--o{ INTERVIEWS : has
+    INVITE_CODES |o--o{ INVITE_REQUESTS : fulfils
     USERS { int id PK string email UK string password_hash string account_name }
     SESSIONS { int id PK string token_hash UK int user_id FK timestamptz created_at timestamptz expires_at }
     JOB_APPLICATIONS { int id PK int created_by FK string company string job_name enum status enum mode_of_work int salary date date_applied }
     INTERVIEWS { int id PK int job_application_id FK timestamptz scheduled_at enum mode enum outcome }
+    INVITE_REQUESTS { int id PK text contact text note enum status string status_token_hash UK timestamptz created_at timestamptz decided_at int invite_id FK text code_plain timestamptz revealed_at }
 ```
 Columns are abridged; the full schema is in the Schema section below.
 
